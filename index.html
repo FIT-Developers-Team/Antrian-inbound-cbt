@@ -3,7 +3,7 @@
 <html class="dark" lang="en"><head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>LuxeLogistics Queue | Supervisor Dashboard</title>
+<title>Antrian Inbound CBT | Queue Dashboard</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&amp;family=JetBrains+Mono:wght@600&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
 <style>
@@ -157,27 +157,31 @@
 <!-- Side Navigation Shell -->
 <aside class="hidden md:flex flex-col h-full py-4 gap-2 bg-surface-container-lowest dark:bg-surface-container-lowest light:bg-[#efede8] border-r border-outline-variant dark:border-outline-variant light:border-[#dad8d3] w-64 transition-colors duration-300">
 <div class="px-6 mb-8">
-<h1 class="font-headline-sm text-headline-sm font-bold text-on-surface dark:text-on-surface light:text-[#1a1c1e]">LuxeLogistics</h1>
+<h1 class="font-headline-sm text-headline-sm font-bold text-on-surface dark:text-on-surface light:text-[#1a1c1e]">Antrian Inbound CBT</h1>
 <p class="text-on-surface-variant dark:text-on-surface-variant light:text-[#44474e] font-label-sm text-label-sm uppercase tracking-widest">Inbound Operations</p>
 </div>
 <nav class="flex-1 flex flex-col gap-1">
-<a class="flex items-center gap-3 text-on-surface-variant dark:text-on-surface-variant light:text-[#44474e] px-4 py-3 mx-2 hover:bg-surface-container-high dark:hover:bg-surface-container-high light:hover:bg-[#dad8d3] rounded-full transition-all" href="#">
+<a class="flex items-center gap-3 text-on-surface-variant dark:text-on-surface-variant light:text-[#44474e] px-4 py-3 mx-2 hover:bg-surface-container-high dark:hover:bg-surface-container-high light:hover:bg-[#dad8d3] rounded-full transition-all" href="#registration" data-page-link="registration">
 <span class="material-symbols-outlined">security</span>
 <span class="font-label-sm text-label-sm">Registration</span>
 </a>
-<a class="flex items-center gap-3 text-on-surface-variant dark:text-on-surface-variant light:text-[#44474e] px-4 py-3 mx-2 hover:bg-surface-container-high dark:hover:bg-surface-container-high light:hover:bg-[#dad8d3] rounded-full transition-all" href="#">
+<a class="flex items-center gap-3 text-on-surface-variant dark:text-on-surface-variant light:text-[#44474e] px-4 py-3 mx-2 hover:bg-surface-container-high dark:hover:bg-surface-container-high light:hover:bg-[#dad8d3] rounded-full transition-all" href="#queue" data-page-link="queue">
 <span class="material-symbols-outlined">format_list_numbered</span>
 <span class="font-label-sm text-label-sm">Queue Control</span>
 </a>
-<a class="flex items-center gap-3 text-on-surface-variant dark:text-on-surface-variant light:text-[#44474e] px-4 py-3 mx-2 hover:bg-surface-container-high dark:hover:bg-surface-container-high light:hover:bg-[#dad8d3] rounded-full transition-all" href="#">
+<a class="flex items-center gap-3 text-on-surface-variant dark:text-on-surface-variant light:text-[#44474e] px-4 py-3 mx-2 hover:bg-surface-container-high dark:hover:bg-surface-container-high light:hover:bg-[#dad8d3] rounded-full transition-all" href="#display" data-page-link="display">
+<span class="material-symbols-outlined">desktop_windows</span>
+<span class="font-label-sm text-label-sm">Display TV</span>
+</a>
+<a class="flex items-center gap-3 text-on-surface-variant dark:text-on-surface-variant light:text-[#44474e] px-4 py-3 mx-2 hover:bg-surface-container-high dark:hover:bg-surface-container-high light:hover:bg-[#dad8d3] rounded-full transition-all" href="#dock" data-page-link="dock">
 <span class="material-symbols-outlined">conveyor_belt</span>
 <span class="font-label-sm text-label-sm">Dock Monitoring</span>
 </a>
-<a class="flex items-center gap-3 bg-secondary-container dark:bg-secondary-container light:bg-[#6001d1] text-on-secondary-container dark:text-on-secondary-container light:text-white rounded-full px-4 py-3 mx-2 scale-98" href="#">
+<a class="flex items-center gap-3 bg-secondary-container dark:bg-secondary-container light:bg-[#6001d1] text-on-secondary-container dark:text-on-secondary-container light:text-white rounded-full px-4 py-3 mx-2 transition-all" href="#dashboard" data-page-link="dashboard">
 <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
 <span class="font-label-sm text-label-sm">Supervisor Dashboard</span>
 </a>
-<a class="flex items-center gap-3 text-on-surface-variant dark:text-on-surface-variant light:text-[#44474e] px-4 py-3 mx-2 hover:bg-surface-container-high dark:hover:bg-surface-container-high light:hover:bg-[#dad8d3] rounded-full transition-all" href="#">
+<a class="flex items-center gap-3 text-on-surface-variant dark:text-on-surface-variant light:text-[#44474e] px-4 py-3 mx-2 hover:bg-surface-container-high dark:hover:bg-surface-container-high light:hover:bg-[#dad8d3] rounded-full transition-all" href="#reports" data-page-link="reports">
 <span class="material-symbols-outlined">assessment</span>
 <span class="font-label-sm text-label-sm">Reports</span>
 </a>
@@ -189,10 +193,10 @@
 <span class="font-label-sm text-label-sm dark:hidden">Dark Mode</span>
 <span class="font-label-sm text-label-sm hidden dark:block">Light Mode</span>
 </button>
-<a class="flex items-center gap-3 text-on-surface-variant dark:text-on-surface-variant light:text-[#44474e] px-4 py-3 mx-2 hover:bg-surface-container-high dark:hover:bg-surface-container-high light:hover:bg-[#dad8d3] rounded-full transition-all" href="#">
+<button class="flex items-center gap-3 text-on-surface-variant dark:text-on-surface-variant light:text-[#44474e] px-4 py-3 mx-2 hover:bg-surface-container-high dark:hover:bg-surface-container-high light:hover:bg-[#dad8d3] rounded-full transition-all text-left w-[calc(100%-1rem)]" data-page-link="settings" type="button">
 <span class="material-symbols-outlined">settings</span>
 <span class="font-label-sm text-label-sm">Settings</span>
-</a>
+</button>
 <div class="px-6 mt-4 flex items-center gap-3">
 <div class="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center">
 <span class="material-symbols-outlined text-[18px] text-white">account_circle</span>
@@ -209,21 +213,32 @@
 <!-- Top App Bar -->
 <header class="flex justify-between items-center w-full px-container-padding h-row-height-md bg-surface dark:bg-surface light:bg-[#fbf9f4] border-b border-outline-variant dark:border-outline-variant light:border-[#dad8d3] z-10 transition-colors duration-300">
 <div class="flex items-center gap-4">
-<h2 class="font-headline-md text-headline-md font-bold text-primary dark:text-primary light:text-[#0053db]">LuxeLogistics Queue</h2>
+<h2 id="pageTitle" class="font-headline-md text-headline-md font-bold text-primary dark:text-primary light:text-[#0053db]">Supervisor Dashboard</h2>
 <span class="h-6 w-[1px] bg-outline-variant dark:bg-outline-variant light:bg-[#dad8d3] mx-2"></span>
-<p class="font-label-sm text-label-sm text-on-surface-variant dark:text-on-surface-variant light:text-[#44474e]">Supervisor Monitoring</p>
+<p id="pageSubtitle" class="font-label-sm text-label-sm text-on-surface-variant dark:text-on-surface-variant light:text-[#44474e]">Monitoring inbound queue hari ini</p>
 </div>
 <div class="flex items-center gap-4">
 <div class="relative flex items-center">
 <span class="material-symbols-outlined absolute left-3 text-on-surface-variant dark:text-on-surface-variant light:text-[#44474e]">search</span>
-<input class="bg-surface-container dark:bg-surface-container light:bg-[#f2f0eb] border-none focus:ring-1 focus:ring-primary text-label-sm rounded-full pl-10 pr-4 py-2 w-64 text-on-surface dark:text-on-surface light:text-[#1a1c1e]" placeholder="Search queues..." type="text"/>
+<input class="bg-surface-container dark:bg-surface-container light:bg-[#f2f0eb] border-none focus:ring-1 focus:ring-primary text-label-sm rounded-full pl-10 pr-4 py-2 w-64 text-on-surface dark:text-on-surface light:text-[#1a1c1e]" id="globalSearch" placeholder="Search queues..." type="text"/>
 </div>
 <button class="material-symbols-outlined text-on-surface-variant dark:text-on-surface-variant light:text-[#44474e] hover:bg-surface-container-high dark:hover:bg-surface-container-high light:hover:bg-[#dad8d3] p-2 rounded-full transition-colors">notifications</button>
 <button class="material-symbols-outlined text-on-surface-variant dark:text-on-surface-variant light:text-[#44474e] hover:bg-surface-container-high dark:hover:bg-surface-container-high light:hover:bg-[#dad8d3] p-2 rounded-full transition-colors">account_circle</button>
 </div>
 </header>
+<!-- Mobile Quick Navigation -->
+<div class="md:hidden flex gap-2 overflow-x-auto px-container-padding py-3 bg-surface-container-low dark:bg-surface-container-low light:bg-[#f5f3ef] border-b border-outline-variant dark:border-outline-variant light:border-[#dad8d3]">
+<button data-page-link="registration" class="shrink-0 px-3 py-2 rounded-full text-label-sm font-bold bg-surface-container-high dark:bg-surface-container-high light:bg-white">Registration</button>
+<button data-page-link="queue" class="shrink-0 px-3 py-2 rounded-full text-label-sm font-bold bg-surface-container-high dark:bg-surface-container-high light:bg-white">Queue</button>
+<button data-page-link="display" class="shrink-0 px-3 py-2 rounded-full text-label-sm font-bold bg-surface-container-high dark:bg-surface-container-high light:bg-white">Display</button>
+<button data-page-link="dock" class="shrink-0 px-3 py-2 rounded-full text-label-sm font-bold bg-surface-container-high dark:bg-surface-container-high light:bg-white">Dock</button>
+<button data-page-link="dashboard" class="shrink-0 px-3 py-2 rounded-full text-label-sm font-bold bg-primary dark:bg-primary light:bg-[#0053db] text-on-primary dark:text-on-primary light:text-white">Dashboard</button>
+<button data-page-link="reports" class="shrink-0 px-3 py-2 rounded-full text-label-sm font-bold bg-surface-container-high dark:bg-surface-container-high light:bg-white">Reports</button>
+</div>
 <!-- Dashboard Scrollable Area -->
 <section class="flex-1 overflow-y-auto p-container-padding bg-surface dark:bg-surface light:bg-[#fbf9f4] custom-scrollbar transition-colors duration-300">
+<div id="page-dashboard" class="page-view" data-page="dashboard">
+
 <!-- KPI Dashboard Row (Bento Style) -->
 <div class="grid grid-cols-1 md:grid-cols-6 gap-gutter mb-8">
 <div class="md:col-span-1 bg-surface-container-low dark:bg-surface-container-low light:bg-[#f5f3ef] border-l-4 border-primary p-4 rounded-lg shadow-sm transition-colors duration-300">
@@ -461,6 +476,232 @@
 </div>
 </div>
 </div>
+
+</div>
+
+<!-- Registration Page -->
+<div id="page-registration" class="page-view hidden" data-page="registration">
+  <div class="grid grid-cols-1 xl:grid-cols-12 gap-gutter">
+    <div class="xl:col-span-7 glass-panel rounded-xl p-6">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h3 class="font-headline-lg text-headline-lg font-bold">Registrasi Inbound</h3>
+          <p class="text-on-surface-variant dark:text-on-surface-variant light:text-[#44474e]">Input driver/supplier, lalu generate nomor antrian.</p>
+        </div>
+        <span class="material-symbols-outlined text-primary text-[36px]">confirmation_number</span>
+      </div>
+      <form id="registrationForm" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <label class="flex flex-col gap-2 text-label-sm font-bold uppercase">Supplier Name
+          <input id="supplierName" class="rounded-lg bg-surface-container dark:bg-surface-container light:bg-white border-outline-variant" placeholder="Contoh: Supplier ABC" required>
+        </label>
+        <label class="flex flex-col gap-2 text-label-sm font-bold uppercase">Driver Name
+          <input id="driverName" class="rounded-lg bg-surface-container dark:bg-surface-container light:bg-white border-outline-variant" placeholder="Nama driver" required>
+        </label>
+        <label class="flex flex-col gap-2 text-label-sm font-bold uppercase">Vehicle Plate
+          <input id="vehiclePlate" class="rounded-lg bg-surface-container dark:bg-surface-container light:bg-white border-outline-variant uppercase" placeholder="B 1234 XYZ" required>
+        </label>
+        <label class="flex flex-col gap-2 text-label-sm font-bold uppercase">Document Number
+          <input id="documentNumber" class="rounded-lg bg-surface-container dark:bg-surface-container light:bg-white border-outline-variant" placeholder="SJ / PO / ASN" required>
+        </label>
+        <label class="flex flex-col gap-2 text-label-sm font-bold uppercase">Inbound Type
+          <select id="inboundType" class="rounded-lg bg-surface-container dark:bg-surface-container light:bg-white border-outline-variant">
+            <option>PO</option>
+            <option>Transfer</option>
+            <option>Return</option>
+            <option>Manual</option>
+          </select>
+        </label>
+        <label class="flex flex-col gap-2 text-label-sm font-bold uppercase">Priority
+          <select id="priorityLevel" class="rounded-lg bg-surface-container dark:bg-surface-container light:bg-white border-outline-variant">
+            <option>NORMAL</option>
+            <option>HIGH</option>
+            <option>VIP</option>
+          </select>
+        </label>
+        <label class="md:col-span-2 flex flex-col gap-2 text-label-sm font-bold uppercase">Remarks
+          <textarea id="remarks" class="rounded-lg bg-surface-container dark:bg-surface-container light:bg-white border-outline-variant" rows="3" placeholder="Catatan dokumen/barang jika ada"></textarea>
+        </label>
+        <div class="md:col-span-2 flex flex-wrap gap-3">
+          <button class="bg-primary dark:bg-primary light:bg-[#0053db] text-on-primary dark:text-on-primary light:text-white px-6 py-3 rounded-lg font-bold flex items-center gap-2" type="submit">
+            <span class="material-symbols-outlined">add_task</span> Generate Queue
+          </button>
+          <button class="bg-surface-container-high dark:bg-surface-container-high light:bg-white border border-outline-variant px-6 py-3 rounded-lg font-bold" type="reset">Clear Form</button>
+        </div>
+      </form>
+    </div>
+    <div class="xl:col-span-5 glass-panel rounded-xl p-6 flex flex-col justify-between min-h-[420px]">
+      <div>
+        <p class="text-label-sm uppercase tracking-widest text-on-surface-variant">Nomor Antrian Terakhir</p>
+        <div id="queueTicket" class="mt-6 rounded-xl border-2 border-dashed border-primary p-8 text-center bg-surface-container-low dark:bg-surface-container-low light:bg-[#f5f3ef]">
+          <p class="text-on-surface-variant">Belum ada nomor baru</p>
+          <h2 id="lastQueueNumber" class="font-queue-id text-[64px] leading-none font-extrabold text-primary my-4">IB----</h2>
+          <p id="lastQueueMeta" class="text-label-sm text-on-surface-variant">Submit form untuk generate.</p>
+        </div>
+      </div>
+      <button id="goQueueControl" class="mt-6 bg-secondary dark:bg-secondary light:bg-[#6001d1] text-on-secondary dark:text-on-secondary light:text-white px-6 py-3 rounded-lg font-bold flex items-center justify-center gap-2">
+        <span class="material-symbols-outlined">format_list_numbered</span> Lihat Queue Control
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Queue Control Page -->
+<div id="page-queue" class="page-view hidden" data-page="queue">
+  <div class="glass-panel rounded-xl p-6">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+      <div>
+        <h3 class="font-headline-lg text-headline-lg font-bold">Queue Control</h3>
+        <p class="text-on-surface-variant dark:text-on-surface-variant light:text-[#44474e]">Panggil antrian, assign dock, hold, cancel. Bank BCA vibes, tapi versi inbound.</p>
+      </div>
+      <div class="flex gap-2">
+        <select id="dockSelect" class="rounded-lg bg-surface-container dark:bg-surface-container light:bg-white border-outline-variant">
+          <option>Dock 01</option>
+          <option>Dock 02</option>
+          <option>Dock 03</option>
+          <option>Dock 04</option>
+          <option>Chiller 01</option>
+        </select>
+        <button id="callNextBtn" class="bg-primary text-on-primary dark:text-on-primary light:text-white px-5 py-2 rounded-lg font-bold flex items-center gap-2">
+          <span class="material-symbols-outlined">campaign</span> Call Next
+        </button>
+      </div>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left min-w-[900px]">
+        <thead class="text-label-sm uppercase text-on-surface-variant border-b border-outline-variant">
+          <tr>
+            <th class="py-3">Queue</th>
+            <th>Supplier</th>
+            <th>Vehicle</th>
+            <th>Arrival</th>
+            <th>Waiting</th>
+            <th>Priority</th>
+            <th>Status</th>
+            <th class="text-right">Action</th>
+          </tr>
+        </thead>
+        <tbody id="queueTableBody" class="divide-y divide-outline-variant">
+          <tr data-status="WAITING">
+            <td class="py-4 font-queue-id text-primary">IB-021</td>
+            <td>Supplier Nusantara</td>
+            <td>B 1234 XYZ</td>
+            <td>08:10</td>
+            <td class="text-tertiary font-bold">35 min</td>
+            <td><span class="px-2 py-1 rounded bg-surface-container-high text-[11px] font-bold">NORMAL</span></td>
+            <td><span class="queue-status px-2 py-1 rounded bg-tertiary/20 text-tertiary text-[11px] font-bold">WAITING</span></td>
+            <td class="text-right"><button class="call-row bg-primary text-on-primary px-3 py-1.5 rounded font-bold text-[11px]">CALL</button></td>
+          </tr>
+          <tr data-status="WAITING">
+            <td class="py-4 font-queue-id text-primary">IB-022</td>
+            <td>Fresh Supplier ID</td>
+            <td>B 9988 ABC</td>
+            <td>08:20</td>
+            <td class="text-tertiary font-bold">25 min</td>
+            <td><span class="px-2 py-1 rounded bg-error-container text-on-error-container text-[11px] font-bold">HIGH</span></td>
+            <td><span class="queue-status px-2 py-1 rounded bg-tertiary/20 text-tertiary text-[11px] font-bold">WAITING</span></td>
+            <td class="text-right"><button class="call-row bg-primary text-on-primary px-3 py-1.5 rounded font-bold text-[11px]">CALL</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Display TV Page -->
+<div id="page-display" class="page-view hidden" data-page="display">
+  <div class="min-h-[calc(100vh-180px)] flex flex-col gap-gutter">
+    <div class="glass-panel rounded-xl p-10 text-center flex-1 flex flex-col justify-center">
+      <p class="text-label-sm uppercase tracking-[0.3em] text-on-surface-variant">Nomor Antrian</p>
+      <h1 id="displayQueueNumber" class="font-queue-id text-[112px] md:text-[168px] leading-none font-extrabold text-primary my-8">IB-022</h1>
+      <p class="text-headline-md">Silakan menuju</p>
+      <h2 id="displayDockName" class="font-headline-lg text-[56px] font-extrabold text-secondary mt-2">Dock 02</h2>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-gutter">
+      <div class="bg-surface-container-low p-5 rounded-xl border border-outline-variant"><p class="text-label-sm text-on-surface-variant">Recent</p><h3 class="font-queue-id text-queue-id mt-1">IB-021 — Dock 01</h3></div>
+      <div class="bg-surface-container-low p-5 rounded-xl border border-outline-variant"><p class="text-label-sm text-on-surface-variant">Status</p><h3 class="font-headline-md text-primary mt-1">CALLED</h3></div>
+      <div class="bg-surface-container-low p-5 rounded-xl border border-outline-variant"><p class="text-label-sm text-on-surface-variant">Clock</p><h3 id="liveClock" class="font-queue-id text-queue-id mt-1">--:--:--</h3></div>
+    </div>
+  </div>
+</div>
+
+<!-- Dock Monitoring Page -->
+<div id="page-dock" class="page-view hidden" data-page="dock">
+  <div class="glass-panel rounded-xl p-6">
+    <div class="flex justify-between items-center mb-6">
+      <div>
+        <h3 class="font-headline-lg text-headline-lg font-bold">Dock Monitoring</h3>
+        <p class="text-on-surface-variant">Pantau occupancy dock dan durasi unloading realtime.</p>
+      </div>
+      <span class="px-3 py-1 rounded-full bg-primary/20 text-primary text-label-sm font-bold">9 / 13 Active</span>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-gutter">
+      <div class="p-5 rounded-xl bg-surface-container-low border border-outline-variant"><div class="flex justify-between"><b>D-01</b><span class="text-secondary font-bold">UNLOADING</span></div><p class="mt-4 font-queue-id text-primary">IB-021</p><p class="text-on-surface-variant text-sm">Supplier Nusantara</p><p class="mt-4 text-label-sm">Duration: <b>45 min</b></p></div>
+      <div class="p-5 rounded-xl bg-surface-container-low border border-outline-variant"><div class="flex justify-between"><b>D-02</b><span class="text-primary font-bold">CALLED</span></div><p class="mt-4 font-queue-id text-primary">IB-022</p><p class="text-on-surface-variant text-sm">Fresh Supplier ID</p><p class="mt-4 text-label-sm">Waiting dock: <b>5 min</b></p></div>
+      <div class="p-5 rounded-xl bg-surface-container-low border border-dashed border-outline-variant"><div class="flex justify-between"><b>D-03</b><span class="text-[#4ADE80] font-bold">AVAILABLE</span></div><p class="mt-4 text-on-surface-variant">Ready untuk inbound berikutnya.</p></div>
+      <div class="p-5 rounded-xl bg-error-container/40 border border-error"><div class="flex justify-between"><b>C-03</b><span class="text-error font-bold">WARNING</span></div><p class="mt-4 font-queue-id">IB-019</p><p class="text-on-error-container text-sm">Chiller temp warning</p><p class="mt-4 text-label-sm">Duration: <b>1h 20m</b></p></div>
+    </div>
+  </div>
+</div>
+
+<!-- Reports Page -->
+<div id="page-reports" class="page-view hidden" data-page="reports">
+  <div class="glass-panel rounded-xl p-6">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+      <div>
+        <h3 class="font-headline-lg text-headline-lg font-bold">Reports</h3>
+        <p class="text-on-surface-variant">Export report inbound harian, SLA, dan lead time.</p>
+      </div>
+      <button id="exportReportBtn" class="bg-primary text-on-primary px-5 py-3 rounded-lg font-bold flex items-center gap-2">
+        <span class="material-symbols-outlined">download</span> Export CSV
+      </button>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-gutter mb-6">
+      <input type="date" class="rounded-lg bg-surface-container border-outline-variant">
+      <select class="rounded-lg bg-surface-container border-outline-variant"><option>All Supplier</option><option>Supplier Nusantara</option></select>
+      <select class="rounded-lg bg-surface-container border-outline-variant"><option>All Status</option><option>Completed</option><option>SLA Miss</option></select>
+      <select class="rounded-lg bg-surface-container border-outline-variant"><option>All Type</option><option>PO</option><option>Transfer</option></select>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left min-w-[900px]">
+        <thead class="text-label-sm uppercase text-on-surface-variant border-b border-outline-variant"><tr><th class="py-3">Date</th><th>Queue</th><th>Supplier</th><th>Vehicle</th><th>Arrival</th><th>Completed</th><th>Lead Time</th><th>SLA</th></tr></thead>
+        <tbody class="divide-y divide-outline-variant">
+          <tr><td class="py-4">Today</td><td class="font-queue-id text-primary">IB-018</td><td>Supplier A</td><td>B 1111 AA</td><td>07:55</td><td>10:15</td><td>2h 20m</td><td><span class="text-[#4ADE80] font-bold">OK</span></td></tr>
+          <tr><td class="py-4">Today</td><td class="font-queue-id text-primary">IB-019</td><td>Supplier B</td><td>B 2222 BB</td><td>08:00</td><td>11:25</td><td>3h 25m</td><td><span class="text-error font-bold">MISS</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Page -->
+<div id="page-settings" class="page-view hidden" data-page="settings">
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-gutter">
+    <div class="glass-panel rounded-xl p-6">
+      <h3 class="font-headline-lg text-headline-lg font-bold mb-2">Settings</h3>
+      <p class="text-on-surface-variant mb-6">Konfigurasi awal dashboard inbound queue.</p>
+      <div class="flex flex-col gap-4">
+        <label class="flex flex-col gap-2 text-label-sm font-bold uppercase">Waiting SLA
+          <input value="30 menit" class="rounded-lg bg-surface-container border-outline-variant">
+        </label>
+        <label class="flex flex-col gap-2 text-label-sm font-bold uppercase">Process SLA
+          <input value="120 menit" class="rounded-lg bg-surface-container border-outline-variant">
+        </label>
+        <label class="flex flex-col gap-2 text-label-sm font-bold uppercase">Auto Refresh Display
+          <select class="rounded-lg bg-surface-container border-outline-variant"><option>5 seconds</option><option>10 seconds</option><option>30 seconds</option></select>
+        </label>
+      </div>
+    </div>
+    <div class="glass-panel rounded-xl p-6">
+      <h4 class="font-headline-md text-headline-md font-bold mb-4">Dock Master</h4>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="p-4 rounded-lg bg-surface-container-low border border-outline-variant">Dock 01<br><span class="text-[#4ADE80] text-label-sm">Active</span></div>
+        <div class="p-4 rounded-lg bg-surface-container-low border border-outline-variant">Dock 02<br><span class="text-[#4ADE80] text-label-sm">Active</span></div>
+        <div class="p-4 rounded-lg bg-surface-container-low border border-outline-variant">Dock 03<br><span class="text-[#4ADE80] text-label-sm">Active</span></div>
+        <div class="p-4 rounded-lg bg-surface-container-low border border-outline-variant">Chiller 01<br><span class="text-primary text-label-sm">Chiller</span></div>
+      </div>
+    </div>
+  </div>
+</div>
 </section>
 <!-- Bottom Action Bar (Contextual) -->
 <footer class="h-16 bg-surface-container-high dark:bg-surface-container-high light:bg-[#e8e6e1] border-t border-outline-variant dark:border-outline-variant light:border-[#dad8d3] px-container-padding flex items-center justify-between transition-colors duration-300">
@@ -486,25 +727,182 @@
 </div>
 <!-- Micro-interaction Script -->
 <script>
-        // Simple hover effect for "Docks" to show more info
-        const docks = document.querySelectorAll('.aspect-square');
-        docks.forEach(dock => {
-            dock.addEventListener('mouseenter', () => {
-                dock.style.transform = 'translateY(-4px) scale(1.02)';
-                dock.style.transition = 'all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)';
-            });
-            dock.addEventListener('mouseleave', () => {
-                dock.style.transform = 'translateY(0) scale(1)';
-            });
-        });
+(function () {
+  const inactiveClasses = "flex items-center gap-3 text-on-surface-variant dark:text-on-surface-variant light:text-[#44474e] px-4 py-3 mx-2 hover:bg-surface-container-high dark:hover:bg-surface-container-high light:hover:bg-[#dad8d3] rounded-full transition-all";
+  const activeClasses = "flex items-center gap-3 bg-secondary-container dark:bg-secondary-container light:bg-[#6001d1] text-on-secondary-container dark:text-on-secondary-container light:text-white rounded-full px-4 py-3 mx-2 transition-all";
+  const pageMeta = {
+    registration: { title: "Registration", subtitle: "Check-in driver dan generate nomor antrian inbound" },
+    queue: { title: "Queue Control", subtitle: "Call, recall, assign dock, hold, dan cancel antrian" },
+    display: { title: "Display TV", subtitle: "Tampilan layar panggilan untuk driver / supplier" },
+    dock: { title: "Dock Monitoring", subtitle: "Pantau occupancy dock dan proses unloading" },
+    dashboard: { title: "Supervisor Dashboard", subtitle: "Monitoring inbound queue hari ini" },
+    reports: { title: "Reports", subtitle: "Report harian, SLA, waiting time, dan export data" },
+    settings: { title: "Settings", subtitle: "Konfigurasi SLA, dock, dan display dashboard" }
+  };
 
-        // Search bar interaction
-        const searchInput = document.querySelector('input[type="text"]');
-        searchInput.addEventListener('focus', () => {
-            searchInput.parentElement.classList.add('ring-1', 'ring-primary');
-        });
-        searchInput.addEventListener('blur', () => {
-            searchInput.parentElement.classList.remove('ring-1', 'ring-primary');
-        });
-    </script>
+  function setActiveLink(page) {
+    document.querySelectorAll("[data-page-link]").forEach(link => {
+      const target = link.getAttribute("data-page-link");
+      if (link.tagName === "A" || !link.closest(".md\\:hidden")) {
+        const buttonExtra = link.tagName === "BUTTON" ? " text-left w-[calc(100%-1rem)]" : "";
+        link.className = (target === page ? activeClasses : inactiveClasses) + buttonExtra;
+      } else if (link.closest(".md\\:hidden")) {
+        link.classList.toggle("bg-primary", target === page);
+        link.classList.toggle("dark:bg-primary", target === page);
+        link.classList.toggle("light:bg-[#0053db]", target === page);
+        link.classList.toggle("text-on-primary", target === page);
+        link.classList.toggle("light:text-white", target === page);
+        link.classList.toggle("bg-surface-container-high", target !== page);
+        link.classList.toggle("dark:bg-surface-container-high", target !== page);
+        link.classList.toggle("light:bg-white", target !== page);
+      }
+      const icon = link.querySelector(".material-symbols-outlined");
+      if (icon) icon.style.fontVariationSettings = target === page ? "'FILL' 1" : "'FILL' 0";
+    });
+  }
+
+  function switchPage(page) {
+    const nextPage = pageMeta[page] ? page : "dashboard";
+    document.querySelectorAll(".page-view").forEach(view => {
+      view.classList.toggle("hidden", view.dataset.page !== nextPage);
+    });
+    document.getElementById("pageTitle").textContent = pageMeta[nextPage].title;
+    document.getElementById("pageSubtitle").textContent = pageMeta[nextPage].subtitle;
+    setActiveLink(nextPage);
+    if (location.hash !== "#" + nextPage) history.replaceState(null, "", "#" + nextPage);
+  }
+
+  document.querySelectorAll("[data-page-link]").forEach(link => {
+    link.addEventListener("click", event => {
+      event.preventDefault();
+      switchPage(link.getAttribute("data-page-link"));
+    });
+  });
+
+  function bindDockHover() {
+    const docks = document.querySelectorAll('.aspect-square');
+    docks.forEach(dock => {
+      dock.addEventListener('mouseenter', () => {
+        dock.style.transform = 'translateY(-4px) scale(1.02)';
+        dock.style.transition = 'all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)';
+      });
+      dock.addEventListener('mouseleave', () => {
+        dock.style.transform = 'translateY(0) scale(1)';
+      });
+    });
+  }
+
+  const searchInput = document.querySelector('#globalSearch');
+  if (searchInput) {
+    searchInput.addEventListener('focus', () => searchInput.parentElement.classList.add('ring-1', 'ring-primary'));
+    searchInput.addEventListener('blur', () => searchInput.parentElement.classList.remove('ring-1', 'ring-primary'));
+  }
+
+  function todayKey() {
+    const d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+
+  function nextQueueNumber() {
+    const key = "inbound_queue_counter_" + todayKey();
+    const next = Number(localStorage.getItem(key) || "22") + 1;
+    localStorage.setItem(key, String(next));
+    return "IB-" + String(next).padStart(3, "0");
+  }
+
+  function addQueueRow(queueNumber, supplier, vehicle, priority) {
+    const body = document.getElementById("queueTableBody");
+    if (!body) return;
+    const tr = document.createElement("tr");
+    tr.dataset.status = "WAITING";
+    tr.innerHTML = `
+      <td class="py-4 font-queue-id text-primary">${queueNumber}</td>
+      <td>${supplier || "-"}</td>
+      <td>${vehicle || "-"}</td>
+      <td>${new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</td>
+      <td class="text-tertiary font-bold">0 min</td>
+      <td><span class="px-2 py-1 rounded ${priority === "HIGH" || priority === "VIP" ? "bg-error-container text-on-error-container" : "bg-surface-container-high"} text-[11px] font-bold">${priority}</span></td>
+      <td><span class="queue-status px-2 py-1 rounded bg-tertiary/20 text-tertiary text-[11px] font-bold">WAITING</span></td>
+      <td class="text-right"><button class="call-row bg-primary text-on-primary px-3 py-1.5 rounded font-bold text-[11px]">CALL</button></td>
+    `;
+    body.prepend(tr);
+  }
+
+  const registrationForm = document.getElementById("registrationForm");
+  if (registrationForm) {
+    registrationForm.addEventListener("submit", event => {
+      event.preventDefault();
+      const queueNumber = nextQueueNumber();
+      const supplier = document.getElementById("supplierName").value.trim();
+      const vehicle = document.getElementById("vehiclePlate").value.trim().toUpperCase();
+      const priority = document.getElementById("priorityLevel").value;
+      document.getElementById("lastQueueNumber").textContent = queueNumber;
+      document.getElementById("lastQueueMeta").textContent = `${supplier || "Supplier"} • ${vehicle || "No Plate"} • WAITING`;
+      document.getElementById("displayQueueNumber").textContent = queueNumber;
+      addQueueRow(queueNumber, supplier, vehicle, priority);
+      registrationForm.reset();
+    });
+  }
+
+  function callQueue(row) {
+    const dock = document.getElementById("dockSelect")?.value || "Dock 01";
+    const queueNumber = row.querySelector(".font-queue-id")?.textContent?.trim() || "IB----";
+    const status = row.querySelector(".queue-status");
+    if (status) {
+      status.textContent = "CALLED";
+      status.className = "queue-status px-2 py-1 rounded bg-primary/20 text-primary text-[11px] font-bold";
+    }
+    row.dataset.status = "CALLED";
+    const displayQueue = document.getElementById("displayQueueNumber");
+    const displayDock = document.getElementById("displayDockName");
+    if (displayQueue) displayQueue.textContent = queueNumber;
+    if (displayDock) displayDock.textContent = dock;
+  }
+
+  document.addEventListener("click", event => {
+    const callButton = event.target.closest(".call-row");
+    if (callButton) callQueue(callButton.closest("tr"));
+  });
+
+  const callNextBtn = document.getElementById("callNextBtn");
+  if (callNextBtn) {
+    callNextBtn.addEventListener("click", () => {
+      const nextRow = document.querySelector('#queueTableBody tr[data-status="WAITING"]');
+      if (nextRow) callQueue(nextRow);
+    });
+  }
+
+  const goQueueControl = document.getElementById("goQueueControl");
+  if (goQueueControl) goQueueControl.addEventListener("click", () => switchPage("queue"));
+
+  const exportReportBtn = document.getElementById("exportReportBtn");
+  if (exportReportBtn) {
+    exportReportBtn.addEventListener("click", () => {
+      const rows = [
+        ["Date","Queue","Supplier","Vehicle","Arrival","Completed","Lead Time","SLA"],
+        ["Today","IB-018","Supplier A","B 1111 AA","07:55","10:15","2h 20m","OK"],
+        ["Today","IB-019","Supplier B","B 2222 BB","08:00","11:25","3h 25m","MISS"]
+      ];
+      const csv = rows.map(row => row.map(cell => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\n");
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "inbound_queue_report.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  }
+
+  function tickClock() {
+    const clock = document.getElementById("liveClock");
+    if (clock) clock.textContent = new Date().toLocaleTimeString("id-ID");
+  }
+  setInterval(tickClock, 1000);
+  tickClock();
+
+  bindDockHover();
+  switchPage((location.hash || "#dashboard").replace("#", ""));
+})();
+</script>
 </body></html>
