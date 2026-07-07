@@ -161,6 +161,28 @@
         box-shadow: 0 0 0 1px rgb(var(--primary));
         border-color: rgb(var(--primary));
       }
+
+      .form-input,
+      .form-select {
+        color: rgb(var(--on-surface)) !important;
+        caret-color: rgb(var(--primary));
+      }
+      .form-input::placeholder {
+        color: rgb(var(--on-surface-variant) / 0.72) !important;
+      }
+      .form-select option {
+        background: rgb(var(--surface-container-lowest)) !important;
+        color: rgb(var(--on-surface)) !important;
+      }
+      .light .form-select option {
+        background: white !important;
+        color: rgb(15 23 42) !important;
+      }
+      .dark .form-input,
+      .dark .form-select {
+        background: rgb(var(--surface-container-high) / 0.68) !important;
+        color: rgb(var(--on-surface)) !important;
+      }
       .thin-tab {
         border: 1px solid rgb(var(--outline-variant));
         background: rgb(var(--surface-container) / 0.65);
@@ -293,17 +315,13 @@
             <span class="material-symbols-outlined">campaign</span
             ><span>Panggil</span>
           </button>
-          <button data-page="dock" class="nav-btn">
-            <span class="material-symbols-outlined">conveyor_belt</span
-            ><span>Dock</span>
-          </button>
           <button data-page="monitor" class="nav-btn">
             <span class="material-symbols-outlined">dashboard</span
-            ><span>Monitor</span>
+            ><span>Waiting Monitor</span>
           </button>
           <button data-page="laporan" class="nav-btn">
             <span class="material-symbols-outlined">assessment</span
-            ><span>Laporan</span>
+            ><span>Waiting List</span>
           </button>
         </nav>
 
@@ -381,9 +399,12 @@
             <button data-page="checker" class="mobile-nav-btn">Checker</button>
             <button data-page="antrian" class="mobile-nav-btn">Antrian</button>
             <button data-page="panggil" class="mobile-nav-btn">Panggil</button>
-            <button data-page="dock" class="mobile-nav-btn">Dock</button>
-            <button data-page="monitor" class="mobile-nav-btn">Monitor</button>
-            <button data-page="laporan" class="mobile-nav-btn">Laporan</button>
+            <button data-page="monitor" class="mobile-nav-btn">
+              Waiting Monitor
+            </button>
+            <button data-page="laporan" class="mobile-nav-btn">
+              Waiting List
+            </button>
           </div>
         </div>
 
@@ -420,20 +441,15 @@
             "Truck",
             "CDD",
             "CDE",
+            "WINGBOX",
+            "CDDL",
             "Engkel",
             "Box",
             "Blind Van",
             "Kontainer",
             "Motor",
           ],
-          security_status: [
-            "WAITING",
-            "CALLED",
-            "ON_DOCK",
-            "UNLOADING",
-            "COMPLETED",
-            "HOLD",
-          ],
+          security_status: ["WAITING"],
           checker_status: [
             "ARRIVED",
             "ON_DOCK",
@@ -483,14 +499,14 @@
           title: "Panggil",
           subtitle: "Layar panggilan untuk TV/display",
         },
-        dock: { title: "Dock", subtitle: "Pantau dock kosong dan aktif" },
         monitor: {
-          title: "Monitor",
-          subtitle: "KPI dari CAPHAND, PUTAWAY, dan ticket",
+          title: "Waiting List Monitoring",
+          subtitle:
+            "Monitor plat nomor, gate, status, dan waktu tunggu berjalan",
         },
         laporan: {
-          title: "Laporan",
-          subtitle: "Report hasil input security dan checker",
+          title: "Waiting List",
+          subtitle: "List input security, update gate/status dari checker",
         },
         setting: { title: "Setting", subtitle: "Set API URL dan refresh data" },
         debug: {
@@ -614,16 +630,25 @@
         return `<div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
           <div class="lg:col-span-2 glass-card rounded-xl p-6">
             <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-6">
-              <div><h3 class="font-headline-md text-headline-md mb-1">Security Input</h3><p class="text-on-surface-variant">Input driver datang. Total PO Qty dan Count SKU auto lookup dari CAPHAND.</p></div>
-              <button onclick="lookupPo()" class="thin-tab rounded-lg px-4 py-2 font-label-sm flex items-center gap-2 w-fit"><span class="material-symbols-outlined">search</span>Lookup PO</button>
+              <div>
+                <h3 class="font-headline-md text-headline-md mb-1">Security Input</h3>
+                <p class="text-on-surface-variant">Input driver datang. Vendor, Total PO Qty, dan Count SKU auto lookup dari CAPHAND berdasarkan PO.</p>
+              </div>
+              <button onclick="lookupPo()" class="thin-tab rounded-lg px-4 py-2 font-label-sm flex items-center gap-2 w-fit">
+                <span class="material-symbols-outlined">search</span>Lookup PO
+              </button>
             </div>
             <form id="security-form" onsubmit="submitSecurity(event)">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                ${textInput("vendor_name", "Vendor Name", "Contoh: PT Tirta Investama", "vendor-list", lookup?.summary?.vendor_name)}
+                ${textInput("po_number", "PO Number", "ID1/POR/...", "po-list", lookup?.summary?.po_number, 'onchange="lookupPo(true)" onblur="lookupPo(true)"')}
+                ${textInput("vendor_name", "Vendor Name", "Auto dari PO / bisa manual", "vendor-list", lookup?.summary?.vendor_name)}
                 ${selectInput("fleet_type", "Fleet Type", o.fleet_type)}
                 ${textInput("plat_number", "Plat Number", "Contoh: B 1234 XYZ")}
-                ${textInput("po_number", "PO Number", "ID1/POR/...", "po-list", lookup?.summary?.po_number)}
-                ${selectInput("status", "Status", o.security_status, "WAITING")}
+                <label class="flex flex-col gap-2">
+                  <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Status Security</span>
+                  <input type="hidden" name="status" value="WAITING" />
+                  <div class="bg-tertiary/15 border border-tertiary/30 rounded-lg px-4 py-3 text-tertiary font-bold">WAITING</div>
+                </label>
                 <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Auto Summary</span><div class="grid grid-cols-2 gap-2">
                   <div class="bg-surface-container/60 border border-outline-variant rounded-lg p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Total PO Qty</div><div id="security-total-qty" class="font-queue-id text-primary">${num(lookup?.summary?.total_po_qty || 0)}</div></div>
                   <div class="bg-surface-container/60 border border-outline-variant rounded-lg p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Count SKU</div><div id="security-count-sku" class="font-queue-id text-primary">${num(lookup?.summary?.count_po_sku || 0)}</div></div>
@@ -728,24 +753,86 @@
       }
 
       function pageMonitor() {
-        const s = state.dashboard?.summary || {};
+        const rows = (state.dashboard?.queue || []).filter(
+          (r) =>
+            !String(r.status || "")
+              .toUpperCase()
+              .includes("COMPLETED"),
+        );
+        const waiting = rows.filter((r) =>
+          String(r.status || "")
+            .toUpperCase()
+            .includes("WAIT"),
+        );
+        const cap = state.dashboard?.summary?.caphand || {};
         return `${kpiCards()}
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-gutter">
-          <div class="glass-card rounded-xl p-6"><h3 class="font-headline-md text-headline-md mb-2">Raw Data Health</h3><p class="text-on-surface-variant mb-6">Dari tab CAPHAND dan PUTAWAY hasil sync Superset.</p>
-            <div class="grid grid-cols-2 gap-4">${miniMetric("CAPHAND Rows", s.caphand?.rows || 0, "text-primary")}${miniMetric("PUTAWAY Rows", s.putaway?.rows || 0, "text-secondary")}${miniMetric("PO Unique", s.caphand?.unique_po || 0, "text-primary")}${miniMetric("Putaway Done %", (s.putaway?.completed_pct || 0) + "%", "text-success")}</div>
+        <div class="grid grid-cols-1 xl:grid-cols-3 gap-gutter">
+          <div class="xl:col-span-2 glass-card rounded-xl p-6">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+              <div>
+                <h3 class="font-headline-md text-headline-md">Waiting List Monitoring</h3>
+                <p class="text-on-surface-variant">Fokus pantau plat nomor, gate, status, dan waktu tunggu berjalan.</p>
+              </div>
+              <button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2 w-fit"><span class="material-symbols-outlined">refresh</span>Refresh</button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              ${miniMetric("Total Aktif", rows.length, "text-primary")}
+              ${miniMetric("Masih Waiting", waiting.length, "text-tertiary")}
+              ${miniMetric("PO CAPHAND", cap.unique_po || 0, "text-secondary")}
+            </div>
+            <div class="overflow-x-auto">
+              <table id="monitor-table" class="w-full text-left">
+                <thead class="bg-surface-container text-on-surface-variant">
+                  <tr>${["Plat", "Queue", "Vendor", "PO", "Gate", "Status", "Menunggu"].map((h) => `<th class="px-4 py-3 font-label-sm uppercase">${h}</th>`).join("")}</tr>
+                </thead>
+                <tbody class="divide-y divide-outline-variant/10">
+                  ${rows.map((r) => monitorRow(r)).join("") || `<tr><td colspan="7" class="px-6 py-8 text-center text-on-surface-variant">Belum ada waiting list aktif.</td></tr>`}
+                </tbody>
+              </table>
+            </div>
           </div>
-          <div class="glass-card rounded-xl p-6"><h3 class="font-headline-md text-headline-md mb-4">Bottleneck</h3>
-            ${bottleneck("Putaway Pending", s.putaway?.pending || 0, "Dari tab PUTAWAY status PENDING", "text-warning")}
-            ${bottleneck("Late CAPHAND", s.caphand?.late_rows || 0, "Dari lateness_status = Late", "text-error")}
-            ${bottleneck("SLA Miss", s.checker?.sla_miss || 0, "Dari Checker Input UNLOAD SLA", "text-error")}
+          <div class="glass-card rounded-xl p-6">
+            <h3 class="font-headline-md text-headline-md mb-4">CAPHAND Summary</h3>
+            <div class="space-y-3">
+              ${miniMetric("Rows CAPHAND", cap.rows || 0, "text-primary")}
+              ${miniMetric("Unique SKU", cap.unique_sku || 0, "text-secondary")}
+              ${miniMetric("Total Request Qty", num(cap.total_request_qty || 0), "text-success")}
+              ${miniMetric("Late Rows", cap.late_rows || 0, "text-error")}
+            </div>
           </div>
         </div>`;
+      }
+
+      function monitorRow(r) {
+        const st = String(r.status || "").toUpperCase();
+        const wait =
+          r.waiting_text || liveWaitingText(r.created_at, r.completed_at);
+        const danger =
+          Number(r.waiting_minutes || minutesFromCreated(r.created_at)) >= 60;
+        return `<tr class="hover:bg-primary/5 ${danger ? "bg-error/5" : ""}">
+          <td class="px-4 py-3 font-queue-id text-primary">${esc(r.plat_number || "-")}</td>
+          <td class="px-4 py-3 font-queue-id">${esc(r.queue_no || "-")}</td>
+          <td class="px-4 py-3">${esc(r.vendor_name || "-")}</td>
+          <td class="px-4 py-3 text-sm">${esc(r.po_number || "-")}</td>
+          <td class="px-4 py-3">${esc(r.gate || "-")}</td>
+          <td class="px-4 py-3">${esc(st || "-")}</td>
+          <td class="px-4 py-3 font-queue-id ${danger ? "text-error" : "text-tertiary"}">${esc(wait)}</td>
+        </tr>`;
       }
 
       function pageLaporan() {
         const rows = state.dashboard?.report_preview || [];
         return `<div class="glass-card rounded-xl p-6">
-          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6"><div><h3 class="font-headline-md text-headline-md">Laporan Antrian</h3><p class="text-on-surface-variant">Rekap ticket dari Security + Checker.</p></div><div class="flex gap-2"><button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">refresh</span>Refresh</button><button onclick="exportCsv()" class="bg-primary-container text-on-primary-container px-5 py-3 rounded-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined">download</span>Export CSV</button></div></div>
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+            <div>
+              <h3 class="font-headline-md text-headline-md">Waiting List</h3>
+              <p class="text-on-surface-variant">Hasil input Security. Status dan gate ikut berubah setelah Checker submit berdasarkan plat nomor.</p>
+            </div>
+            <div class="flex gap-2">
+              <button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">refresh</span>Refresh</button>
+              <button onclick="exportCsv()" class="bg-primary-container text-on-primary-container px-5 py-3 rounded-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined">download</span>Export CSV</button>
+            </div>
+          </div>
           ${reportTable(rows)}
         </div>`;
       }
@@ -771,8 +858,15 @@
         </div>`;
       }
 
-      function textInput(name, label, placeholder, list, value = "") {
-        return `<label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">${label}</span><input name="${name}" ${list ? `list="${list}"` : ""} class="form-input" placeholder="${placeholder || ""}" value="${esc(value || "")}" /></label>`;
+      function textInput(
+        name,
+        label,
+        placeholder,
+        list,
+        value = "",
+        extra = "",
+      ) {
+        return `<label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">${label}</span><input name="${name}" ${list ? `list="${list}"` : ""} ${extra || ""} class="form-input" placeholder="${placeholder || ""}" value="${esc(value || "")}" /></label>`;
       }
       function selectInput(name, label, options = [], value = "") {
         return `<label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">${label}</span><select name="${name}" class="form-select">${(options || []).map((o) => `<option ${String(o) === String(value) ? "selected" : ""}>${esc(o)}</option>`).join("")}</select></label>`;
@@ -797,10 +891,17 @@
       function queueTable() {
         const rows = state.dashboard?.queue || [];
         return `<div class="glass-card rounded-xl overflow-hidden border border-outline-variant/30">
-          <div class="p-6 border-b border-outline-variant/30 flex flex-col md:flex-row md:justify-between md:items-center gap-4"><div class="flex items-center gap-3"><span class="material-symbols-outlined text-primary">stream</span><h3 class="font-headline-md text-headline-md">Data Antrian</h3></div><input id="queue-search" oninput="filterTable('queue-table',this.value)" class="form-input md:max-w-xs" placeholder="Cari antrian / plat / vendor..." type="text"/></div>
-          <div class="overflow-x-auto"><table id="queue-table" class="w-full text-left"><thead class="bg-surface-container text-on-surface-variant"><tr>${["No. Antrian", "Vendor", "Plat", "PO", "Status", "Gate", "Qty", "SKU"].map((h) => `<th class="px-6 py-4 font-label-sm uppercase tracking-wider">${h}</th>`).join("")}</tr></thead><tbody class="divide-y divide-outline-variant/10">${rows.map(queueRow).join("") || `<tr><td colspan="8" class="px-6 py-8 text-center text-on-surface-variant">Belum ada data.</td></tr>`}</tbody></table></div>
+          <div class="p-6 border-b border-outline-variant/30 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+            <div class="flex items-center gap-3"><span class="material-symbols-outlined text-primary">stream</span><h3 class="font-headline-md text-headline-md">Data Waiting List</h3></div>
+            <input id="queue-search" oninput="filterTable('queue-table',this.value)" class="form-input md:max-w-xs" placeholder="Cari antrian / plat / vendor..." type="text"/>
+          </div>
+          <div class="overflow-x-auto"><table id="queue-table" class="w-full text-left">
+            <thead class="bg-surface-container text-on-surface-variant"><tr>${["No. Antrian", "Vendor", "Plat", "PO", "Status", "Gate", "Menunggu", "Qty", "SKU"].map((h) => `<th class="px-6 py-4 font-label-sm uppercase tracking-wider">${h}</th>`).join("")}</tr></thead>
+            <tbody class="divide-y divide-outline-variant/10">${rows.map(queueRow).join("") || `<tr><td colspan="9" class="px-6 py-8 text-center text-on-surface-variant">Belum ada data.</td></tr>`}</tbody>
+          </table></div>
         </div>`;
       }
+
       function queueRow(q) {
         const st = String(q.status || "").toUpperCase();
         const color = st.includes("WAIT")
@@ -810,8 +911,19 @@
             : st.includes("HOLD") || st.includes("MISS")
               ? "text-error bg-error/10 border-error/30"
               : "text-primary bg-primary/20 border-primary/30";
-        return `<tr class="hover:bg-primary/5 transition-colors"><td class="px-6 py-4 font-queue-id text-primary">${esc(q.queue_no || "-")}</td><td class="px-6 py-4">${esc(q.vendor_name || "-")}</td><td class="px-6 py-4 font-queue-id text-sm">${esc(q.plat_number || "-")}</td><td class="px-6 py-4 text-sm">${esc(q.po_number || "-")}</td><td class="px-6 py-4"><span class="px-3 py-1 rounded-full text-[10px] font-bold ${color} border">${esc(st || "-")}</span></td><td class="px-6 py-4">${esc(q.gate || "-")}</td><td class="px-6 py-4">${num(q.total_po_qty || 0)}</td><td class="px-6 py-4">${num(q.count_po_sku || 0)}</td></tr>`;
+        return `<tr class="hover:bg-primary/5 transition-colors">
+          <td class="px-6 py-4 font-queue-id text-primary">${esc(q.queue_no || "-")}</td>
+          <td class="px-6 py-4">${esc(q.vendor_name || "-")}</td>
+          <td class="px-6 py-4 font-queue-id text-sm">${esc(q.plat_number || "-")}</td>
+          <td class="px-6 py-4 text-sm">${esc(q.po_number || "-")}</td>
+          <td class="px-6 py-4"><span class="px-3 py-1 rounded-full text-[10px] font-bold ${color} border">${esc(st || "-")}</span></td>
+          <td class="px-6 py-4">${esc(q.gate || "-")}</td>
+          <td class="px-6 py-4 font-queue-id text-sm ${st.includes("WAIT") ? "text-tertiary" : "text-on-surface"}">${esc(q.waiting_text || liveWaitingText(q.created_at, q.completed_at))}</td>
+          <td class="px-6 py-4">${num(q.total_po_qty || 0)}</td>
+          <td class="px-6 py-4">${num(q.count_po_sku || 0)}</td>
+        </tr>`;
       }
+
       function dockCard(d) {
         const st = String(d.status || "KOSONG").toUpperCase();
         const cls = st.includes("KOSONG")
@@ -825,8 +937,16 @@
         return `<div class="bg-surface-container-high/50 p-4 rounded-lg border-l-4 border-current ${color} mb-3"><div class="flex justify-between"><span class="font-bold text-on-surface">${esc(title)}</span><span class="font-queue-id ${color}">${esc(value)}</span></div><p class="text-[12px] text-on-surface-variant mt-1">${esc(note)}</p></div>`;
       }
       function reportTable(rows) {
-        return `<div class="overflow-x-auto"><table id="report-table" class="w-full text-left"><thead class="bg-surface-container text-on-surface-variant"><tr>${["Source", "Created", "Queue", "Vendor", "Fleet", "Plat", "PO", "Gate", "Status", "Qty", "SKU", "SLA"].map((h) => `<th class="px-4 py-3 font-label-sm uppercase">${h}</th>`).join("")}</tr></thead><tbody class="divide-y divide-outline-variant/10">${rows.map((r) => `<tr class="hover:bg-primary/5">${["source", "created_at", "queue_no", "vendor_name", "fleet_type", "plat_number", "po_number", "gate", "status", "total_po_qty", "count_po_sku", "unload_sla"].map((k) => `<td class="px-4 py-3 text-sm">${esc(r[k] ?? "")}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="12" class="px-6 py-8 text-center text-on-surface-variant">Belum ada report.</td></tr>`}</tbody></table></div>`;
+        return `<div class="overflow-x-auto"><table id="report-table" class="w-full text-left">
+          <thead class="bg-surface-container text-on-surface-variant">
+            <tr>${["Created", "Queue", "Vendor", "Fleet", "Plat", "PO", "Gate", "Status", "Menunggu", "Qty", "SKU", "SLA"].map((h) => `<th class="px-4 py-3 font-label-sm uppercase">${h}</th>`).join("")}</tr>
+          </thead>
+          <tbody class="divide-y divide-outline-variant/10">
+            ${rows.map((r) => `<tr class="hover:bg-primary/5">${["created_at", "queue_no", "vendor_name", "fleet_type", "plat_number", "po_number", "gate", "status"].map((k) => `<td class="px-4 py-3 text-sm">${esc(r[k] ?? "")}</td>`).join("")}<td class="px-4 py-3 text-sm font-queue-id text-tertiary">${esc(r.waiting_text || liveWaitingText(r.created_at, r.completed_at))}</td><td class="px-4 py-3 text-sm">${esc(r.total_po_qty ?? "")}</td><td class="px-4 py-3 text-sm">${esc(r.count_po_sku ?? "")}</td><td class="px-4 py-3 text-sm">${esc(r.unload_sla ?? "")}</td></tr>`).join("") || `<tr><td colspan="12" class="px-6 py-8 text-center text-on-surface-variant">Belum ada waiting list.</td></tr>`}
+          </tbody>
+        </table></div>`;
       }
+
       function emptyBox(t) {
         return `<div class="p-6 rounded-lg border border-outline-variant text-on-surface-variant text-center">${esc(t)}</div>`;
       }
@@ -838,7 +958,6 @@
           checker: pageChecker,
           antrian: pageAntrian,
           panggil: pagePanggil,
-          dock: pageDock,
           monitor: pageMonitor,
           laporan: pageLaporan,
           setting: pageSetting,
@@ -894,26 +1013,27 @@
           showToast("Refresh gagal: " + err.message);
         }
       }
-      async function lookupPo() {
+      async function lookupPo(silent = false) {
         const f = document.getElementById("security-form");
+        if (!f) return;
         const fd = new FormData(f);
         const po = fd.get("po_number");
         const vendor = fd.get("vendor_name");
         if (!po && !vendor) {
-          showToast("Isi PO Number atau Vendor dulu.");
+          if (!silent) showToast("Isi PO Number atau Vendor dulu.");
           return;
         }
         if (!hasApi()) {
           state.poLookup = {
             summary: {
               po_number: po,
-              vendor_name: vendor,
+              vendor_name: vendor || "Vendor Dummy",
               total_po_qty: 123,
               count_po_sku: 7,
             },
           };
           renderPage("daftar", false);
-          showToast("Lookup dummy aktif");
+          if (!silent) showToast("Lookup dummy aktif");
           return;
         }
         try {
@@ -922,21 +1042,40 @@
             vendor_name: vendor,
           });
           renderPage("daftar", false);
-          showToast(state.poLookup.found ? "PO ditemukan" : "PO tidak ketemu");
+          if (!silent)
+            showToast(
+              state.poLookup.found
+                ? "PO ditemukan, vendor auto keisi"
+                : "PO tidak ketemu",
+            );
         } catch (err) {
-          showToast("Lookup gagal: " + err.message);
+          if (!silent) showToast("Lookup gagal: " + err.message);
         }
       }
+
       async function submitSecurity(e) {
         e.preventDefault();
         const body = Object.fromEntries(new FormData(e.target).entries());
+        body.status = "WAITING";
         body.total_po_qty =
           state.poLookup?.summary?.total_po_qty ||
-          document.getElementById("security-total-qty")?.textContent ||
+          Number(
+            String(
+              document.getElementById("security-total-qty")?.textContent || "0",
+            )
+              .replace(/\./g, "")
+              .replace(/,/g, ""),
+          ) ||
           0;
         body.count_po_sku =
           state.poLookup?.summary?.count_po_sku ||
-          document.getElementById("security-count-sku")?.textContent ||
+          Number(
+            String(
+              document.getElementById("security-count-sku")?.textContent || "0",
+            )
+              .replace(/\./g, "")
+              .replace(/,/g, ""),
+          ) ||
           0;
         if (!hasApi()) {
           const id =
@@ -962,6 +1101,7 @@
           showToast("Submit gagal: " + err.message);
         }
       }
+
       async function submitChecker(e) {
         e.preventDefault();
         const body = Object.fromEntries(new FormData(e.target).entries());
@@ -1071,6 +1211,40 @@
         });
       }
 
+      function parseDateLocal(value) {
+        if (!value) return null;
+        const s = String(value);
+        let d = null;
+        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) {
+          d = new Date(s.replace(" ", "T"));
+        } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) {
+          d = new Date(s);
+        } else if (/^\d{2}\/\d{2}\/\d{4}/.test(s)) {
+          const p = s.split(/[\/ :]/);
+          d = new Date(
+            Number(p[2]),
+            Number(p[1]) - 1,
+            Number(p[0]),
+            Number(p[3] || 0),
+            Number(p[4] || 0),
+            Number(p[5] || 0),
+          );
+        }
+        return d && !isNaN(d.getTime()) ? d : null;
+      }
+      function minutesFromCreated(createdAt) {
+        const d = parseDateLocal(createdAt);
+        if (!d) return 0;
+        return Math.max(0, Math.floor((Date.now() - d.getTime()) / 60000));
+      }
+      function liveWaitingText(createdAt, completedAt) {
+        if (completedAt) return "Selesai";
+        const mins = minutesFromCreated(createdAt);
+        const h = Math.floor(mins / 60);
+        const m = mins % 60;
+        return h > 0 ? `${h}j ${m}m` : `${m}m`;
+      }
+
       function applyTheme(mode, withToast = true) {
         const html = document.documentElement;
         const icon = document.getElementById("theme-icon");
@@ -1164,12 +1338,12 @@
               metric: "unique_sku",
             },
             {
-              label: "Putaway Pending",
+              label: "Late CAPHAND",
               display_value: "0",
-              icon: "pending_actions",
-              color: "warning",
+              icon: "warning",
+              color: "error",
               source: "demo",
-              metric: "pending",
+              metric: "late_rows",
             },
             {
               label: "SLA OK",
@@ -1194,7 +1368,6 @@
               sla_miss: 0,
             },
             caphand: { rows: 0, unique_po: 0, late_rows: 0 },
-            putaway: { rows: 0, pending: 0, completed_pct: 0 },
           },
           queue: [],
           priority: [],
