@@ -17,14 +17,129 @@
           "GRAD" 0,
           "opsz" 24;
       }
+
+      html.dark {
+        color-scheme: dark;
+        --background: 8 20 37;
+        --surface: 8 20 37;
+        --surface-dim: 8 20 37;
+        --surface-container-lowest: 4 14 31;
+        --surface-container-low: 17 28 45;
+        --surface-container: 21 32 49;
+        --surface-container-high: 31 42 60;
+        --surface-container-highest: 42 53 72;
+        --surface-variant: 42 53 72;
+        --surface-bright: 47 58 76;
+        --on-surface: 216 227 251;
+        --on-surface-variant: 195 198 215;
+        --on-background: 216 227 251;
+        --primary: 180 197 255;
+        --primary-container: 37 99 235;
+        --primary-fixed: 219 225 255;
+        --primary-fixed-dim: 180 197 255;
+        --on-primary: 0 42 120;
+        --on-primary-container: 238 239 255;
+        --on-primary-fixed: 0 23 75;
+        --secondary: 210 187 255;
+        --secondary-container: 96 1 209;
+        --secondary-fixed: 234 221 255;
+        --secondary-fixed-dim: 210 187 255;
+        --on-secondary: 63 0 142;
+        --on-secondary-container: 201 174 255;
+        --tertiary: 255 181 150;
+        --tertiary-container: 188 72 0;
+        --tertiary-fixed-dim: 255 181 150;
+        --error: 255 180 171;
+        --error-container: 147 0 10;
+        --on-error: 105 0 5;
+        --on-error-container: 255 218 214;
+        --outline: 141 144 160;
+        --outline-variant: 67 70 85;
+        --inverse-surface: 216 227 251;
+        --inverse-on-surface: 38 49 67;
+        --inverse-primary: 0 83 219;
+        --surface-tint: 180 197 255;
+        --success: 74 222 128;
+        --warning: 251 191 36;
+        --shader-opacity: 0.8;
+        --shader-filter: saturate(1) brightness(1);
+        --shader-blend: normal;
+      }
+
+      html.light {
+        color-scheme: light;
+        --background: 245 248 255;
+        --surface: 245 248 255;
+        --surface-dim: 233 240 251;
+        --surface-container-lowest: 238 244 255;
+        --surface-container-low: 255 255 255;
+        --surface-container: 237 243 252;
+        --surface-container-high: 223 233 248;
+        --surface-container-highest: 208 220 239;
+        --surface-variant: 219 230 247;
+        --surface-bright: 255 255 255;
+        --on-surface: 15 23 42;
+        --on-surface-variant: 71 85 105;
+        --on-background: 15 23 42;
+        --primary: 29 78 216;
+        --primary-container: 37 99 235;
+        --primary-fixed: 219 234 254;
+        --primary-fixed-dim: 147 197 253;
+        --on-primary: 255 255 255;
+        --on-primary-container: 239 246 255;
+        --on-primary-fixed: 15 23 42;
+        --secondary: 109 40 217;
+        --secondary-container: 109 40 217;
+        --secondary-fixed: 237 233 254;
+        --secondary-fixed-dim: 196 181 253;
+        --on-secondary: 255 255 255;
+        --on-secondary-container: 245 243 255;
+        --tertiary: 234 88 12;
+        --tertiary-container: 254 215 170;
+        --tertiary-fixed-dim: 253 186 116;
+        --error: 220 38 38;
+        --error-container: 254 226 226;
+        --on-error: 255 255 255;
+        --on-error-container: 127 29 29;
+        --outline: 100 116 139;
+        --outline-variant: 203 213 225;
+        --inverse-surface: 15 23 42;
+        --inverse-on-surface: 248 250 252;
+        --inverse-primary: 96 165 250;
+        --surface-tint: 37 99 235;
+        --success: 22 163 74;
+        --warning: 217 119 6;
+        --shader-opacity: 0.24;
+        --shader-filter: saturate(1.25) brightness(1.55);
+        --shader-blend: multiply;
+      }
+
+      body {
+        background: rgb(var(--background));
+        color: rgb(var(--on-surface));
+      }
+
+      #shader-bg {
+        opacity: var(--shader-opacity) !important;
+        filter: var(--shader-filter);
+        mix-blend-mode: var(--shader-blend);
+        transition:
+          opacity 0.35s ease,
+          filter 0.35s ease;
+      }
       .glass-card {
         background: rgba(21, 32, 49, 0.64);
         backdrop-filter: blur(14px);
         border: 1px solid rgba(67, 70, 85, 0.42);
+        transition:
+          background 0.35s ease,
+          border-color 0.35s ease,
+          color 0.35s ease;
       }
       .light .glass-card {
-        background: rgba(255, 255, 255, 0.74);
-        border: 1px solid rgba(0, 0, 0, 0.1);
+        background: rgba(255, 255, 255, 0.7);
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        box-shadow: 0 16px 45px rgba(15, 23, 42, 0.08);
       }
       .status-pulse {
         animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
@@ -70,157 +185,6 @@
       .light ::-webkit-scrollbar-thumb {
         background: #c4c6cf;
       }
-
-      /* THEME FIX: Light mode must be real light mode, not dark UI with gray glass. */
-      html.dark {
-        color-scheme: dark;
-      }
-      html.light {
-        color-scheme: light;
-      }
-
-      html.light body {
-        background: linear-gradient(
-          135deg,
-          #f8fafc 0%,
-          #eef4ff 45%,
-          #ffffff 100%
-        ) !important;
-        color: #111827 !important;
-      }
-
-      html.light #shader-bg {
-        display: none !important;
-        opacity: 0 !important;
-      }
-
-      html.light .relative.z-10 {
-        background:
-          radial-gradient(
-            circle at top right,
-            rgba(37, 99, 235, 0.12),
-            transparent 34%
-          ),
-          radial-gradient(
-            circle at bottom left,
-            rgba(96, 1, 209, 0.08),
-            transparent 32%
-          ),
-          linear-gradient(135deg, #f8fafc 0%, #eef4ff 42%, #ffffff 100%) !important;
-      }
-
-      html.light aside,
-      html.light header,
-      html.light .md\:hidden {
-        background: rgba(255, 255, 255, 0.88) !important;
-        border-color: #d8dee9 !important;
-        color: #111827 !important;
-        box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
-      }
-
-      html.light .glass-card {
-        background: rgba(255, 255, 255, 0.9) !important;
-        border: 1px solid rgba(148, 163, 184, 0.38) !important;
-        box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08) !important;
-        color: #111827 !important;
-      }
-
-      html.light [class*="bg-surface"] {
-        background-color: rgba(255, 255, 255, 0.72) !important;
-      }
-
-      html.light [class*="bg-surface-container-high"] {
-        background-color: rgba(241, 245, 249, 0.88) !important;
-      }
-
-      html.light [class*="bg-surface-container-lowest"] {
-        background-color: rgba(255, 255, 255, 0.9) !important;
-      }
-
-      html.light [class*="border-outline"] {
-        border-color: #d8dee9 !important;
-      }
-
-      html.light .text-on-surface,
-      html.light [class*="text-on-surface"] {
-        color: #111827 !important;
-      }
-
-      html.light .text-on-surface-variant,
-      html.light [class*="text-on-surface-variant"] {
-        color: #475569 !important;
-      }
-
-      html.light .text-primary,
-      html.light [class*="text-primary"] {
-        color: #2563eb !important;
-      }
-
-      html.light .text-tertiary,
-      html.light [class*="text-tertiary"] {
-        color: #ea580c !important;
-      }
-
-      html.light .text-error,
-      html.light [class*="text-error"] {
-        color: #dc2626 !important;
-      }
-
-      html.light .bg-primary-container,
-      html.light [class~="bg-primary-container"] {
-        background-color: #2563eb !important;
-        color: #ffffff !important;
-      }
-
-      html.light .bg-secondary-container,
-      html.light [class~="bg-secondary-container"] {
-        background-color: #6d00d7 !important;
-        color: #ffffff !important;
-      }
-
-      html.light .text-on-primary-container,
-      html.light [class*="text-on-primary-container"],
-      html.light .text-on-secondary-container,
-      html.light [class*="text-on-secondary-container"] {
-        color: #ffffff !important;
-      }
-
-      html.light .bg-on-primary,
-      html.light [class~="bg-on-primary"] {
-        background-color: #0f172a !important;
-        color: #dbeafe !important;
-      }
-
-      html.light input,
-      html.light select,
-      html.light textarea {
-        background: rgba(255, 255, 255, 0.92) !important;
-        color: #111827 !important;
-        border-color: #cbd5e1 !important;
-      }
-
-      html.light input::placeholder,
-      html.light textarea::placeholder {
-        color: #64748b !important;
-      }
-
-      html.light table thead {
-        background: #eef2ff !important;
-        color: #475569 !important;
-      }
-
-      html.light table tbody tr:hover {
-        background: rgba(37, 99, 235, 0.06) !important;
-      }
-
-      html.light #toast {
-        background: #0f172a !important;
-        color: #ffffff !important;
-      }
-
-      html.light .status-pulse {
-        opacity: 1;
-      }
     </style>
     <script id="tailwind-config">
       tailwind.config = {
@@ -228,46 +192,63 @@
         theme: {
           extend: {
             colors: {
-              "primary-fixed-dim": "#b4c5ff",
-              "tertiary-fixed-dim": "#ffb596",
-              tertiary: "#ffb596",
-              "on-secondary-container": "#c9aeff",
-              "inverse-surface": "#d8e3fb",
-              "on-error-container": "#ffdad6",
-              "outline-variant": "#434655",
-              "on-primary-container": "#eeefff",
-              "inverse-on-surface": "#263143",
-              "surface-container-low": "#111c2d",
-              "on-surface-variant": "#c3c6d7",
-              "on-primary": "#002a78",
-              "surface-container": "#152031",
-              "on-primary-fixed": "#00174b",
-              "tertiary-container": "#bc4800",
-              "surface-dim": "#081425",
-              "surface-container-lowest": "#040e1f",
-              "surface-variant": "#2a3548",
-              error: "#ffb4ab",
-              "surface-container-highest": "#2a3548",
-              "on-surface": "#d8e3fb",
-              "secondary-fixed-dim": "#d2bbff",
-              "on-error": "#690005",
-              "inverse-primary": "#0053db",
-              "surface-bright": "#2f3a4c",
-              "surface-tint": "#b4c5ff",
-              outline: "#8d90a0",
-              "on-background": "#d8e3fb",
-              primary: "#b4c5ff",
-              background: "#081425",
-              "on-secondary": "#3f008e",
-              "secondary-container": "#6001d1",
-              "surface-container-high": "#1f2a3c",
-              surface: "#081425",
-              "error-container": "#93000a",
-              "primary-fixed": "#dbe1ff",
-              "primary-container": "#2563eb",
-              secondary: "#d2bbff",
-              success: "#4ade80",
-              warning: "#fbbf24",
+              "primary-fixed-dim":
+                "rgb(var(--primary-fixed-dim) / <alpha-value>)",
+              "tertiary-fixed-dim":
+                "rgb(var(--tertiary-fixed-dim) / <alpha-value>)",
+              tertiary: "rgb(var(--tertiary) / <alpha-value>)",
+              "on-secondary-container":
+                "rgb(var(--on-secondary-container) / <alpha-value>)",
+              "inverse-surface": "rgb(var(--inverse-surface) / <alpha-value>)",
+              "on-error-container":
+                "rgb(var(--on-error-container) / <alpha-value>)",
+              "outline-variant": "rgb(var(--outline-variant) / <alpha-value>)",
+              "on-primary-container":
+                "rgb(var(--on-primary-container) / <alpha-value>)",
+              "inverse-on-surface":
+                "rgb(var(--inverse-on-surface) / <alpha-value>)",
+              "surface-container-low":
+                "rgb(var(--surface-container-low) / <alpha-value>)",
+              "on-surface-variant":
+                "rgb(var(--on-surface-variant) / <alpha-value>)",
+              "on-primary": "rgb(var(--on-primary) / <alpha-value>)",
+              "surface-container":
+                "rgb(var(--surface-container) / <alpha-value>)",
+              "on-primary-fixed":
+                "rgb(var(--on-primary-fixed) / <alpha-value>)",
+              "tertiary-container":
+                "rgb(var(--tertiary-container) / <alpha-value>)",
+              "surface-dim": "rgb(var(--surface-dim) / <alpha-value>)",
+              "surface-container-lowest":
+                "rgb(var(--surface-container-lowest) / <alpha-value>)",
+              "surface-variant": "rgb(var(--surface-variant) / <alpha-value>)",
+              error: "rgb(var(--error) / <alpha-value>)",
+              "surface-container-highest":
+                "rgb(var(--surface-container-highest) / <alpha-value>)",
+              "on-surface": "rgb(var(--on-surface) / <alpha-value>)",
+              "secondary-fixed-dim":
+                "rgb(var(--secondary-fixed-dim) / <alpha-value>)",
+              "on-error": "rgb(var(--on-error) / <alpha-value>)",
+              "inverse-primary": "rgb(var(--inverse-primary) / <alpha-value>)",
+              "surface-bright": "rgb(var(--surface-bright) / <alpha-value>)",
+              "surface-tint": "rgb(var(--surface-tint) / <alpha-value>)",
+              outline: "rgb(var(--outline) / <alpha-value>)",
+              "on-background": "rgb(var(--on-background) / <alpha-value>)",
+              primary: "rgb(var(--primary) / <alpha-value>)",
+              background: "rgb(var(--background) / <alpha-value>)",
+              "on-secondary": "rgb(var(--on-secondary) / <alpha-value>)",
+              "secondary-container":
+                "rgb(var(--secondary-container) / <alpha-value>)",
+              "surface-container-high":
+                "rgb(var(--surface-container-high) / <alpha-value>)",
+              surface: "rgb(var(--surface) / <alpha-value>)",
+              "error-container": "rgb(var(--error-container) / <alpha-value>)",
+              "primary-fixed": "rgb(var(--primary-fixed) / <alpha-value>)",
+              "primary-container":
+                "rgb(var(--primary-container) / <alpha-value>)",
+              secondary: "rgb(var(--secondary) / <alpha-value>)",
+              success: "rgb(var(--success) / <alpha-value>)",
+              warning: "rgb(var(--warning) / <alpha-value>)",
             },
             borderRadius: {
               DEFAULT: "0.125rem",
@@ -937,26 +918,28 @@
         showToast("Buka menu " + pageMeta[page].title);
       }
 
-      function applyTheme(theme, silent = false) {
+      function applyTheme(mode, withToast = true) {
         const html = document.documentElement;
         const icon = document.getElementById("theme-icon");
-        const useLight = theme === "light";
-        html.classList.toggle("light", useLight);
-        html.classList.toggle("dark", !useLight);
-        if (icon) icon.innerText = useLight ? "dark_mode" : "light_mode";
-        try {
-          localStorage.setItem(
-            "inboundQueueTheme",
-            useLight ? "light" : "dark",
+        const safeMode = mode === "light" ? "light" : "dark";
+        html.classList.toggle("light", safeMode === "light");
+        html.classList.toggle("dark", safeMode === "dark");
+        if (icon)
+          icon.innerText = safeMode === "light" ? "light_mode" : "dark_mode";
+        localStorage.setItem("inboundQueueTheme", safeMode);
+        if (withToast)
+          showToast(
+            safeMode === "light" ? "Light mode aktif" : "Dark mode aktif",
           );
-        } catch (e) {}
-        if (!silent)
-          showToast(useLight ? "Light mode aktif" : "Dark mode aktif");
+      }
+
+      function initTheme() {
+        applyTheme(localStorage.getItem("inboundQueueTheme") || "dark", false);
       }
 
       function toggleTheme() {
-        const html = document.documentElement;
-        applyTheme(html.classList.contains("dark") ? "light" : "dark");
+        const isDark = document.documentElement.classList.contains("dark");
+        applyTheme(isDark ? "light" : "dark");
       }
 
       function callNext(btn) {
@@ -1126,18 +1109,9 @@
         renderPage((location.hash || "#antrian").replace("#", "")),
       );
 
+      initTheme();
       setInterval(tickClock, 1000);
       tickClock();
-      applyTheme(
-        (() => {
-          try {
-            return localStorage.getItem("inboundQueueTheme") || "dark";
-          } catch (e) {
-            return "dark";
-          }
-        })(),
-        true,
-      );
       initShader();
       renderPage((location.hash || "#antrian").replace("#", ""));
     </script>
