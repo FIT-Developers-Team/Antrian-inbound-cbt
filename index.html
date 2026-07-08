@@ -438,16 +438,17 @@
         schema: null,
         options: {
           fleet_type: [
-            "Truck",
             "CDD",
             "CDE",
-            "WINGBOX",
-            "CDDL",
-            "Engkel",
-            "Box",
-            "Blind Van",
-            "Kontainer",
-            "Motor",
+            "WING BOX",
+            "VAN",
+            "L300",
+            "TRONTON",
+            "PROTON",
+            "FUSO",
+            "MINI BUS",
+            "KR2",
+            "KR3",
           ],
           security_status: ["WAITING"],
           checker_status: [
@@ -627,23 +628,30 @@
       function pageDaftar() {
         const o = state.options;
         const lookup = state.poLookup;
+        const nowText = new Date().toLocaleString("id-ID");
         return `<div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
           <div class="lg:col-span-2 glass-card rounded-xl p-6">
             <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-6">
               <div>
                 <h3 class="font-headline-md text-headline-md mb-1">Security Input</h3>
-                <p class="text-on-surface-variant">Input driver datang. Vendor, Total PO Qty, dan Count SKU auto lookup dari CAPHAND berdasarkan PO.</p>
+                <p class="text-on-surface-variant">Isi PO dulu. Vendor, qty, SKU, dan slot auto lookup dari CAPHAND tanpa klik tombol.</p>
               </div>
-              <button onclick="lookupPo()" class="thin-tab rounded-lg px-4 py-2 font-label-sm flex items-center gap-2 w-fit">
-                <span class="material-symbols-outlined">search</span>Lookup PO
-              </button>
+              <div class="thin-tab rounded-lg px-4 py-2 font-label-sm flex items-center gap-2 w-fit opacity-80">
+                <span class="material-symbols-outlined">sync</span>Auto lookup PO
+              </div>
             </div>
             <form id="security-form" onsubmit="submitSecurity(event)">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                ${textInput("po_number", "PO Number", "ID1/POR/...", "po-list", lookup?.summary?.po_number, 'onchange="lookupPo(true)" onblur="lookupPo(true)"')}
-                ${textInput("vendor_name", "Vendor Name", "Auto dari PO / bisa manual", "vendor-list", lookup?.summary?.vendor_name)}
+                ${textInput("po_number", "PO Number", "ID1/POR/...", "po-list", lookup?.summary?.po_number, 'oninput="schedulePoLookup()" onblur="lookupPo(true)" autocomplete="off"')}
+                ${textInput("vendor_name", "Vendor Name", "Auto dari PO", "vendor-list", lookup?.summary?.vendor_name)}
+                ${selectInput("ticket_type", "Tipe Tiket", ["REG", "DROP"], "REG", 'onchange="handleTicketTypeChange()"')}
+                ${selectInput("slot", "Slot", buildSlotOptions(lookup?.summary?.slot), lookup?.summary?.slot || "3")}
                 ${selectInput("fleet_type", "Fleet Type", o.fleet_type)}
                 ${textInput("plat_number", "Plat Number", "Contoh: B 1234 XYZ")}
+                ${textInput("driver_name", "Driver's Name", "Nama driver")}
+                ${textInput("ktp_6_digit", "6 Digit No KTP", "Contoh: 123456", "", "", 'maxlength="6" inputmode="numeric" pattern="[0-9]{6}"')}
+                ${textInput("phone_number", "Phone Number", "08xxxxxxxxxx", "", "", 'inputmode="tel"')}
+                <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Register Time</span><input name="register_time" class="form-input opacity-80" value="${esc(nowText)}" readonly /></label>
                 <label class="flex flex-col gap-2">
                   <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Status Security</span>
                   <input type="hidden" name="status" value="WAITING" />
@@ -662,8 +670,8 @@
           </div>
           <div class="glass-card rounded-xl p-6 flex flex-col justify-center items-center text-center">
             <span class="text-on-surface-variant uppercase font-label-sm">Nomor Terakhir</span>
-            <div id="new-queue-number" class="font-queue-id text-[70px] md:text-[88px] leading-none text-primary my-6">${esc(state.lastCalled.queue_no || "IB-000")}</div>
-            <p class="text-on-surface-variant">Kasih nomor ini ke driver. Simpel. No drama.</p>
+            <div id="new-queue-number" class="font-queue-id text-[64px] md:text-[78px] leading-none text-primary my-6">${esc(state.lastCalled.queue_no || "REG 3-0")}</div>
+            <p class="text-on-surface-variant">Format: REG 3-12 = reguler slot 3 urutan 12. DROP = drop barang.</p>
           </div>
         </div>`;
       }
@@ -673,7 +681,7 @@
         return `<div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
           <div class="lg:col-span-2 glass-card rounded-xl p-6">
             <h3 class="font-headline-md text-headline-md mb-1">Checker Input</h3>
-            <p class="text-on-surface-variant mb-6">Update gate, status bongkar, dan SLA. Ini nulis ke kolom J:O.</p>
+            <p class="text-on-surface-variant mb-6">Update gate, status bongkar, dan SLA. Data checker masuk blok CHECKER INPUT.</p>
             <form id="checker-form" onsubmit="submitChecker(event)">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 ${textInput("vendor_name", "Vendor Name", "Contoh: Supplier A", "vendor-list")}
@@ -868,9 +876,32 @@
       ) {
         return `<label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">${label}</span><input name="${name}" ${list ? `list="${list}"` : ""} ${extra || ""} class="form-input" placeholder="${placeholder || ""}" value="${esc(value || "")}" /></label>`;
       }
-      function selectInput(name, label, options = [], value = "") {
-        return `<label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">${label}</span><select name="${name}" class="form-select">${(options || []).map((o) => `<option ${String(o) === String(value) ? "selected" : ""}>${esc(o)}</option>`).join("")}</select></label>`;
+      function selectInput(name, label, options = [], value = "", extra = "") {
+        return `<label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">${label}</span><select name="${name}" class="form-select" ${extra}>${(options || []).map((o) => `<option ${String(o) === String(value) ? "selected" : ""}>${esc(o)}</option>`).join("")}</select></label>`;
       }
+      function buildSlotOptions(preferred) {
+        const base = ["1", "2", "3", "4", "5", "6"];
+        const val = String(preferred || "").trim();
+        return val && !base.includes(val) ? [val].concat(base) : base;
+      }
+
+      let poLookupTimer = null;
+      function schedulePoLookup() {
+        clearTimeout(poLookupTimer);
+        poLookupTimer = setTimeout(() => lookupPo(true), 650);
+      }
+
+      function handleTicketTypeChange() {
+        const form = document.getElementById("security-form");
+        if (!form) return;
+        const type = form.querySelector('[name="ticket_type"]')?.value;
+        const slot = form.querySelector('[name="slot"]');
+        if (slot) {
+          slot.disabled = type === "DROP";
+          slot.parentElement.style.opacity = type === "DROP" ? "0.45" : "1";
+        }
+      }
+
       function datalists() {
         return `<datalist id="vendor-list">${(state.options.vendor_name || [])
           .slice(0, 500)
@@ -942,7 +973,7 @@
             <tr>${["Created", "Queue", "Vendor", "Fleet", "Plat", "PO", "Gate", "Status", "Menunggu", "Qty", "SKU", "SLA"].map((h) => `<th class="px-4 py-3 font-label-sm uppercase">${h}</th>`).join("")}</tr>
           </thead>
           <tbody class="divide-y divide-outline-variant/10">
-            ${rows.map((r) => `<tr class="hover:bg-primary/5">${["created_at", "queue_no", "vendor_name", "fleet_type", "plat_number", "po_number", "gate", "status"].map((k) => `<td class="px-4 py-3 text-sm">${esc(r[k] ?? "")}</td>`).join("")}<td class="px-4 py-3 text-sm font-queue-id text-tertiary">${esc(r.waiting_text || liveWaitingText(r.created_at, r.completed_at))}</td><td class="px-4 py-3 text-sm">${esc(r.total_po_qty ?? "")}</td><td class="px-4 py-3 text-sm">${esc(r.count_po_sku ?? "")}</td><td class="px-4 py-3 text-sm">${esc(r.unload_sla ?? "")}</td></tr>`).join("") || `<tr><td colspan="12" class="px-6 py-8 text-center text-on-surface-variant">Belum ada waiting list.</td></tr>`}
+            ${rows.map((r) => `<tr class="hover:bg-primary/5">${["created_at", "queue_no", "vendor_name", "fleet_type", "plat_number", "po_number", "gate", "status"].map((k) => `<td class="px-4 py-3 text-sm">${esc(r[k] ?? "")}</td>`).join("")}<td class="px-4 py-3 text-sm font-queue-id text-tertiary">${esc(r.waiting_text || liveWaitingText(r.created_at, r.completed_at))}</td><td class="px-4 py-3 text-sm">${esc(r.total_po_qty ?? "")}</td><td class="px-4 py-3 text-sm">${esc(r.count_po_sku ?? "")}</td><td class="px-4 py-3 text-sm">${esc(r.unload_sla ?? "")}</td></tr>`).join("") || `<tr><td colspan="14" class="px-6 py-8 text-center text-on-surface-variant">Belum ada waiting list.</td></tr>`}
           </tbody>
         </table></div>`;
       }
@@ -970,7 +1001,9 @@
         document.getElementById("page-subtitle").textContent =
           pageMeta[safe].subtitle;
         root.innerHTML = map[safe]();
+        if (safe === "daftar") setTimeout(handleTicketTypeChange, 0);
         updateActiveNav(safe);
+        requestAnimationFrame(() => updateActiveNav(safe));
         history.replaceState(null, "", "#" + safe);
         if (toast) showToast("Buka menu " + pageMeta[safe].title);
       }
@@ -1017,22 +1050,20 @@
         const f = document.getElementById("security-form");
         if (!f) return;
         const fd = new FormData(f);
-        const po = fd.get("po_number");
-        const vendor = fd.get("vendor_name");
-        if (!po && !vendor) {
-          if (!silent) showToast("Isi PO Number atau Vendor dulu.");
-          return;
-        }
+        const po = String(fd.get("po_number") || "").trim();
+        const vendor = String(fd.get("vendor_name") || "").trim();
+        if (!po && !vendor) return;
         if (!hasApi()) {
           state.poLookup = {
             summary: {
               po_number: po,
-              vendor_name: vendor || "Vendor Dummy",
+              vendor_name: vendor,
               total_po_qty: 123,
               count_po_sku: 7,
+              slot: "3",
             },
           };
-          renderPage("daftar", false);
+          applyPoLookupToForm();
           if (!silent) showToast("Lookup dummy aktif");
           return;
         }
@@ -1041,16 +1072,36 @@
             po_number: po,
             vendor_name: vendor,
           });
-          renderPage("daftar", false);
+          applyPoLookupToForm();
           if (!silent)
             showToast(
-              state.poLookup.found
-                ? "PO ditemukan, vendor auto keisi"
-                : "PO tidak ketemu",
+              state.poLookup.found ? "PO ditemukan" : "PO tidak ketemu",
             );
         } catch (err) {
           if (!silent) showToast("Lookup gagal: " + err.message);
         }
+      }
+
+      function applyPoLookupToForm() {
+        const f = document.getElementById("security-form");
+        const s = state.poLookup?.summary || {};
+        if (!f || !s) return;
+        if (s.vendor_name && f.vendor_name) f.vendor_name.value = s.vendor_name;
+        if (s.po_number && f.po_number && !f.po_number.value)
+          f.po_number.value = s.po_number;
+        if (s.slot && f.slot) {
+          const exists = Array.from(f.slot.options).some(
+            (o) => o.value === String(s.slot),
+          );
+          if (!exists)
+            f.slot.add(new Option(String(s.slot), String(s.slot)), 0);
+          f.slot.value = String(s.slot);
+        }
+        const qty = document.getElementById("security-total-qty");
+        const sku = document.getElementById("security-count-sku");
+        if (qty) qty.textContent = num(s.total_po_qty || 0);
+        if (sku) sku.textContent = num(s.count_po_sku || 0);
+        handleTicketTypeChange();
       }
 
       async function submitSecurity(e) {
@@ -1078,9 +1129,11 @@
           ) ||
           0;
         if (!hasApi()) {
+          const seq = String(Math.floor(Math.random() * 90) + 1);
           const id =
-            "IB-" +
-            String(Math.floor(Math.random() * 900) + 100).padStart(3, "0");
+            body.ticket_type === "DROP"
+              ? `DROP-${seq}`
+              : `REG ${body.slot || "3"}-${seq}`;
           state.lastCalled = {
             queue_no: id,
             gate: "-",
@@ -1297,6 +1350,10 @@
       function num(v) {
         return Number(v || 0).toLocaleString("id-ID");
       }
+      function cleanNumber(v) {
+        return Number(String(v || "0").replace(/[^0-9.-]/g, "")) || 0;
+      }
+
       function csvSafe(v) {
         const s = String(v ?? "");
         return /[",\n]/.test(s) ? `"${s.replaceAll('"', '""')}"` : s;
