@@ -75,6 +75,249 @@ const mobBase =
 const mobActive =
   "px-4 py-2 rounded-full text-label-sm bg-secondary-container text-on-secondary-container border border-secondary-container font-bold";
 
+const AUTH_STORAGE_KEY = "inbound_cbt_auth_user_v1";
+
+const AUTH_USERS = [
+  {
+    username: "spv",
+    password: "spv123",
+    role: "SPV",
+    display_name: "SPV",
+  },
+  {
+    username: "admin",
+    password: "admin123",
+    role: "ADMIN",
+    display_name: "Admin",
+  },
+  {
+    username: "checker",
+    password: "checker123",
+    role: "CHECKER",
+    display_name: "Checker",
+  },
+  {
+    username: "security",
+    password: "security123",
+    role: "SECURITY",
+    display_name: "Security",
+  },
+];
+
+const ROLE_ACCESS = {
+  SPV: [
+    "daftar",
+    "checker",
+    "antrian",
+    "panggil",
+    "monitor",
+    "laporan",
+    "setting",
+    "debug",
+  ],
+  ADMIN: ["checker", "panggil"],
+  CHECKER: ["checker"],
+  SECURITY: ["daftar"],
+};
+
+const ROLE_DEFAULT_PAGE = {
+  SPV: "daftar",
+  ADMIN: "checker",
+  CHECKER: "checker",
+  SECURITY: "daftar",
+};
+
+function normalizeRole(role = "") {
+  return String(role || "")
+    .trim()
+    .toUpperCase();
+}
+
+function getAuthUser() {
+  try {
+    const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!raw) return null;
+    const user = JSON.parse(raw);
+    if (!user || !user.role) return null;
+    return user;
+  } catch (err) {
+    return null;
+  }
+}
+
+function setAuthUser(user) {
+  localStorage.setItem(
+    AUTH_STORAGE_KEY,
+    JSON.stringify({
+      username: user.username,
+      role: normalizeRole(user.role),
+      display_name: user.display_name || user.username,
+      login_at: new Date().toISOString(),
+    }),
+  );
+}
+
+function clearAuthUser() {
+  localStorage.removeItem(AUTH_STORAGE_KEY);
+}
+
+function getRolePages(role = "") {
+  return ROLE_ACCESS[normalizeRole(role)] || [];
+}
+
+function canAccessPage(page, role = getAuthUser()?.role) {
+  const safePage = String(page || "").trim();
+  const pages = getRolePages(role);
+  return pages.includes(safePage);
+}
+
+function getDefaultPageForRole(role = getAuthUser()?.role) {
+  const safeRole = normalizeRole(role);
+  return ROLE_DEFAULT_PAGE[safeRole] || getRolePages(safeRole)[0] || "daftar";
+}
+
+function isLoggedIn() {
+  return !!getAuthUser();
+}
+
+function loginPage() {
+  return `<div class="min-h-[calc(100vh-120px)] flex items-center justify-center">
+    <div class="glass-card rounded-2xl p-8 w-full max-w-[460px] border border-outline-variant/50 shadow-2xl">
+      <div class="flex items-center gap-3 mb-6">
+        <div class="h-12 w-12 rounded-2xl bg-primary-container text-on-primary-container flex items-center justify-center">
+          <span class="material-symbols-outlined text-3xl">lock_person</span>
+        </div>
+        <div>
+          <h2 class="font-headline-md text-3xl font-extrabold text-on-surface">Login User</h2>
+          <p class="text-on-surface-variant text-sm">Masuk sesuai role operasional.</p>
+        </div>
+      </div>
+
+      <form id="login-form" onsubmit="submitLogin(event)" class="space-y-4">
+        <label class="flex flex-col gap-2">
+          <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Username</span>
+          <input name="username" class="form-input" placeholder="spv / admin / checker / security" autocomplete="username" required />
+        </label>
+        <label class="flex flex-col gap-2">
+          <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Password</span>
+          <input name="password" type="password" class="form-input" placeholder="Password" autocomplete="current-password" required />
+        </label>
+        <button class="w-full bg-primary-container text-on-primary-container px-6 py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:brightness-110" type="submit">
+          <span class="material-symbols-outlined">login</span>Login
+        </button>
+      </form>
+
+      <div class="mt-6 rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4 text-xs text-on-surface-variant">
+        <div class="font-bold text-on-surface mb-2">Default user sementara:</div>
+        <div class="grid grid-cols-2 gap-2 font-queue-id text-[11px]">
+          <div>spv / spv123</div>
+          <div>admin / admin123</div>
+          <div>checker / checker123</div>
+          <div>security / security123</div>
+        </div>
+        <div class="mt-3">Ganti password di konstanta <b>AUTH_USERS</b> sebelum dipakai production.</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function submitLogin(e) {
+  e.preventDefault();
+  const form = e.target;
+  const username = String(form.username?.value || "")
+    .trim()
+    .toLowerCase();
+  const password = String(form.password?.value || "");
+
+  const found = AUTH_USERS.find(
+    (u) =>
+      String(u.username || "").toLowerCase() === username &&
+      String(u.password || "") === password,
+  );
+
+  if (!found) {
+    showToast("Username / password salah.");
+    form.password?.classList.add("invalid");
+    return;
+  }
+
+  setAuthUser(found);
+  applyRoleAccessUI();
+  showToast("Login sebagai " + normalizeRole(found.role));
+  renderPage(getDefaultPageForRole(found.role), false);
+}
+
+function logoutUser() {
+  const user = getAuthUser();
+  clearAuthUser();
+  stopCallMonitorRuntime?.();
+  applyTvModeStyles?.(false);
+  showToast("Logout " + (user?.display_name || ""));
+  renderPage("login", false);
+}
+
+function applyRoleAccessUI() {
+  const user = getAuthUser();
+  const role = normalizeRole(user?.role || "");
+  const allowed = new Set(getRolePages(role));
+
+  document.querySelectorAll("[data-page]").forEach((btn) => {
+    const page = btn.dataset.page;
+    const show = !!user && allowed.has(page);
+    btn.style.display = show ? "" : "none";
+  });
+
+  const sidebar =
+    document.getElementById("sidebar-panel") || document.querySelector("aside");
+  const mobile = document.getElementById("mobile-menu-bar");
+  const sidebarToggle = document.getElementById("sidebar-toggle");
+
+  if (!user) {
+    if (sidebar) sidebar.style.display = "none";
+    if (mobile) mobile.style.display = "none";
+    if (sidebarToggle) sidebarToggle.style.display = "none";
+  } else {
+    if (sidebarToggle) sidebarToggle.style.display = "";
+    if (sidebar && localStorage.getItem("inboundSidebarHidden") !== "1") {
+      sidebar.style.display = "";
+    }
+    if (mobile) mobile.style.display = "";
+  }
+
+  renderAuthHeader();
+}
+
+function renderAuthHeader() {
+  const headerRight = document.querySelector("header > div:last-child");
+  if (!headerRight) return;
+
+  let box = document.getElementById("auth-user-box");
+  if (!box) {
+    box = document.createElement("div");
+    box.id = "auth-user-box";
+    headerRight.appendChild(box);
+  }
+
+  const user = getAuthUser();
+  if (!user) {
+    box.innerHTML = "";
+    box.style.display = "none";
+    return;
+  }
+
+  box.style.display = "";
+  const role = normalizeRole(user.role);
+  box.innerHTML = `<div class="hidden md:flex items-center gap-2 rounded-full border border-outline-variant bg-surface-container/70 px-3 py-1 text-xs">
+    <span class="material-symbols-outlined text-sm text-primary">verified_user</span>
+    <span class="font-bold text-on-surface">${esc(user.display_name || user.username)}</span>
+    <span class="text-on-surface-variant">· ${esc(role)}</span>
+    <button onclick="logoutUser()" class="ml-1 text-error font-bold hover:underline">Logout</button>
+  </div>
+  <button onclick="logoutUser()" class="md:hidden p-2 rounded-full hover:bg-surface-container-high transition-colors" title="Logout">
+    <span class="material-symbols-outlined text-error">logout</span>
+  </button>`;
+}
+
 function kpiCards() {
   const kpis =
     (state.dashboard && state.dashboard.kpis) || demoDashboard().kpis;
@@ -1605,16 +1848,25 @@ function startLiveWaitingTimer() {
 }
 
 function applySidebarVisibility(hidden) {
+  const user = getAuthUser();
   const side =
     document.getElementById("sidebar-panel") || document.querySelector("aside");
   const mobile = document.getElementById("mobile-menu-bar");
   const icon = document.getElementById("sidebar-toggle-icon");
+
+  if (!user) {
+    if (side) side.style.display = "none";
+    if (mobile) mobile.style.display = "none";
+    if (icon) icon.textContent = "menu";
+    return;
+  }
 
   if (side) side.style.display = hidden ? "none" : "";
   if (mobile) mobile.style.display = hidden ? "none" : "";
   if (icon) icon.textContent = hidden ? "menu" : "menu_open";
 
   localStorage.setItem("inboundSidebarHidden", hidden ? "1" : "0");
+  applyRoleAccessUI();
 }
 
 function toggleSidebar() {
@@ -1638,12 +1890,34 @@ function renderPage(page, toast = true) {
     setting: pageSetting,
     debug: pageDebug,
   };
-  const safe = map[page] ? page : "daftar";
+
+  if (!isLoggedIn()) {
+    state.page = "login";
+    document.getElementById("page-title").textContent = "Login";
+    document.getElementById("page-subtitle").textContent = "User access";
+    root.innerHTML = loginPage();
+    applyRoleAccessUI();
+    history.replaceState(null, "", "#login");
+    return;
+  }
+
+  let safe = map[page] ? page : getDefaultPageForRole();
+  if (!canAccessPage(safe)) {
+    const fallback = getDefaultPageForRole();
+    if (toast)
+      showToast(
+        "Role kamu tidak punya akses menu " + (pageMeta[safe]?.title || safe),
+      );
+    safe = fallback;
+  }
+
   state.page = safe;
   document.getElementById("page-title").textContent = pageMeta[safe].title;
   document.getElementById("page-subtitle").textContent =
     pageMeta[safe].subtitle;
   root.innerHTML = map[safe]();
+  applyRoleAccessUI();
+
   if (safe === "daftar")
     setTimeout(() => {
       handleTicketTypeChange();
@@ -1663,7 +1937,10 @@ function renderPage(page, toast = true) {
     stopCallMonitorRuntime();
   }
 
-  requestAnimationFrame(() => updateActiveNav(safe));
+  requestAnimationFrame(() => {
+    applyRoleAccessUI();
+    updateActiveNav(safe);
+  });
   history.replaceState(null, "", "#" + safe);
   if (toast) showToast("Buka menu " + pageMeta[safe].title);
 }
@@ -1672,6 +1949,7 @@ function updateActiveNav(page) {
   const safePage = String(page || state.page || "daftar");
 
   document.querySelectorAll("aside [data-page]").forEach((btn) => {
+    if (btn.style.display === "none") return;
     const on = btn.dataset.page === safePage;
     btn.className = (on ? navActive : navBase) + " nav-btn";
     btn.setAttribute("aria-current", on ? "page" : "false");
@@ -1685,14 +1963,26 @@ function updateActiveNav(page) {
   });
 
   document.querySelectorAll("#mobile-nav [data-page]").forEach((btn) => {
+    if (btn.style.display === "none") return;
     const on = btn.dataset.page === safePage;
-    btn.className = (on ? mobActive : mobBase) + " mobile-nav-btn";
-    btn.setAttribute("aria-current", on ? "page" : "false");
+    btn.className = on ? mobActive : mobBase;
   });
 }
 
 function switchPage(page) {
-  renderPage(page);
+  if (!isLoggedIn()) {
+    renderPage("login", false);
+    return;
+  }
+
+  const safe = String(page || "").trim();
+  if (!canAccessPage(safe)) {
+    showToast("Akses ditolak untuk role " + normalizeRole(getAuthUser()?.role));
+    renderPage(getDefaultPageForRole(), false);
+    return;
+  }
+
+  renderPage(safe);
 }
 
 function exportCsv() {
