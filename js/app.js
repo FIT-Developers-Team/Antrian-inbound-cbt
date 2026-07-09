@@ -840,22 +840,85 @@ function buildSecurityPreviewRowsForPrint() {
   return rows;
 }
 
+function securityFormPrintSignatureFromForm() {
+  const form = document.getElementById("security-form");
+  if (!form) return null;
+  if (typeof syncPlateMultiInput === "function") syncPlateMultiInput();
+
+  const fd = new FormData(form);
+  return {
+    vendor_name: normalizeKey(fd.get("vendor_name") || ""),
+    po_number: parsePoInputText(fd.get("po_number") || "")
+      .map(normalizeKey)
+      .sort()
+      .join("|"),
+    plat_number: parsePlateValues(fd.get("plat_number") || "")
+      .map(normalizeKey)
+      .sort()
+      .join("|"),
+    driver_name: parseMultiInputValues(fd.get("driver_name") || "")
+      .map(normalizeKey)
+      .sort()
+      .join("|"),
+  };
+}
+
+function securityFormPrintSignatureFromRows(rows = []) {
+  return {
+    vendor_name: normalizeKey(rows[0]?.vendor_name || ""),
+    po_number: rows
+      .flatMap((row) => parsePoInputText(row.po_number || ""))
+      .map(normalizeKey)
+      .sort()
+      .join("|"),
+    plat_number: rows
+      .map((row) => normalizeKey(row.plat_number || ""))
+      .filter(Boolean)
+      .sort()
+      .join("|"),
+    driver_name: rows
+      .map((row) => normalizeKey(row.driver_name || ""))
+      .filter(Boolean)
+      .sort()
+      .join("|"),
+  };
+}
+
+function securityFormMatchesRowsForPrint(rows = []) {
+  const formSig = securityFormPrintSignatureFromForm();
+  if (!formSig || !rows.length) return false;
+  const rowSig = securityFormPrintSignatureFromRows(rows);
+
+  return (
+    formSig.vendor_name === rowSig.vendor_name &&
+    formSig.po_number === rowSig.po_number &&
+    formSig.plat_number === rowSig.plat_number &&
+    formSig.driver_name === rowSig.driver_name
+  );
+}
+
 function printSecurityTickets() {
-  let rows = getLastSecurityRowsForPrint();
+  const existingRows = getLastSecurityRowsForPrint();
+  let rows = existingRows;
 
   // Kalau belum pernah klik Buat Nomor, print bisa ambil langsung dari form yang sudah lengkap.
+  // Kalau sudah klik Buat Nomor dan form masih sama, pakai row actual supaya queue_no QR tidak berubah.
   const form = document.getElementById("security-form");
   if (form) {
-    const previewRows = buildSecurityPreviewRowsForPrint();
-    if (!previewRows.length) return;
-    rows = previewRows;
-    state.lastSecurityRows = previewRows;
-    try {
-      localStorage.setItem(
-        "inbound_cbt_last_print_rows",
-        JSON.stringify(previewRows),
-      );
-    } catch (err) {}
+    if (existingRows.length && securityFormMatchesRowsForPrint(existingRows)) {
+      rows = existingRows;
+    } else {
+      const previewRows = buildSecurityPreviewRowsForPrint();
+      if (!previewRows.length) return;
+      rows = previewRows;
+      state.lastSecurityRows = previewRows;
+      try {
+        localStorage.setItem(
+          "inbound_cbt_last_print_rows",
+          JSON.stringify(previewRows),
+        );
+      } catch (err) {}
+    }
   }
 
   if (!rows.length) {
@@ -1045,7 +1108,7 @@ function checkerGatePicker() {
     <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Gate</span>
     <input type="hidden" name="gate" id="checker-gate-value" value="Dock 01" />
     <div id="checker-gate-picker" class="flex flex-col gap-2"></div>
-    <div id="checker-gate-help" class="text-[11px] text-on-surface-variant">Pilih data dari list. Wingbox wajib pilih minimal 2 gate, maksimal 3 gate.</div>
+    <div id="checker-gate-help" class="text-[11px] text-on-surface-variant">Pilih data dari list. Wingbox bisa pilih 1 sampai 3 gate.</div>
   </label>`;
 }
 
@@ -1065,19 +1128,15 @@ function renderCheckerGatePicker(
   const lockedClass = locked ? "opacity-60 cursor-not-allowed" : "";
 
   if (wingbox) {
-    const selected = [
-      gates[0] || "Dock 01",
-      gates[1] || "Dock 02",
-      gates[2] || "",
-    ];
+    const selected = [gates[0] || "Dock 01", gates[1] || "", gates[2] || ""];
 
     wrap.innerHTML = `<div class="grid grid-cols-1 lg:grid-cols-3 gap-2">
       ${[0, 1, 2]
         .map(
           (idx) => `<div class="flex flex-col gap-1">
-            <span class="text-[10px] uppercase font-bold text-on-surface-variant">${idx === 2 ? "Gate 3 Optional" : `Gate ${idx + 1}`}</span>
+            <span class="text-[10px] uppercase font-bold text-on-surface-variant">${idx === 0 ? "Gate 1" : `Gate ${idx + 1} Optional`}</span>
             <select data-wingbox-gate="${idx}" class="form-select ${lockedClass}" ${disabled} onchange="syncCheckerGateInput()">
-              ${gateSelectOptions(selected[idx], idx === 2)}
+              ${gateSelectOptions(selected[idx], idx > 0)}
             </select>
           </div>`,
         )
@@ -1087,8 +1146,8 @@ function renderCheckerGatePicker(
     hidden.value = uniqueGateList(selected).join(", ");
     if (help) {
       help.innerHTML = locked
-        ? "Wingbox memakai 2 sampai 3 gate dan sudah terkunci."
-        : "<b>WINGBOX wajib pilih minimal 2 gate dan maksimal 3 gate berbeda.</b> Gate 3 optional.";
+        ? "Wingbox memakai 1 sampai 3 gate dan sudah terkunci."
+        : "<b>WINGBOX bisa pilih 1 sampai 3 gate berbeda.</b> Gate 2 dan Gate 3 optional.";
     }
   } else {
     const selected = gates[0] || "Dock 01";
@@ -1119,12 +1178,12 @@ function syncCheckerGateInput() {
     hidden.value = gates.join(", ");
 
     const duplicateExists = rawValues.length !== gates.length;
-    const ok = gates.length >= 2 && gates.length <= 3 && !duplicateExists;
+    const ok = gates.length >= 1 && gates.length <= 3 && !duplicateExists;
 
     allSelects.forEach((el) => {
       const val = String(el.value || "").trim();
       const isDuplicate = val && rawValues.filter((x) => x === val).length > 1;
-      const isRequiredEmpty = Number(el.dataset.wingboxGate) < 2 && !val;
+      const isRequiredEmpty = Number(el.dataset.wingboxGate) === 0 && !val;
       el.classList.toggle("invalid", !ok || isDuplicate || isRequiredEmpty);
     });
 
@@ -1181,7 +1240,7 @@ function pageChecker() {
     </div>
     <div class="xl:col-span-5 glass-card rounded-xl p-6">
       <h3 class="font-headline-md text-headline-md mb-1">Checker Input</h3>
-      <p class="text-on-surface-variant mb-6">Step: WAITING → CALLED tampil di TV → UNLOADING → SELESAI UNLOADING. Khusus WINGBOX wajib pilih minimal 2 gate dan maksimal 3 gate.</p>
+      <p class="text-on-surface-variant mb-6">Step: WAITING → CALLED tampil di TV → UNLOADING → SELESAI UNLOADING. Khusus WINGBOX bisa pilih 1 sampai 3 gate.</p>
       <form id="checker-form" onsubmit="submitChecker(event)">
         <input type="hidden" name="ticket_id" />
         <input type="hidden" name="queue_no" />
@@ -1355,11 +1414,45 @@ function pronounceGate(gate = "") {
   return `${match[1]} ${numberToIndoWords(match[2])}`;
 }
 
+function speechTitleCaseWord(word = "") {
+  const raw = String(word || "");
+  const upperKeep = new Set([
+    "PT",
+    "CV",
+    "TBK",
+    "Tbk",
+    "UD",
+    "ID",
+    "PO",
+    "SKU",
+  ]);
+  if (upperKeep.has(raw.toUpperCase())) return raw.toUpperCase();
+
+  // Kalau kata full kapital seperti ANDRY / SAMDSAL, ubah ke Andry / Samdsal
+  // supaya browser tidak mengeja huruf satu-satu.
+  if (/^[A-Z]{3,}$/.test(raw)) {
+    return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+  }
+
+  return raw;
+}
+
+function normalizeSpeechCase(text = "") {
+  return String(text || "")
+    .split(/(\s+|[-/.,&]+)/)
+    .map((part) =>
+      /^[A-Za-z]+$/.test(part) ? speechTitleCaseWord(part) : part,
+    )
+    .join("");
+}
+
 function cleanSpeechName(value = "") {
-  return String(value || "")
-    .replace(/[^\w\s./&-]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  return normalizeSpeechCase(
+    String(value || "")
+      .replace(/[^\w\s./&-]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
 }
 
 function buildCallSpeech(row = {}) {
@@ -2810,7 +2903,7 @@ function populateCheckerFromTicket(index) {
   showToast(
     nextStatus === "CALLED"
       ? isWingboxFleet(row.fleet_type)
-        ? "Wingbox wajib pilih minimal 2 gate lalu panggil ke monitor TV."
+        ? "Wingbox bisa pilih 1 sampai 3 gate lalu panggil ke monitor TV."
         : "Isi Gate lalu panggil ke monitor TV."
       : nextStatus === "UNLOADING"
         ? "Data siap diubah ke UNLOADING. Gate terkunci."

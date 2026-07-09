@@ -471,15 +471,19 @@ function normalizeQueueSequenceBySlot(queue = []) {
 
     seqBySlot[slot] = (seqBySlot[slot] || 0) + 1;
 
+    const existingQueueNo = String(row.queue_no || "").trim();
+    const generatedQueueNo =
+      type === "DROP"
+        ? `DROP ${slot}-${seqBySlot[slot]}`
+        : `${type} ${slot}-${seqBySlot[slot]}`;
+
     return {
       ...row,
-      original_queue_no: row.original_queue_no || row.queue_no || "",
-      queue_no:
-        type === "DROP"
-          ? `DROP ${slot}-${seqBySlot[slot]}`
-          : `${type} ${slot}-${seqBySlot[slot]}`,
+      original_queue_no:
+        row.original_queue_no || existingQueueNo || generatedQueueNo,
+      queue_no: existingQueueNo || generatedQueueNo,
       slot,
-      queue_sequence: seqBySlot[slot],
+      queue_sequence: queueSequenceNumber(existingQueueNo) || seqBySlot[slot],
     };
   });
 }
@@ -1044,24 +1048,33 @@ function updatePoLookupUi(lookup) {
   }
 }
 
+function queueSequenceNumber(queueNo = "") {
+  const match = String(queueNo || "").match(/-\s*(\d+)\s*$/);
+  const n = match ? Number(match[1]) : 0;
+  return Number.isFinite(n) ? n : 0;
+}
+
 function nextLocalQueueNoFromList(ticketType, slot, queue = []) {
   const type = String(ticketType || "REG").toUpperCase();
   const slotText = String(slot || "3").trim() || "3";
 
-  if (type === "DROP") {
-    const count =
-      queue.filter((q) => String(q.slot || "").trim() === slotText).length + 1;
-    return `DROP ${slotText}-${count}`;
-  }
+  const sameSlot = queue.filter((q) => {
+    const qSlot = String(q.slot || queueSlotValue(q) || "").trim();
+    return qSlot === slotText;
+  });
 
-  // Sequence sekarang berbasis SLOT, bukan cuma type.
-  // Jadi Slot 1 akan jadi REG 1-1, REG/VIP 1-2, dst; baru lanjut Slot 2.
-  const count =
-    queue.filter(
-      (q) => String(q.slot || queueSlotValue(q) || "").trim() === slotText,
-    ).length + 1;
+  // Pakai max sequence dari queue_no existing, bukan count rows.
+  // Ini mencegah nomor berubah/duplicate kalau ada row yang dihapus atau data refresh.
+  const maxSeq = sameSlot.reduce((max, q) => {
+    const seq = queueSequenceNumber(q.queue_no || q.original_queue_no || "");
+    return Math.max(max, seq);
+  }, 0);
 
-  return `${type} ${slotText}-${count}`;
+  const nextSeq = maxSeq + 1;
+
+  if (type === "DROP") return `DROP ${slotText}-${nextSeq}`;
+
+  return `${type} ${slotText}-${nextSeq}`;
 }
 
 function nextLocalQueueNo(ticketType, slot) {
@@ -1346,6 +1359,13 @@ async function submitSecurity(e) {
         Array.isArray(result?.rows) && result.rows.length
           ? result.rows
           : newRows;
+      state.lastSecurityRows = savedRows;
+      try {
+        localStorage.setItem(
+          "inbound_cbt_last_print_rows",
+          JSON.stringify(savedRows),
+        );
+      } catch (err) {}
 
       upsertOutputRowsToRawResponse(savedRows);
       state.dashboard = buildDashboardFromV2(v2RawResponse);
@@ -1368,16 +1388,20 @@ async function submitSecurity(e) {
       showToast("Backend gagal, ticket tersimpan lokal: " + err.message);
     }
 
-    state.lastCalled = newRows[0];
-    state.lastSecurityRows = newRows;
-    try {
-      localStorage.setItem(
-        "inbound_cbt_last_print_rows",
-        JSON.stringify(newRows),
-      );
-    } catch (err) {}
+    state.lastCalled =
+      (state.lastSecurityRows && state.lastSecurityRows[0]) || newRows[0];
+    if (!state.lastSecurityRows || !state.lastSecurityRows.length) {
+      state.lastSecurityRows = newRows;
+      try {
+        localStorage.setItem(
+          "inbound_cbt_last_print_rows",
+          JSON.stringify(newRows),
+        );
+      } catch (err) {}
+    }
     const queueEl = document.getElementById("new-queue-number");
-    if (queueEl) queueEl.textContent = newRows[0].queue_no;
+    if (queueEl)
+      queueEl.textContent = state.lastCalled?.queue_no || newRows[0].queue_no;
     renderPage("checker", false);
   } finally {
     securitySubmitBusy = false;
@@ -1432,7 +1456,7 @@ async function submitChecker(e) {
 
   if (typeof syncCheckerGateInput === "function" && !syncCheckerGateInput()) {
     showToast(
-      "Wingbox wajib pilih minimal 2 gate dan maksimal 3 gate berbeda.",
+      "Wingbox bisa pilih 1 sampai 3 gate berbeda dan tidak boleh duplicate.",
     );
     return;
   }
