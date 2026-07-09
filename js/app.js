@@ -243,6 +243,8 @@ function pageChecker() {
       <h3 class="font-headline-md text-headline-md mb-1">Checker Input</h3>
       <p class="text-on-surface-variant mb-6">Data dari list akan otomatis masuk form. Checker tinggal pilih gate, status, dan SLA.</p>
       <form id="checker-form" onsubmit="submitChecker(event)">
+        <input type="hidden" name="ticket_id" />
+        <input type="hidden" name="queue_no" />
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           ${textInput("vendor_name", "Vendor Name", "Pilih dari list", "vendor-list", "", "required")}
           ${selectInput("fleet_type", "Fleet Type", getFleetTypeOptions(), getFleetDefaultType(), "required")}
@@ -823,15 +825,18 @@ function populateCheckerFromTicket(index) {
   const row = (state.dashboard?.queue || [])[index];
   const form = document.getElementById("checker-form");
   if (!row || !form) return;
+  if (form.ticket_id) form.ticket_id.value = row.ticket_id || "";
+  if (form.queue_no) form.queue_no.value = row.queue_no || "";
   if (form.vendor_name) form.vendor_name.value = row.vendor_name || "";
   if (form.fleet_type)
     form.fleet_type.value = row.fleet_type || form.fleet_type.value;
   if (form.plat_number)
     form.plat_number.value = normalizePlateValue(row.plat_number || "");
-  if (form.gate && row.gate) form.gate.value = row.gate;
+  if (form.gate && row.gate && row.gate !== "-") form.gate.value = row.gate;
   if (form.status)
     form.status.value =
       row.status && row.status !== "WAITING" ? row.status : "ON_DOCK";
+  if (form.unload_sla && row.unload_sla) form.unload_sla.value = row.unload_sla;
   showToast(
     "Data " + (row.queue_no || row.plat_number || "") + " masuk form Checker",
   );

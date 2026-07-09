@@ -104,7 +104,15 @@ async function updateCheckerToBackend(body = {}) {
 }
 
 async function fetchV2Data() {
-  return apiGetV2("raw");
+  // SAFE GAS:
+  // /exec biasa tetap dipakai web lain.
+  // Web Antrian harus pakai action=inboundRaw supaya dapat outputForm.
+  return apiGetV2("inboundRaw");
+}
+
+async function fetchOutputFormData() {
+  // Refresh cepat untuk Checker/Laporan/Monitor: baca Output form saja.
+  return apiGetV2("output");
 }
 
 function getCell(row, keys, fallback = "") {
@@ -250,6 +258,108 @@ function getOutputFormRows(response) {
   if (Array.isArray(response?.data?.output_form))
     return response.data.output_form;
   return [];
+}
+
+function upsertOutputRowsToRawResponse(rows = []) {
+  const incoming = Array.isArray(rows) ? rows : [];
+  if (!incoming.length) return;
+
+  if (!v2RawResponse) {
+    v2RawResponse = {
+      status: "success",
+      timestamp: new Date().toISOString(),
+      kpiRaw: [],
+      table: [],
+      tablev2: [],
+      outputForm: [],
+    };
+  }
+
+  const current = getOutputFormRows(v2RawResponse);
+  const map = new Map();
+
+  for (const row of current) {
+    map.set(ticketIdentity(row), row);
+  }
+
+  for (const row of incoming) {
+    map.set(ticketIdentity(row), row);
+  }
+
+  v2RawResponse = {
+    ...v2RawResponse,
+    timestamp: new Date().toISOString(),
+    outputForm: Array.from(map.values()),
+  };
+}
+
+function applyCheckerUpdateToQueue(body = {}) {
+  const queue = state.dashboard?.queue || [];
+  const bodyTicket = String(body.ticket_id || "").trim();
+  const bodyQueue = String(body.queue_no || "").trim();
+  const bodyPlate = normalizePlateValue(body.plat_number || "");
+
+  let updated = false;
+
+  const nextQueue = queue.map((row) => {
+    const rowTicket = String(row.ticket_id || "").trim();
+    const rowQueue = String(row.queue_no || "").trim();
+    const rowPlate = normalizePlateValue(row.plat_number || "");
+
+    const match =
+      (bodyTicket && rowTicket === bodyTicket) ||
+      (bodyQueue && rowQueue === bodyQueue) ||
+      (bodyPlate && rowPlate === bodyPlate);
+
+    if (!match) return row;
+
+    updated = true;
+    return {
+      ...row,
+      ...body,
+      plat_number: bodyPlate || row.plat_number,
+      status: String(body.status || row.status || "WAITING").toUpperCase(),
+      completed_at: body.completed_at || row.completed_at || "",
+      updated_at: body.updated_at || formatDateTimeLocal(new Date()),
+    };
+  });
+
+  if (updated && state.dashboard) {
+    state.dashboard.queue = nextQueue;
+    state.dashboard.report_preview = nextQueue;
+    state.dashboard.priority = nextQueue
+      .filter((q) => !String(q.status || "").includes("COMPLETED"))
+      .slice(0, 8);
+  }
+
+  return updated;
+}
+
+function replaceOutputRowsInRawResponse(rows = []) {
+  const incoming = Array.isArray(rows) ? rows : [];
+  if (!incoming.length || !v2RawResponse) return;
+
+  const current = getOutputFormRows(v2RawResponse);
+  const incomingMap = new Map();
+  incoming.forEach((row) => incomingMap.set(ticketIdentity(row), row));
+
+  const nextOutput = current.map((row) => {
+    const key = ticketIdentity(row);
+    return incomingMap.get(key) || row;
+  });
+
+  for (const row of incoming) {
+    const key = ticketIdentity(row);
+    if (!nextOutput.some((existing) => ticketIdentity(existing) === key)) {
+      nextOutput.unshift(row);
+    }
+  }
+
+  v2RawResponse = {
+    ...v2RawResponse,
+    timestamp: new Date().toISOString(),
+    outputForm: nextOutput,
+  };
 }
 
 function ticketIdentity(row) {
@@ -613,8 +723,33 @@ async function initApi() {
 }
 
 async function refreshDashboard() {
-  await initApi();
-  showToast("Data V2 refresh");
+  try {
+    if (
+      ["checker", "laporan", "monitor", "antrian"].includes(state.page) &&
+      v2RawResponse
+    ) {
+      updateApiPill("loading", "Refresh Output form...");
+      const outputResponse = await fetchOutputFormData();
+      v2RawResponse = {
+        ...v2RawResponse,
+        timestamp: outputResponse?.timestamp || new Date().toISOString(),
+        outputForm: getOutputFormRows(outputResponse),
+      };
+      state.dashboard = buildDashboardFromV2(v2RawResponse);
+      state.options = state.dashboard.options || state.options;
+      updateApiPill("on", "API live");
+      renderPage(state.page || "checker", false);
+      showToast("Output form refresh");
+      return;
+    }
+
+    await initApi();
+    showToast("Data refresh");
+  } catch (err) {
+    console.error(err);
+    updateApiPill("error", "API error");
+    showToast("Refresh gagal: " + err.message);
+  }
 }
 
 function parsePoNumbers(value) {
@@ -851,25 +986,36 @@ async function submitSecurity(e) {
     newRows.push(row);
   }
 
+  // Local fallback tetap disimpan supaya UI langsung punya data walau backend lambat.
   rows.unshift(...newRows);
   saveLocalTickets(rows);
 
   try {
     showToast("Menyimpan ticket ke Output form...");
-    await submitSecurityRowsToBackend(newRows);
-    v2RawResponse = await fetchV2Data();
+    const result = await submitSecurityRowsToBackend(newRows);
+
+    // Tidak fetch full API lagi. Row hasil POST langsung dimasukkan ke state.
+    const savedRows =
+      Array.isArray(result?.rows) && result.rows.length ? result.rows : newRows;
+
+    upsertOutputRowsToRawResponse(savedRows);
     state.dashboard = buildDashboardFromV2(v2RawResponse);
     state.options = state.dashboard.options || state.options;
+
     showToast(`${newRows.length} ticket masuk Output form`);
   } catch (err) {
     console.error(err);
+
+    // Tetap tampilkan ticket lokal supaya Checker langsung bisa proses.
     if (v2RawResponse) {
+      upsertOutputRowsToRawResponse(newRows);
       state.dashboard = buildDashboardFromV2(v2RawResponse);
       state.options = state.dashboard.options || state.options;
     } else {
       state.dashboard.queue.unshift(...newRows);
       state.dashboard.report_preview.unshift(...newRows);
     }
+
     showToast("Backend gagal, ticket tersimpan lokal: " + err.message);
   }
 
@@ -899,29 +1045,37 @@ async function submitChecker(e) {
     : "";
 
   const local = getLocalTickets();
-  let updated = false;
+  let updatedLocal = false;
   for (const row of local) {
-    if (normalizePlateValue(row.plat_number) === body.plat_number) {
+    const match =
+      (body.ticket_id && row.ticket_id === body.ticket_id) ||
+      (body.queue_no && row.queue_no === body.queue_no) ||
+      normalizePlateValue(row.plat_number) === body.plat_number;
+
+    if (match) {
       Object.assign(row, body, {
         completed_at: body.completed_at || row.completed_at || "",
       });
-      updated = true;
+      updatedLocal = true;
     }
   }
   saveLocalTickets(local);
 
+  const updatedUi = applyCheckerUpdateToQueue(body);
+
   try {
-    await updateCheckerToBackend(body);
-    v2RawResponse = await fetchV2Data();
-    state.dashboard = buildDashboardFromV2(v2RawResponse);
+    const result = await updateCheckerToBackend(body);
+    if (Array.isArray(result?.rows) && result.rows.length) {
+      replaceOutputRowsInRawResponse(result.rows);
+      state.dashboard = buildDashboardFromV2(v2RawResponse);
+    } else if (v2RawResponse) {
+      state.dashboard = buildDashboardFromV2(v2RawResponse);
+    }
     showToast("Checker tersimpan ke Output form");
   } catch (err) {
     console.error(err);
-    if (v2RawResponse) {
-      state.dashboard = buildDashboardFromV2(v2RawResponse);
-    }
     showToast(
-      updated
+      updatedLocal || updatedUi
         ? "Checker tersimpan lokal, backend gagal: " + err.message
         : "Checker backend gagal: " + err.message,
     );
@@ -1015,7 +1169,8 @@ function openApi(action) {
     return;
   }
 
-  window.open(apiUrlV2("raw"), "_blank");
+  const safeAction = action === "raw" ? "inboundRaw" : action;
+  window.open(apiUrlV2(safeAction), "_blank");
 }
 
 document.addEventListener("click", (e) => {
