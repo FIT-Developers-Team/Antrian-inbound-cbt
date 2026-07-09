@@ -16,16 +16,10 @@ const state = {
     security_status: ["WAITING"],
     checker_status: ["UNLOADING"],
     unload_sla: ["SLA OK", "SLA MISS", "ON PROCESS"],
-    gate: [
-      "Dock 01",
-      "Dock 02",
-      "Dock 03",
-      "Dock 04",
-      "Dock 05",
-      "Dock 06",
-      "Chiller 01",
-      "Chiller 02",
-    ],
+    gate: Array.from(
+      { length: 30 },
+      (_, i) => `Dock ${String(i + 1).padStart(2, "0")}`,
+    ),
     vendor_name: [],
     po_number: [],
   },
@@ -167,10 +161,10 @@ function pageDaftar() {
           ${selectInput("slot", "Slot", buildSlotOptions(lookup?.summary?.slot), lookup?.summary?.slot || "3", "required")}
           ${selectInput("fleet_type", "Fleet Type", getFleetTypeOptions(), getFleetDefaultType(), 'required onchange="updateFleetPreview()"')}
           ${fleetPreviewCard(getFleetDefaultType())}
-          ${textInput("plat_number", "Plat Number", "Contoh: B 1234 XYZ → B1234XYZ", "", "", 'required oninput="normalizePlateInput(this)" onblur="normalizePlateInput(this); validatePlateInput(this)" autocomplete="off"')}
+          ${textareaInput("plat_number", "Plat Number", "B 1234 XYZ, B 5678 ABC / pisah baris juga bisa", "", 'required onblur="normalizePlateMultiInput(this); validatePlateMultiInput(this)" autocomplete="off"')}
           ${textInput("driver_name", "Driver's Name", "Nama driver", "", "", "required")}
           ${textInput("ktp_6_digit", "6 Digit No KTP", "Optional. Contoh: 123456", "", "", 'maxlength="6" inputmode="numeric" pattern="[0-9]{6}" oninput="this.value=this.value.replace(/\\D/g, \'\').slice(0,6)"')}
-          ${textInput("phone_number", "Phone Number", "08xxxxxxxxxx", "", "", 'required inputmode="tel"')}
+          ${textareaInput("phone_number", "Phone Number", "08xxxxxxxxxx, 08xxxxxxxxxx / pisah baris juga bisa", "", 'required inputmode="tel"')}
           <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Register Time</span><input name="register_time" class="form-input opacity-80" value="${esc(nowText)}" readonly /></label>
           <label class="flex flex-col gap-2">
             <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Status Security</span>
@@ -183,7 +177,7 @@ function pageDaftar() {
           </div></label>
         </div>
         ${renderPoLookupSummary(lookup)}
-        <p class="form-help mt-3">Catatan: No KTP tidak wajib. Plat otomatis disimpan tanpa spasi; contoh B 1234 XYZ jadi B1234XYZ. Plat angka doang ditolak.</p>
+        <p class="form-help mt-3">Catatan: Plat, Driver, dan Phone bisa multiple pakai koma / enter. Kalau jumlahnya sama dengan PO, mapping per urutan PO. Kalau cuma isi 1, nilainya dipakai untuk semua PO. Plat otomatis disimpan tanpa spasi; contoh B 1234 XYZ jadi B1234XYZ.</p>
         ${datalists()}
         <button class="mt-6 bg-primary-container text-on-primary-container px-6 py-3 rounded-lg font-bold flex items-center gap-2 hover:brightness-110" type="submit">
           <span class="material-symbols-outlined">confirmation_number</span>Buat Nomor
@@ -233,7 +227,7 @@ function pageChecker() {
     </div>
     <div class="xl:col-span-5 glass-card rounded-xl p-6">
       <h3 class="font-headline-md text-headline-md mb-1">Checker Input</h3>
-      <p class="text-on-surface-variant mb-6">Pilih data dari list. Checker hanya isi Gate; status otomatis menjadi UNLOADING.</p>
+      <p class="text-on-surface-variant mb-6">Pilih data dari list. Checker hanya bisa edit Gate. Jika status sudah UNLOADING, pilih lagi lalu simpan untuk ubah menjadi SELESAI UNLOADING.</p>
       <form id="checker-form" onsubmit="submitChecker(event)">
         <input type="hidden" name="ticket_id" />
         <input type="hidden" name="queue_no" />
@@ -246,15 +240,15 @@ function pageChecker() {
           ${selectInput("gate", "Gate", o.gate, "Dock 01", "required")}
           <label class="flex flex-col gap-2 md:col-span-2">
             <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Status Checker</span>
-            <div class="bg-primary/15 border border-primary/30 rounded-lg px-4 py-3 text-primary font-bold flex items-center gap-2">
-              <span class="material-symbols-outlined text-base">local_shipping</span>
-              UNLOADING
+            <div id="checker-status-box" class="bg-primary/15 border border-primary/30 rounded-lg px-4 py-3 text-primary font-bold flex items-center gap-2">
+              <span id="checker-status-icon" class="material-symbols-outlined text-base">local_shipping</span>
+              <span id="checker-status-preview">UNLOADING</span>
             </div>
           </label>
         </div>
         ${datalists()}
-        <button class="mt-6 bg-primary-container text-on-primary-container px-6 py-3 rounded-lg font-bold flex items-center gap-2 hover:brightness-110" type="submit">
-          <span class="material-symbols-outlined">save</span>Simpan Gate
+        <button id="checker-submit-btn" class="mt-6 bg-primary-container text-on-primary-container px-6 py-3 rounded-lg font-bold flex items-center gap-2 hover:brightness-110" type="submit">
+          <span class="material-symbols-outlined">save</span><span id="checker-submit-text">Simpan Gate</span>
         </button>
       </form>
     </div>
@@ -419,6 +413,10 @@ function pageDebug() {
 
 function textInput(name, label, placeholder, list, value = "", extra = "") {
   return `<label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">${label}</span><input name="${name}" ${list ? `list="${list}"` : ""} ${extra || ""} class="form-input" placeholder="${placeholder || ""}" value="${esc(value || "")}" /></label>`;
+}
+
+function textareaInput(name, label, placeholder, value = "", extra = "") {
+  return `<label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">${label}</span><textarea name="${name}" ${extra || ""} class="form-input min-h-[92px] resize-y" placeholder="${placeholder || ""}">${esc(value || "")}</textarea></label>`;
 }
 
 function selectInput(name, label, options = [], value = "", extra = "") {
@@ -807,8 +805,9 @@ function priorityItem(r) {
 function checkerListRow(r, i) {
   const st = String(r.status || "").toUpperCase();
   const wait = r.waiting_text || liveWaitingText(r.created_at, r.completed_at);
+  const actionLabel = st.includes("UNLOADING") ? "Selesai" : "Pilih";
   return `<tr data-status="${esc(st || "-")}" class="hover:bg-primary/5 transition-colors">
-    <td class="px-4 py-3"><button type="button" onclick="populateCheckerFromTicket(${i})" class="bg-primary-container text-on-primary-container px-3 py-2 rounded-lg font-bold text-xs">Pilih</button></td>
+    <td class="px-4 py-3"><button type="button" onclick="populateCheckerFromTicket(${i})" class="bg-primary-container text-on-primary-container px-3 py-2 rounded-lg font-bold text-xs">${esc(actionLabel)}</button></td>
     <td class="px-4 py-3 font-queue-id text-primary">${esc(r.queue_no || "-")}</td>
     <td class="px-4 py-3">${esc(r.vendor_name || "-")}</td>
     <td class="px-4 py-3 text-sm">${esc(r.po_number || "-")}</td>
@@ -824,6 +823,12 @@ function populateCheckerFromTicket(index) {
   const row = (state.dashboard?.queue || [])[index];
   const form = document.getElementById("checker-form");
   if (!row || !form) return;
+
+  const currentStatus = String(row.status || "").toUpperCase();
+  const nextStatus = currentStatus.includes("UNLOADING")
+    ? "COMPLETED"
+    : "UNLOADING";
+
   if (form.ticket_id) form.ticket_id.value = row.ticket_id || "";
   if (form.queue_no) form.queue_no.value = row.queue_no || "";
   if (form.vendor_name) form.vendor_name.value = row.vendor_name || "";
@@ -831,11 +836,41 @@ function populateCheckerFromTicket(index) {
   if (form.plat_number)
     form.plat_number.value = normalizePlateValue(row.plat_number || "");
   if (form.gate && row.gate && row.gate !== "-") form.gate.value = row.gate;
-  if (form.status) form.status.value = "UNLOADING";
-  if (form.unload_sla) form.unload_sla.value = "ON PROCESS";
+  if (form.status) form.status.value = nextStatus;
+  if (form.unload_sla)
+    form.unload_sla.value =
+      nextStatus === "COMPLETED" ? "SLA OK" : "ON PROCESS";
+
+  updateCheckerStatusPreview(nextStatus);
+
   showToast(
-    "Data " + (row.queue_no || row.plat_number || "") + " masuk form Checker",
+    nextStatus === "COMPLETED"
+      ? "Data " +
+          (row.queue_no || row.plat_number || "") +
+          " siap diselesaikan."
+      : "Data " +
+          (row.queue_no || row.plat_number || "") +
+          " masuk form Checker.",
   );
+}
+
+function updateCheckerStatusPreview(status = "UNLOADING") {
+  const safe = String(status || "UNLOADING").toUpperCase();
+  const isDone = safe.includes("COMPLETED");
+  const box = document.getElementById("checker-status-box");
+  const icon = document.getElementById("checker-status-icon");
+  const label = document.getElementById("checker-status-preview");
+  const btnText = document.getElementById("checker-submit-text");
+
+  if (box) {
+    box.className = isDone
+      ? "bg-success/15 border border-success/30 rounded-lg px-4 py-3 text-success font-bold flex items-center gap-2"
+      : "bg-primary/15 border border-primary/30 rounded-lg px-4 py-3 text-primary font-bold flex items-center gap-2";
+  }
+  if (icon) icon.textContent = isDone ? "check_circle" : "local_shipping";
+  if (label) label.textContent = isDone ? "SELESAI UNLOADING" : "UNLOADING";
+  if (btnText)
+    btnText.textContent = isDone ? "Selesai Unloading" : "Simpan Gate";
 }
 
 function filterCheckerStatus(status) {
@@ -928,6 +963,28 @@ function startLiveWaitingTimer() {
   if (liveWaitingTimer) clearInterval(liveWaitingTimer);
   refreshLiveWaitingCells();
   liveWaitingTimer = setInterval(refreshLiveWaitingCells, 1000);
+}
+
+function applySidebarVisibility(hidden) {
+  const side =
+    document.getElementById("sidebar-panel") || document.querySelector("aside");
+  const mobile = document.getElementById("mobile-menu-bar");
+  const icon = document.getElementById("sidebar-toggle-icon");
+
+  if (side) side.style.display = hidden ? "none" : "";
+  if (mobile) mobile.style.display = hidden ? "none" : "";
+  if (icon) icon.textContent = hidden ? "menu" : "menu_open";
+
+  localStorage.setItem("inboundSidebarHidden", hidden ? "1" : "0");
+}
+
+function toggleSidebar() {
+  const nowHidden = localStorage.getItem("inboundSidebarHidden") === "1";
+  applySidebarVisibility(!nowHidden);
+}
+
+function initSidebarVisibility() {
+  applySidebarVisibility(localStorage.getItem("inboundSidebarHidden") === "1");
 }
 
 function renderPage(page, toast = true) {
@@ -1061,6 +1118,41 @@ function normalizePlateValue(value) {
     .replace(/[^A-Z0-9]/g, "");
 }
 
+function parseMultiValues(value) {
+  return String(value || "")
+    .split(/[,\n;]+/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+function parsePlateValues(value) {
+  return parseMultiValues(value).map(normalizePlateValue).filter(Boolean);
+}
+
+function normalizePlateMultiInput(input) {
+  if (!input) return "";
+  const values = parsePlateValues(input.value);
+  input.value = values.join(", ");
+  input.classList.remove("invalid");
+  return input.value;
+}
+
+function validatePlateMultiInput(input) {
+  if (!input) return true;
+  const values = parsePlateValues(input.value);
+  const invalid = values.filter((x) => !isValidPlate(x));
+  const ok = values.length > 0 && invalid.length === 0;
+  input.classList.toggle("invalid", !ok);
+  if (!ok) {
+    input.setCustomValidity(
+      values.length
+        ? "Ada plat yang belum valid: " + invalid.join(", ")
+        : "Plat number wajib diisi.",
+    );
+  } else input.setCustomValidity("");
+  return ok;
+}
+
 function isValidPlate(value) {
   const plate = normalizePlateValue(value);
   return /^[A-Z]{1,2}\d{1,4}[A-Z]{1,3}$/.test(plate);
@@ -1088,18 +1180,21 @@ function validatePlateInput(input) {
 
 function validateRequiredFields(form) {
   let ok = true;
-  form.querySelectorAll("input[required], select[required]").forEach((el) => {
-    const filled = String(el.value || "").trim() !== "";
-    el.classList.toggle("invalid", !filled);
-    if (!filled) ok = false;
-  });
+  form
+    .querySelectorAll("input[required], select[required], textarea[required]")
+    .forEach((el) => {
+      const filled = String(el.value || "").trim() !== "";
+      el.classList.toggle("invalid", !filled);
+      if (!filled) ok = false;
+    });
   return ok;
 }
 
 function validateSecurityForm(form) {
   const requiredOk = validateRequiredFields(form);
-  const plateOk = validatePlateInput(form.plat_number);
+  const plateOk = validatePlateMultiInput(form.plat_number);
   const ktp = String(form.ktp_6_digit?.value || "").trim();
+
   if (ktp && !/^\d{6}$/.test(ktp)) {
     form.ktp_6_digit.classList.add("invalid");
     showToast("No KTP opsional, tapi kalau diisi harus 6 digit angka.");
@@ -1110,7 +1205,9 @@ function validateSecurityForm(form) {
     return false;
   }
   if (!plateOk) {
-    showToast("Plat nomor harus lengkap. Contoh valid: B1234XYZ.");
+    showToast(
+      "Plat nomor wajib valid. Pisahkan multiple plat pakai koma / enter.",
+    );
     return false;
   }
   return true;
@@ -1251,16 +1348,10 @@ function demoDashboard() {
     },
     queue: [],
     priority: [],
-    dock: [
-      "Dock 01",
-      "Dock 02",
-      "Dock 03",
-      "Dock 04",
-      "Dock 05",
-      "Dock 06",
-      "Chiller 01",
-      "Chiller 02",
-    ].map((g) => ({ gate: g, status: "KOSONG" })),
+    dock: Array.from(
+      { length: 30 },
+      (_, i) => `Dock ${String(i + 1).padStart(2, "0")}`,
+    ).map((g) => ({ gate: g, status: "KOSONG" })),
     report_preview: [],
   };
 }

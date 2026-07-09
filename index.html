@@ -98,6 +98,7 @@
 
     <div class="relative z-10 flex h-screen overflow-hidden">
       <aside
+        id="sidebar-panel"
         class="bg-surface-container-lowest/80 backdrop-blur-xl border-r border-outline-variant w-64 h-screen flex-col py-4 gap-2 hidden md:flex transition-all duration-300"
       >
         <div class="px-6 mb-8">
@@ -158,7 +159,17 @@
         <header
           class="flex justify-between items-center w-full px-container-padding h-row-height-md bg-surface/50 backdrop-blur-md border-b border-outline-variant z-20"
         >
-          <div class="flex items-center gap-4 min-w-0">
+          <div class="flex items-center gap-3 min-w-0">
+            <button
+              id="sidebar-toggle"
+              class="p-2 rounded-full hover:bg-surface-container-high transition-colors"
+              onclick="toggleSidebar()"
+              title="Hide / show menu"
+            >
+              <span class="material-symbols-outlined" id="sidebar-toggle-icon"
+                >menu_open</span
+              >
+            </button>
             <span
               id="page-title"
               class="font-headline-md text-headline-md font-bold text-primary truncate"
@@ -207,6 +218,7 @@
         </header>
 
         <div
+          id="mobile-menu-bar"
           class="md:hidden bg-surface-container-lowest/80 backdrop-blur-xl border-b border-outline-variant px-3 py-2 overflow-x-auto"
         >
           <div id="mobile-nav" class="flex gap-2 min-w-max">

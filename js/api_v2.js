@@ -1017,6 +1017,23 @@ function nextLocalQueueNo(ticketType, slot) {
   return `${type} ${slotText}-${count}`;
 }
 
+function parseMultiInputValues(value) {
+  return String(value || "")
+    .split(/[,\n;]+/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+}
+
+function parseMultiPlateValues(value) {
+  return parseMultiInputValues(value).map(normalizePlateValue).filter(Boolean);
+}
+
+function pickMultiValue(list = [], index = 0) {
+  if (!Array.isArray(list) || !list.length) return "";
+  if (list.length === 1) return list[0];
+  return list[index] || list[list.length - 1] || list[0] || "";
+}
+
 async function submitSecurity(e) {
   e.preventDefault();
   const form = e.target;
@@ -1039,16 +1056,37 @@ async function submitSecurity(e) {
     return;
   }
 
+  const plateList = parseMultiPlateValues(base.plat_number);
+  const driverList = parseMultiInputValues(base.driver_name);
+  const phoneList = parseMultiInputValues(base.phone_number);
+
+  if (!plateList.length) {
+    showToast("Plat number wajib diisi.");
+    return;
+  }
+  if (!driverList.length) {
+    showToast("Driver name wajib diisi.");
+    return;
+  }
+  if (!phoneList.length) {
+    showToast("Phone number wajib diisi.");
+    return;
+  }
+
   const rows = getLocalTickets();
   const newRows = [];
   const registerTime = base.register_time || formatDateTimeLocal(new Date());
   let queuePool = (state.dashboard?.queue || []).concat(rows);
 
-  for (const item of poItems) {
+  for (const [index, item] of poItems.entries()) {
     const rowSlot =
       String(base.ticket_type || "").toUpperCase() === "DROP"
         ? base.slot || item.slot || "3"
         : item.slot || base.slot || "3";
+
+    const plate = pickMultiValue(plateList, index);
+    const driver = pickMultiValue(driverList, index);
+    const phone = pickMultiValue(phoneList, index);
 
     const row = {
       ...base,
@@ -1061,7 +1099,9 @@ async function submitSecurity(e) {
       po_numbers: lookup.summary.po_numbers,
       vendor_name: item.vendor_name || base.vendor_name || "",
       slot: rowSlot,
-      plat_number: normalizePlateValue(base.plat_number),
+      plat_number: plate,
+      driver_name: driver,
+      phone_number: phone,
       status: "WAITING",
       total_po_qty: toNumberV2(item.total_po_qty),
       count_po_sku: toNumberV2(item.count_po_sku),
@@ -1131,10 +1171,18 @@ async function submitChecker(e) {
 
   const body = Object.fromEntries(new FormData(form).entries());
   body.plat_number = normalizePlateValue(body.plat_number);
-  body.status = "UNLOADING";
-  body.unload_sla = body.unload_sla || "ON PROCESS";
+
+  const targetStatus = String(body.status || "UNLOADING")
+    .toUpperCase()
+    .includes("COMPLETED")
+    ? "COMPLETED"
+    : "UNLOADING";
+
+  body.status = targetStatus;
+  body.unload_sla = targetStatus === "COMPLETED" ? "SLA OK" : "ON PROCESS";
   body.updated_at = formatDateTimeLocal(new Date());
-  body.completed_at = "";
+  body.completed_at =
+    targetStatus === "COMPLETED" ? formatDateTimeLocal(new Date()) : "";
 
   const local = getLocalTickets();
   let updatedLocal = false;
@@ -1146,9 +1194,9 @@ async function submitChecker(e) {
 
     if (match) {
       Object.assign(row, body, {
-        status: "UNLOADING",
+        status: targetStatus,
         unload_sla: body.unload_sla,
-        completed_at: "",
+        completed_at: body.completed_at || "",
       });
       updatedLocal = true;
     }
@@ -1165,7 +1213,12 @@ async function submitChecker(e) {
     } else if (v2RawResponse) {
       state.dashboard = buildDashboardFromV2(v2RawResponse);
     }
-    showToast("Gate tersimpan, status otomatis UNLOADING");
+
+    showToast(
+      targetStatus === "COMPLETED"
+        ? "Status berubah menjadi SELESAI UNLOADING"
+        : "Gate tersimpan, status otomatis UNLOADING",
+    );
   } catch (err) {
     console.error(err);
     showToast(
@@ -1278,6 +1331,7 @@ window.addEventListener("hashchange", () =>
 
 document.addEventListener("DOMContentLoaded", () => {
   initTheme();
+  if (typeof initSidebarVisibility === "function") initSidebarVisibility();
   setInterval(tickClock, 1000);
   tickClock();
   initShader();
