@@ -45,7 +45,7 @@ const pageMeta = {
   },
   antrian: {
     title: "Antrian",
-    subtitle: "Pantau urutan dan panggil driver inbound",
+    subtitle: "Deprecated - gunakan Waiting Monitor",
   },
   panggil: {
     title: "Panggil",
@@ -108,7 +108,6 @@ const ROLE_ACCESS = {
   SPV: [
     "daftar",
     "checker",
-    "antrian",
     "panggil",
     "monitor",
     "laporan",
@@ -263,6 +262,13 @@ function applyRoleAccessUI() {
 
   document.querySelectorAll("[data-page]").forEach((btn) => {
     const page = btn.dataset.page;
+
+    // Menu Antrian sengaja dimatikan. Operasional pakai Waiting Monitor.
+    if (page === "antrian") {
+      btn.style.display = "none";
+      return;
+    }
+
     const show = !!user && allowed.has(page);
     btn.style.display = show ? "" : "none";
   });
@@ -630,7 +636,7 @@ function gateSelectOptions(selected = "", allowBlank = false) {
 }
 
 function checkerGatePicker() {
-  return `<label class="flex flex-col gap-2">
+  return `<label class="flex flex-col gap-2 md:col-span-2">
     <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Gate</span>
     <input type="hidden" name="gate" id="checker-gate-value" value="Dock 01" />
     <div id="checker-gate-picker" class="flex flex-col gap-2"></div>
@@ -660,7 +666,7 @@ function renderCheckerGatePicker(
       gates[2] || "",
     ];
 
-    wrap.innerHTML = `<div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+    wrap.innerHTML = `<div class="grid grid-cols-1 lg:grid-cols-3 gap-2">
       ${[0, 1, 2]
         .map(
           (idx) => `<div class="flex flex-col gap-1">
