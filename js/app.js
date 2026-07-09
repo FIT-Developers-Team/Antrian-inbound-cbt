@@ -1243,7 +1243,7 @@ function uniqueGateList(values = []) {
 
 function gateSelectOptions(selected = "", allowBlank = false) {
   const blank = allowBlank
-    ? `<option value="" ${!selected ? "selected" : ""}>- Optional -</option>`
+    ? `<option value="" ${!selected ? "selected" : ""}>- Pilih Gate -</option>`
     : "";
   return (
     blank +
@@ -1259,9 +1259,9 @@ function gateSelectOptions(selected = "", allowBlank = false) {
 function checkerGatePicker() {
   return `<label class="flex flex-col gap-2 md:col-span-2">
     <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Gate</span>
-    <input type="hidden" name="gate" id="checker-gate-value" value="Dock 01" />
+    <input type="hidden" name="gate" id="checker-gate-value" value="" />
     <div id="checker-gate-picker" class="flex flex-col gap-2"></div>
-    <div id="checker-gate-help" class="text-[11px] text-on-surface-variant">Pilih data dari list. Wingbox bisa pilih 1 sampai 3 gate.</div>
+    <div id="checker-gate-help" class="text-[11px] text-on-surface-variant">Pilih gate setelah pilih data checker.</div>
   </label>`;
 }
 
@@ -1281,7 +1281,7 @@ function renderCheckerGatePicker(
   const lockedClass = locked ? "opacity-60 cursor-not-allowed" : "";
 
   if (wingbox) {
-    const selected = [gates[0] || "Dock 01", gates[1] || "", gates[2] || ""];
+    const selected = [gates[0] || "", gates[1] || "", gates[2] || ""];
 
     wrap.innerHTML = `<div class="grid grid-cols-1 lg:grid-cols-3 gap-2">
       ${[0, 1, 2]
@@ -1289,7 +1289,7 @@ function renderCheckerGatePicker(
           (idx) => `<div class="flex flex-col gap-1">
             <span class="text-[10px] uppercase font-bold text-on-surface-variant">${idx === 0 ? "Gate 1" : `Gate ${idx + 1} Optional`}</span>
             <select data-wingbox-gate="${idx}" class="form-select ${lockedClass}" ${disabled} onchange="syncCheckerGateInput()">
-              ${gateSelectOptions(selected[idx], idx > 0)}
+              ${gateSelectOptions(selected[idx], true)}
             </select>
           </div>`,
         )
@@ -1299,13 +1299,13 @@ function renderCheckerGatePicker(
     hidden.value = uniqueGateList(selected).join(", ");
     if (help) {
       help.innerHTML = locked
-        ? "Wingbox memakai 1 sampai 3 gate dan sudah terkunci."
-        : "<b>WINGBOX bisa pilih 1 sampai 3 gate berbeda.</b> Gate 2 dan Gate 3 optional.";
+        ? "Wingbox gate sudah terkunci."
+        : "<b>Pilih minimal Gate 1.</b> Wingbox bisa pilih 1 sampai 3 gate berbeda. Gate 2 dan Gate 3 optional.";
     }
   } else {
-    const selected = gates[0] || "Dock 01";
+    const selected = gates[0] || "";
     wrap.innerHTML = `<select data-single-gate="1" class="form-select ${lockedClass}" ${disabled} onchange="syncCheckerGateInput()">
-      ${gateSelectOptions(selected)}
+      ${gateSelectOptions(selected, true)}
     </select>`;
     hidden.value = selected;
     if (help)
@@ -1343,16 +1343,13 @@ function syncCheckerGateInput() {
     return ok;
   }
 
-  const gate =
-    document.querySelector("[data-single-gate]")?.value ||
-    hidden.value ||
-    "Dock 01";
+  const gate = document.querySelector("[data-single-gate]")?.value || "";
   hidden.value = gate;
   return !!gate;
 }
 
 function resetCheckerGatePicker() {
-  renderCheckerGatePicker("", "Dock 01", false);
+  renderCheckerGatePicker("", "", false);
 }
 
 function setCheckerSubmitButtonState(stateName = "ready", label = "") {
@@ -3228,11 +3225,7 @@ function populateCheckerFormFromRow(row) {
   if (form.plat_number)
     form.plat_number.value = normalizePlateValue(row.plat_number || "");
 
-  renderCheckerGatePicker(
-    row.fleet_type || "",
-    row.gate || "Dock 01",
-    lockGate,
-  );
+  renderCheckerGatePicker(row.fleet_type || "", row.gate || "", lockGate);
 
   if (form.status) form.status.value = nextStatus;
   if (form.unload_sla)
@@ -3337,13 +3330,44 @@ function bottleneck(title, value, note, color) {
   return `<div class="bg-surface-container-high/50 p-4 rounded-lg border-l-4 border-current ${color} mb-3"><div class="flex justify-between"><span class="font-bold text-on-surface">${esc(title)}</span><span class="font-queue-id ${color}">${esc(value)}</span></div><p class="text-[12px] text-on-surface-variant mt-1">${esc(note)}</p></div>`;
 }
 
+function printWaitingListTicket(index) {
+  const rows = state.dashboard?.report_preview || [];
+  const row = rows[index];
+
+  if (!row) {
+    showToast("Data waiting list tidak ditemukan. Klik Refresh Data dulu.");
+    return;
+  }
+
+  printSecurityTickets([row]);
+}
+
 function reportTable(rows) {
   return `<div class="overflow-x-auto"><table id="report-table" class="w-full text-left">
     <thead class="bg-surface-container text-on-surface-variant">
-      <tr>${["Created", "Queue", "Vendor", "Fleet", "Plat", "PO", "Gate", "Status", "Menunggu", "Qty", "SKU", "SLA"].map((h) => `<th class="px-4 py-3 font-label-sm uppercase">${h}</th>`).join("")}</tr>
+      <tr>${["Print", "Created", "Queue", "Vendor", "Fleet", "Plat", "PO", "Gate", "Status", "Menunggu", "Qty", "SKU", "SLA"].map((h) => `<th class="px-4 py-3 font-label-sm uppercase">${h}</th>`).join("")}</tr>
     </thead>
     <tbody class="divide-y divide-outline-variant/10">
-      ${rows.map((r) => `<tr class="hover:bg-primary/5">${["created_at", "queue_no", "vendor_name", "fleet_type", "plat_number", "po_number", "gate", "status"].map((k) => `<td class="px-4 py-3 text-sm">${esc(r[k] ?? "")}</td>`).join("")}<td class="px-4 py-3 text-sm font-queue-id text-tertiary live-waiting-cell" data-live-waiting="1" data-created="${esc(r.created_at || "")}" data-completed="${esc(r.completed_at || "")}">${esc(r.waiting_text || liveWaitingText(r.created_at, r.completed_at))}</td><td class="px-4 py-3 text-sm">${esc(r.total_po_qty ?? "")}</td><td class="px-4 py-3 text-sm">${esc(r.count_po_sku ?? "")}</td><td class="px-4 py-3 text-sm">${esc(r.unload_sla ?? "")}</td></tr>`).join("") || `<tr><td colspan="14" class="px-6 py-8 text-center text-on-surface-variant">Belum ada waiting list.</td></tr>`}
+      ${
+        rows
+          .map(
+            (r, i) =>
+              `<tr class="hover:bg-primary/5">
+                <td class="px-4 py-3">
+                  <button type="button" onclick="printWaitingListTicket(${i})" class="thin-tab rounded-lg px-3 py-2 font-bold text-xs flex items-center gap-1 whitespace-nowrap">
+                    <span class="material-symbols-outlined text-sm">print</span>Print
+                  </button>
+                </td>
+                ${["created_at", "queue_no", "vendor_name", "fleet_type", "plat_number", "po_number", "gate", "status"].map((k) => `<td class="px-4 py-3 text-sm">${esc(r[k] ?? "")}</td>`).join("")}
+                <td class="px-4 py-3 text-sm font-queue-id text-tertiary live-waiting-cell" data-live-waiting="1" data-created="${esc(r.created_at || "")}" data-completed="${esc(r.completed_at || "")}" data-status="${esc(r.status || "")}">${esc(r.waiting_text || liveWaitingText(r.created_at, r.completed_at))}</td>
+                <td class="px-4 py-3 text-sm">${esc(r.total_po_qty ?? "")}</td>
+                <td class="px-4 py-3 text-sm">${esc(r.count_po_sku ?? "")}</td>
+                <td class="px-4 py-3 text-sm">${esc(r.unload_sla ?? "")}</td>
+              </tr>`,
+          )
+          .join("") ||
+        `<tr><td colspan="13" class="px-6 py-8 text-center text-on-surface-variant">Belum ada waiting list.</td></tr>`
+      }
     </tbody>
   </table></div>`;
 }
