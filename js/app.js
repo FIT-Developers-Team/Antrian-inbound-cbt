@@ -577,7 +577,7 @@ function pageChecker() {
     <div class="xl:col-span-7 glass-card rounded-xl p-6">
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
         <div>
-          <h3 class="font-headline-md text-headline-md mb-1">List Security</h3>
+          <h3 class="font-headline-md text-headline-md mb-1">List Checker</h3>
           <p class="text-on-surface-variant">Pilih data, isi Gate, lalu simpan. Data otomatis tampil di monitor Panggil dan voice TV.</p>
         </div>
         <button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-2 font-bold flex items-center gap-2 w-fit"><span class="material-symbols-outlined">refresh</span>Refresh</button>
