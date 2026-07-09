@@ -645,7 +645,7 @@ function pageDaftar() {
       <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-6">
         <div>
           <h3 class="font-headline-md text-headline-md mb-1">Security Input</h3>
-          <p class="text-on-surface-variant">Isi Vendor dulu. PO Number otomatis filter sesuai vendor; qty, SKU, dan slot tetap auto lookup dari Data V2.</p>
+          <p class="text-on-surface-variant">Pilih Vendor dulu. PO Number otomatis filter sesuai vendor; qty, SKU, dan slot tetap auto lookup dari Data V2.</p>
         </div>
         <div class="thin-tab rounded-lg px-4 py-2 font-label-sm flex items-center gap-2 w-fit opacity-80">
           <span class="material-symbols-outlined">sync</span>Auto lookup PO
@@ -653,7 +653,7 @@ function pageDaftar() {
       </div>
       <form id="security-form" onsubmit="submitSecurity(event)">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          ${textInput("vendor_name", "Vendor Name", "Pilih / ketik vendor dulu", "vendor-list", lookup?.summary?.vendor_name, 'required oninput="handleVendorFilterInput(this)" onchange="handleVendorFilterInput(this)" autocomplete="off"')}
+          ${vendorSelectInput(lookup?.summary?.vendor_name || "")}
           ${poMultiSelectInput(lookup?.summary?.po_number || "")}
           ${selectInput("ticket_type", "Tipe Tiket", ["REG", "VIP", "DROP"], "REG", 'required onchange="handleTicketTypeChange()"')}
           ${selectInput("slot", "Slot", buildSlotOptions(lookup?.summary?.slot), lookup?.summary?.slot || "3", "required")}
@@ -2066,6 +2066,7 @@ function vendorMatchesFilter(vendor, filter) {
 function handleVendorFilterInput(input) {
   const currentVendor = String(input?.value || "").trim();
   const selected = getSelectedPoNumbers();
+
   if (selected.length) {
     const kept = selected.filter((po) =>
       vendorMatchesFilter(getPoVendor(po), currentVendor),
@@ -2075,6 +2076,9 @@ function handleVendorFilterInput(input) {
       showToast("PO yang beda vendor otomatis dilepas.");
     }
   }
+
+  const poSearch = document.getElementById("po-search-input");
+  if (poSearch) poSearch.value = "";
 
   filterPoDropdown();
   if (typeof lookupPo === "function") lookupPo(true);
@@ -2221,6 +2225,26 @@ function closePoDropdownSoon() {
   setTimeout(() => {
     document.getElementById("po-dropdown")?.classList.add("hidden");
   }, 180);
+}
+
+function vendorSelectInput(value = "") {
+  const vendors = state.options.vendor_name || [];
+  const selected = String(value || "").trim();
+  const options = vendors
+    .map(
+      (vendor) =>
+        `<option value="${esc(vendor)}" ${String(vendor) === selected ? "selected" : ""}>${esc(vendor)}</option>`,
+    )
+    .join("");
+
+  return `<label class="flex flex-col gap-2 md:col-span-2">
+    <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Vendor Name</span>
+    <select name="vendor_name" class="form-select" required onchange="handleVendorFilterInput(this)">
+      <option value="">Pilih vendor dulu</option>
+      ${options}
+    </select>
+    <span class="form-help">Di HP pakai dropdown select supaya vendor tidak muncul di suggestion keyboard.</span>
+  </label>`;
 }
 
 function poMultiSelectInput(value = "") {
