@@ -263,14 +263,27 @@ function applyRoleAccessUI() {
   document.querySelectorAll("[data-page]").forEach((btn) => {
     const page = btn.dataset.page;
 
-    // Menu Antrian sengaja dimatikan. Operasional pakai Waiting Monitor.
+    // Menu Antrian dimatikan total. Operasional pakai Waiting Monitor.
     if (page === "antrian") {
       btn.style.display = "none";
+      btn.setAttribute("aria-hidden", "true");
       return;
     }
 
     const show = !!user && allowed.has(page);
     btn.style.display = show ? "" : "none";
+  });
+
+  // Extra guard kalau ada markup lama tanpa data-page yang masih berisi Antrian.
+  document.querySelectorAll("button").forEach((btn) => {
+    if (
+      String(btn.textContent || "")
+        .trim()
+        .toLowerCase() === "antrian"
+    ) {
+      btn.style.display = "none";
+      btn.setAttribute("aria-hidden", "true");
+    }
   });
 
   const sidebar =
@@ -745,7 +758,7 @@ function pageChecker() {
     <div class="xl:col-span-7 glass-card rounded-xl p-6">
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
         <div>
-          <h3 class="font-headline-md text-headline-md mb-1">List Security</h3>
+          <h3 class="font-headline-md text-headline-md mb-1">List Checker</h3>
           <p class="text-on-surface-variant">Pilih data, isi Gate, lalu simpan. Data otomatis tampil di monitor Panggil dan voice TV.</p>
         </div>
         <button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-2 font-bold flex items-center gap-2 w-fit"><span class="material-symbols-outlined">refresh</span>Refresh</button>
@@ -766,10 +779,10 @@ function pageChecker() {
       <div class="overflow-x-auto max-h-[520px] overflow-y-auto border border-outline-variant/30 rounded-lg">
         <table id="checker-security-table" class="w-full text-left">
           <thead class="bg-surface-container text-on-surface-variant sticky top-0 z-10">
-            <tr>${["Pilih", "Queue", "Vendor", "PO", "Plat", "Driver", "Gate", "Status", "Menunggu"].map((h) => `<th class="px-4 py-3 font-label-sm uppercase">${h}</th>`).join("")}</tr>
+            <tr>${["Pilih", "Queue", "Vendor", "Type Mobil", "PO", "Plat", "Driver", "Gate", "Status", "Menunggu"].map((h) => `<th class="px-4 py-3 font-label-sm uppercase">${h}</th>`).join("")}</tr>
           </thead>
           <tbody class="divide-y divide-outline-variant/10">
-            ${rows.map((r, i) => checkerListRow(r, i)).join("") || `<tr><td colspan="9" class="px-6 py-8 text-center text-on-surface-variant">Belum ada data Security.</td></tr>`}
+            ${rows.map((r, i) => checkerListRow(r, i)).join("") || `<tr><td colspan="10" class="px-6 py-8 text-center text-on-surface-variant">Belum ada data Checker.</td></tr>`}
           </tbody>
         </table>
       </div>
@@ -2206,11 +2219,12 @@ function checkerListRow(r, i) {
   return `<tr data-status="${esc(st || "-")}" class="hover:bg-primary/5 transition-colors">
     <td class="px-4 py-3"><button type="button" onclick="populateCheckerFromTicket(${i})" class="bg-primary-container text-on-primary-container px-3 py-2 rounded-lg font-bold text-xs">${esc(actionLabel)}</button></td>
     <td class="px-4 py-3 font-queue-id text-primary">${esc(r.queue_no || "-")}</td>
-    <td class="px-4 py-3">${esc(r.vendor_name || "-")}</td>
-    <td class="px-4 py-3 text-sm">${esc(r.po_number || "-")}</td>
+    <td class="px-4 py-3 min-w-[180px]">${esc(r.vendor_name || "-")}</td>
+    <td class="px-4 py-3 font-bold text-sm">${esc(r.fleet_type || "-")}</td>
+    <td class="px-4 py-3 text-sm min-w-[220px]">${esc(r.po_number || "-")}</td>
     <td class="px-4 py-3 font-queue-id text-sm">${esc(r.plat_number || "-")}</td>
     <td class="px-4 py-3">${esc(r.driver_name || "-")}</td>
-    <td class="px-4 py-3">${esc(r.gate || "-")}</td>
+    <td class="px-4 py-3 min-w-[120px]">${esc(r.gate || "-")}</td>
     <td class="px-4 py-3">${esc(st || "-")}</td>
     <td class="px-4 py-3 font-queue-id ${st.includes("COMPLETED") ? "text-success" : "text-tertiary"} live-waiting-cell" data-live-waiting="1" data-created="${esc(r.created_at || "")}" data-completed="${esc(r.completed_at || "")}" data-status="${esc(st)}">${esc(wait)}</td>
   </tr>`;
@@ -2479,7 +2493,9 @@ function renderPage(page, toast = true) {
     return;
   }
 
-  let safe = map[page] ? page : getDefaultPageForRole();
+  let requestedPage = String(page || "").trim();
+  if (requestedPage === "antrian") requestedPage = "monitor";
+  let safe = map[requestedPage] ? requestedPage : getDefaultPageForRole();
   if (!canAccessPage(safe)) {
     const fallback = getDefaultPageForRole();
     if (toast)
@@ -2570,7 +2586,11 @@ function switchPage(page) {
     return;
   }
 
-  const safe = String(page || "").trim();
+  let safe = String(page || "").trim();
+
+  // Menu Antrian dimatikan. Semua akses diarahkan ke Waiting Monitor.
+  if (safe === "antrian") safe = "monitor";
+
   if (!canAccessPage(safe)) {
     showToast("Akses ditolak untuk role " + normalizeRole(getAuthUser()?.role));
     renderPage(getDefaultPageForRole(), false);
