@@ -53,7 +53,7 @@ const pageMeta = {
   },
   monitor: {
     title: "Waiting List Monitoring",
-    subtitle: "Monitor plat nomor, gate, status, dan waktu tunggu berjalan",
+    subtitle: "Report Security + Checker, SLA by fleet type",
   },
   laporan: {
     title: "Waiting List",
@@ -1112,52 +1112,242 @@ function pageDock() {
   </div>`;
 }
 
+function normalizeFleetForSla(type = "") {
+  return String(type || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, " ");
+}
+
+function getInboundSlaHours(row = {}) {
+  const fleet = normalizeFleetForSla(
+    row.fleet_type || row["Vhiecle Type"] || "",
+  );
+  const sku = Number(row.count_po_sku || row["Count SKU"] || 0) || 0;
+
+  if (fleet.includes("WINGBOX") || fleet.includes("WING BOX")) return 4;
+  if (fleet.includes("FUSO")) return 4;
+
+  if (
+    fleet.includes("CDD") ||
+    fleet.includes("CDE") ||
+    fleet.includes("CDDL")
+  ) {
+    return sku > 40 ? 4 : 2;
+  }
+
+  if (
+    fleet.includes("VAN") ||
+    fleet.includes("GRANDMAX") ||
+    fleet.includes("MOBIL")
+  ) {
+    return 1;
+  }
+
+  return 0;
+}
+
+function getInboundSlaLabel(row = {}) {
+  const hours = getInboundSlaHours(row);
+  if (!hours) return "-";
+  if (hours === 1) return "1 jam";
+  return `${hours} jam`;
+}
+
+function getMonitorStartTime(row = {}) {
+  return row.created_at || row.register_time || row.Timestamp || "";
+}
+
+function getElapsedMinutesForSla(row = {}) {
+  const start = parseDateLocal(getMonitorStartTime(row));
+  if (!start) return 0;
+  const end = row.completed_at
+    ? parseDateLocal(row.completed_at) || new Date()
+    : new Date();
+  return Math.max(0, Math.floor((end.getTime() - start.getTime()) / 60000));
+}
+
+function getInboundSlaInfo(row = {}) {
+  const hours = getInboundSlaHours(row);
+  const st = String(row.status || "").toUpperCase();
+  const elapsed = getElapsedMinutesForSla(row);
+
+  if (!hours) {
+    return {
+      target_hours: 0,
+      target_minutes: 0,
+      label: "-",
+      status: "NO SLA",
+      className: "text-on-surface-variant",
+      badgeClass:
+        "bg-surface-container text-on-surface-variant border-outline-variant",
+      elapsed_minutes: elapsed,
+    };
+  }
+
+  const targetMinutes = hours * 60;
+  const miss = elapsed > targetMinutes;
+  const completed = st.includes("COMPLETED") || !!row.completed_at;
+
+  if (completed) {
+    return {
+      target_hours: hours,
+      target_minutes: targetMinutes,
+      label: getInboundSlaLabel(row),
+      status: miss ? "SLA MISS" : "SLA OK",
+      className: miss ? "text-error" : "text-success",
+      badgeClass: miss
+        ? "bg-error/10 text-error border-error/30"
+        : "bg-success/10 text-success border-success/30",
+      elapsed_minutes: elapsed,
+    };
+  }
+
+  return {
+    target_hours: hours,
+    target_minutes: targetMinutes,
+    label: getInboundSlaLabel(row),
+    status: miss ? "SLA MISS" : "ON PROCESS",
+    className: miss ? "text-error" : "text-warning",
+    badgeClass: miss
+      ? "bg-error/10 text-error border-error/30"
+      : "bg-warning/10 text-warning border-warning/30",
+    elapsed_minutes: elapsed,
+  };
+}
+
+function getMonitorSummary(rows = []) {
+  const total = rows.length;
+  const waiting = rows.filter((r) =>
+    String(r.status || "")
+      .toUpperCase()
+      .includes("WAIT"),
+  ).length;
+  const called = rows.filter((r) =>
+    String(r.status || "")
+      .toUpperCase()
+      .includes("CALLED"),
+  ).length;
+  const unloading = rows.filter((r) =>
+    String(r.status || "")
+      .toUpperCase()
+      .includes("UNLOADING"),
+  ).length;
+  const completed = rows.filter((r) =>
+    String(r.status || "")
+      .toUpperCase()
+      .includes("COMPLETED"),
+  ).length;
+  const miss = rows.filter(
+    (r) => getInboundSlaInfo(r).status === "SLA MISS",
+  ).length;
+  const ok = rows.filter(
+    (r) => getInboundSlaInfo(r).status === "SLA OK",
+  ).length;
+  const active = rows.filter(
+    (r) =>
+      !String(r.status || "")
+        .toUpperCase()
+        .includes("COMPLETED"),
+  ).length;
+
+  return { total, waiting, called, unloading, completed, miss, ok, active };
+}
+
+function slaRowsLegend() {
+  return `<div class="rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4 text-sm text-on-surface-variant">
+    <div class="font-bold text-on-surface mb-2">Rule SLA Fleet</div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+      <div><b>WINGBOX</b> / <b>FUSO</b>: 4 jam</div>
+      <div><b>CDD/CDE/CDDL</b>: SKU ≤ 40 = 2 jam, SKU > 40 = 4 jam</div>
+      <div><b>VAN/GRANDMAX/MOBIL</b>: 1 jam</div>
+      <div>Durasi dihitung dari Register Time sampai selesai / waktu sekarang.</div>
+    </div>
+  </div>`;
+}
+
+function updateLiveSlaCells() {
+  document.querySelectorAll("[data-live-sla-target]").forEach((el) => {
+    const target = Number(el.dataset.liveSlaTarget || 0);
+    const created = el.dataset.created || "";
+    const completed = el.dataset.completed || "";
+    const status = String(el.dataset.status || "").toUpperCase();
+
+    if (!target) {
+      el.textContent = "NO SLA";
+      return;
+    }
+
+    const start = parseDateLocal(created);
+    if (!start) return;
+    const end = completed
+      ? parseDateLocal(completed) || new Date()
+      : new Date();
+    const elapsed = Math.max(
+      0,
+      Math.floor((end.getTime() - start.getTime()) / 60000),
+    );
+    const miss = elapsed > target;
+    const done = status.includes("COMPLETED") || !!completed;
+
+    el.textContent = done
+      ? miss
+        ? "SLA MISS"
+        : "SLA OK"
+      : miss
+        ? "SLA MISS"
+        : "ON PROCESS";
+    el.className =
+      "inline-flex items-center px-3 py-1 rounded-full border text-xs font-bold " +
+      (miss
+        ? "bg-error/10 text-error border-error/30"
+        : done
+          ? "bg-success/10 text-success border-success/30"
+          : "bg-warning/10 text-warning border-warning/30");
+  });
+}
+
 function pageMonitor() {
-  const rows = (state.dashboard?.queue || []).filter(
+  const allRows = state.dashboard?.queue || [];
+  const rows = allRows.filter(
     (r) =>
       !String(r.status || "")
         .toUpperCase()
         .includes("COMPLETED"),
   );
-  const waiting = rows.filter((r) =>
-    String(r.status || "")
-      .toUpperCase()
-      .includes("WAIT"),
-  );
-  const cap = state.dashboard?.summary?.caphand || {};
-  return `${kpiCards()}
-  <div class="grid grid-cols-1 xl:grid-cols-3 gap-gutter">
-    <div class="xl:col-span-2 glass-card rounded-xl p-6">
+  const summary = getMonitorSummary(allRows);
+
+  return `<div class="grid grid-cols-1 xl:grid-cols-12 gap-gutter">
+    <div class="xl:col-span-12 glass-card rounded-xl p-6">
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
         <div>
           <h3 class="font-headline-md text-headline-md">Waiting List Monitoring</h3>
-          <p class="text-on-surface-variant">Fokus pantau plat nomor, gate, status, dan waktu tunggu berjalan.</p>
+          <p class="text-on-surface-variant">Report ini hanya dari hasil input Security dan update Checker. Tidak baca semua raw Data V2.</p>
         </div>
-        <button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2 w-fit"><span class="material-symbols-outlined">refresh</span>Refresh</button>
+        <button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2 w-fit"><span class="material-symbols-outlined">refresh</span>Refresh Output form</button>
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        ${miniMetric("Total Aktif", rows.length, "text-primary")}
-        ${miniMetric("Masih Waiting", waiting.length, "text-tertiary")}
-        ${miniMetric("PO Data V2", cap.unique_po || 0, "text-secondary")}
+
+      <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-4 mb-6">
+        ${miniMetric("Total Input", summary.total, "text-primary")}
+        ${miniMetric("Aktif", summary.active, "text-primary")}
+        ${miniMetric("Waiting", summary.waiting, "text-tertiary")}
+        ${miniMetric("Called", summary.called, "text-primary")}
+        ${miniMetric("Unloading", summary.unloading, "text-warning")}
+        ${miniMetric("Completed", summary.completed, "text-success")}
+        ${miniMetric("SLA Miss", summary.miss, summary.miss ? "text-error" : "text-success")}
       </div>
-      <div class="overflow-x-auto">
+
+      <div class="mb-6">${slaRowsLegend()}</div>
+
+      <div class="overflow-x-auto border border-outline-variant/30 rounded-lg">
         <table id="monitor-table" class="w-full text-left">
           <thead class="bg-surface-container text-on-surface-variant">
-            <tr>${["Plat", "Queue", "Vendor", "PO", "Gate", "Status", "Menunggu"].map((h) => `<th class="px-4 py-3 font-label-sm uppercase">${h}</th>`).join("")}</tr>
+            <tr>${["Plat", "Queue", "Vendor", "PO", "Fleet", "SKU", "Gate", "Status", "Menunggu", "SLA Target", "SLA Status"].map((h) => `<th class="px-4 py-3 font-label-sm uppercase">${h}</th>`).join("")}</tr>
           </thead>
           <tbody class="divide-y divide-outline-variant/10">
-            ${rows.map((r) => monitorRow(r)).join("") || `<tr><td colspan="7" class="px-6 py-8 text-center text-on-surface-variant">Belum ada waiting list aktif.</td></tr>`}
+            ${rows.map((r) => monitorRow(r)).join("") || `<tr><td colspan="11" class="px-6 py-8 text-center text-on-surface-variant">Belum ada waiting list aktif dari Output form.</td></tr>`}
           </tbody>
         </table>
-      </div>
-    </div>
-    <div class="glass-card rounded-xl p-6">
-      <h3 class="font-headline-md text-headline-md mb-4">Data V2 Summary</h3>
-      <div class="space-y-3">
-        ${miniMetric("Rows Data V2", cap.rows || 0, "text-primary")}
-        ${miniMetric("Unique SKU", cap.unique_sku || 0, "text-secondary")}
-        ${miniMetric("Total Request Qty", num(cap.total_request_qty || 0), "text-success")}
-        ${miniMetric("Late Rows", cap.late_rows || 0, "text-error")}
       </div>
     </div>
   </div>`;
@@ -1166,16 +1356,25 @@ function pageMonitor() {
 function monitorRow(r) {
   const st = String(r.status || "").toUpperCase();
   const wait = r.waiting_text || liveWaitingText(r.created_at, r.completed_at);
-  const danger =
-    Number(r.waiting_minutes || minutesFromCreated(r.created_at)) >= 60;
+  const sla = getInboundSlaInfo(r);
+  const danger = sla.status === "SLA MISS";
+
   return `<tr class="hover:bg-primary/5 ${danger ? "bg-error/5" : ""}">
     <td class="px-4 py-3 font-queue-id text-primary">${esc(r.plat_number || "-")}</td>
     <td class="px-4 py-3 font-queue-id">${esc(r.queue_no || "-")}</td>
-    <td class="px-4 py-3">${esc(r.vendor_name || "-")}</td>
-    <td class="px-4 py-3 text-sm">${esc(r.po_number || "-")}</td>
+    <td class="px-4 py-3 min-w-[190px]">${esc(r.vendor_name || "-")}</td>
+    <td class="px-4 py-3 text-sm min-w-[210px]">${esc(r.po_number || "-")}</td>
+    <td class="px-4 py-3 font-bold">${esc(r.fleet_type || "-")}</td>
+    <td class="px-4 py-3 font-queue-id">${esc(r.count_po_sku || 0)}</td>
     <td class="px-4 py-3">${esc(r.gate || "-")}</td>
     <td class="px-4 py-3">${esc(st || "-")}</td>
-    <td class="px-4 py-3 font-queue-id ${danger ? "text-error" : "text-tertiary"} live-waiting-cell" data-live-waiting="1" data-created="${esc(r.created_at || "")}" data-completed="${esc(r.completed_at || "")}">${esc(wait)}</td>
+    <td class="px-4 py-3 font-queue-id ${danger ? "text-error" : "text-tertiary"} live-waiting-cell" data-live-waiting="1" data-created="${esc(r.created_at || "")}" data-completed="${esc(r.completed_at || "")}" data-status="${esc(st)}">${esc(wait)}</td>
+    <td class="px-4 py-3 font-bold">${esc(sla.label)}</td>
+    <td class="px-4 py-3">
+      <span data-live-sla-target="${esc(sla.target_minutes || 0)}" data-created="${esc(r.created_at || "")}" data-completed="${esc(r.completed_at || "")}" data-status="${esc(st)}" class="inline-flex items-center px-3 py-1 rounded-full border text-xs font-bold ${sla.badgeClass}">
+        ${esc(sla.status)}
+      </span>
+    </td>
   </tr>`;
 }
 
@@ -1839,6 +2038,8 @@ function refreshLiveWaitingCells() {
     }
     el.textContent = liveWaitingText(el.dataset.created, el.dataset.completed);
   });
+
+  if (typeof updateLiveSlaCells === "function") updateLiveSlaCells();
 }
 
 function startLiveWaitingTimer() {
@@ -1920,6 +2121,8 @@ function renderPage(page, toast = true) {
 
   if (safe === "daftar")
     setTimeout(() => {
+      if (typeof ensureFullDataForDaftar === "function")
+        ensureFullDataForDaftar();
       handleTicketTypeChange();
       updateFleetPreview();
       renderPoSelectedChips(getSelectedPoNumbers());

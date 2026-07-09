@@ -798,6 +798,25 @@ function updateApiPill(mode, text) {
   pill.innerHTML = `<span class="w-2 h-2 rounded-full ${color} ${mode === "on" ? "status-pulse" : ""}"></span>${text}`;
 }
 
+function shouldUseOutputOnlyInitialLoad() {
+  const page = String(
+    state.page || (location.hash || "").replace("#", "") || "",
+  ).trim();
+  const role =
+    typeof getAuthUser === "function"
+      ? normalizeRole(getAuthUser()?.role || "")
+      : "";
+
+  if (role === "CHECKER" || role === "ADMIN") return true;
+  if (
+    ["checker", "monitor", "laporan", "panggil", "antrian"].includes(page) &&
+    role !== "SECURITY"
+  )
+    return true;
+
+  return false;
+}
+
 async function initApi() {
   updateApiPill("loading", "Cek API V2...");
   if (!hasApiV2()) {
@@ -806,7 +825,24 @@ async function initApi() {
   }
 
   try {
-    v2RawResponse = await fetchV2Data();
+    if (
+      typeof shouldUseOutputOnlyInitialLoad === "function" &&
+      shouldUseOutputOnlyInitialLoad()
+    ) {
+      const outputResponse = await fetchOutputFormData();
+      v2RawResponse = {
+        ...(v2RawResponse || {}),
+        status: "success",
+        timestamp: outputResponse?.timestamp || new Date().toISOString(),
+        kpiRaw: [],
+        table: [],
+        tablev2: [],
+        outputForm: getOutputFormRows(outputResponse),
+      };
+    } else {
+      v2RawResponse = await fetchV2Data();
+    }
+
     state.dashboard = buildDashboardFromV2(v2RawResponse);
     state.options = state.dashboard.options || state.options;
     state.lastCalled =
@@ -819,6 +855,25 @@ async function initApi() {
     console.error(err);
     updateApiPill("error", "API error");
     showToast("API V2 error: " + err.message);
+  }
+}
+
+async function ensureFullDataForDaftar() {
+  if (!hasApiV2()) return;
+  const tableRows = getTableV2Rows(v2RawResponse || {});
+  if (tableRows.length) return;
+
+  try {
+    updateApiPill("loading", "Load Data V2...");
+    v2RawResponse = await fetchV2Data();
+    state.dashboard = buildDashboardFromV2(v2RawResponse);
+    state.options = state.dashboard.options || state.options;
+    updateApiPill("on", "API live");
+    if (state.page === "daftar") renderPage("daftar", false);
+  } catch (err) {
+    console.error(err);
+    updateApiPill("error", "API error");
+    showToast("Load Data V2 gagal: " + err.message);
   }
 }
 
