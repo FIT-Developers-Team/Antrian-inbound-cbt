@@ -47,6 +47,7 @@ const columns = [
 const LOCAL_TICKETS_KEY = "inbound_cbt_manual_tickets_v2";
 let v2RawResponse = null;
 let v2PoIndex = null;
+let securitySubmitBusy = false;
 
 function hasApiV2() {
   return API_URL_V2 && !API_URL_V2.includes("PASTE_GAS_WEB_APP_URL_HERE");
@@ -1040,7 +1041,15 @@ function pickMultiValue(list = [], index = 0) {
 
 async function submitSecurity(e) {
   e.preventDefault();
+
+  if (securitySubmitBusy) {
+    showToast("Submit sedang diproses, tunggu sebentar.");
+    return;
+  }
+
   const form = e.target;
+  if (typeof syncPlateMultiInput === "function") syncPlateMultiInput();
+
   if (!validateSecurityForm(form)) return;
 
   const lookup = lookupPo(true);
@@ -1052,115 +1061,131 @@ async function submitSecurity(e) {
     return;
   }
 
-  const base = Object.fromEntries(new FormData(form).entries());
-  const poItems = lookup.items || [];
-
-  if (!poItems.length) {
-    showToast("PO belum valid.");
-    return;
-  }
-
-  const plateList = parseMultiPlateValues(base.plat_number);
-  const driverList = parseMultiInputValues(base.driver_name);
-  const phoneList = parseMultiInputValues(base.phone_number);
-
-  if (!plateList.length) {
-    showToast("Plat number wajib diisi.");
-    return;
-  }
-  if (!driverList.length) {
-    showToast("Driver name wajib diisi.");
-    return;
-  }
-  if (!phoneList.length) {
-    showToast("Phone number wajib diisi.");
-    return;
-  }
-
-  const rows = getLocalTickets();
-  const newRows = [];
-  const registerTime = base.register_time || formatDateTimeLocal(new Date());
-  let queuePool = (state.dashboard?.queue || []).concat(rows);
-
-  for (const [index, item] of poItems.entries()) {
-    const rowSlot =
-      String(base.ticket_type || "").toUpperCase() === "DROP"
-        ? base.slot || item.slot || "3"
-        : item.slot || base.slot || "3";
-
-    const plate = pickMultiValue(plateList, index);
-    const driver = pickMultiValue(driverList, index);
-    const phone = pickMultiValue(phoneList, index);
-
-    const row = {
-      ...base,
-      ticket_id:
-        "IBT-" +
-        Date.now().toString(36).toUpperCase() +
-        "-" +
-        String(newRows.length + 1).padStart(2, "0"),
-      po_number: item.po_number,
-      po_numbers: lookup.summary.po_numbers,
-      vendor_name: item.vendor_name || base.vendor_name || "",
-      slot: rowSlot,
-      plat_number: plate,
-      driver_name: driver,
-      phone_number: phone,
-      status: "WAITING",
-      total_po_qty: toNumberV2(item.total_po_qty),
-      count_po_sku: toNumberV2(item.count_po_sku),
-      created_at: registerTime,
-      register_time: registerTime,
-      queue_no: nextLocalQueueNoFromList(
-        base.ticket_type,
-        rowSlot,
-        queuePool.concat(newRows),
-      ),
-      gate: "-",
-      unload_sla: "",
-      source: "SECURITY_INPUT",
-    };
-
-    newRows.push(row);
-  }
-
-  // Local fallback tetap disimpan supaya UI langsung punya data walau backend lambat.
-  rows.unshift(...newRows);
-  saveLocalTickets(rows);
+  securitySubmitBusy = true;
+  const submitBtn = document.getElementById("security-submit-btn");
+  const submitText = document.getElementById("security-submit-text");
+  if (submitBtn) submitBtn.disabled = true;
+  if (submitText) submitText.textContent = "Menyimpan...";
 
   try {
-    showToast("Menyimpan ticket ke Output form...");
-    const result = await submitSecurityRowsToBackend(newRows);
+    const base = Object.fromEntries(new FormData(form).entries());
+    const poItems = lookup.items || [];
 
-    // Tidak fetch full API lagi. Row hasil POST langsung dimasukkan ke state.
-    const savedRows =
-      Array.isArray(result?.rows) && result.rows.length ? result.rows : newRows;
-
-    upsertOutputRowsToRawResponse(savedRows);
-    state.dashboard = buildDashboardFromV2(v2RawResponse);
-    state.options = state.dashboard.options || state.options;
-
-    showToast(`${newRows.length} ticket masuk Output form`);
-  } catch (err) {
-    console.error(err);
-
-    // Tetap tampilkan ticket lokal supaya Checker langsung bisa proses.
-    if (v2RawResponse) {
-      upsertOutputRowsToRawResponse(newRows);
-      state.dashboard = buildDashboardFromV2(v2RawResponse);
-      state.options = state.dashboard.options || state.options;
-    } else {
-      state.dashboard.queue.unshift(...newRows);
-      state.dashboard.report_preview.unshift(...newRows);
+    if (!poItems.length) {
+      showToast("PO belum valid.");
+      return;
     }
 
-    showToast("Backend gagal, ticket tersimpan lokal: " + err.message);
-  }
+    const plateList = parseMultiPlateValues(base.plat_number);
+    const driverList = parseMultiInputValues(base.driver_name);
+    const phoneList = parseMultiInputValues(base.phone_number);
 
-  state.lastCalled = newRows[0];
-  const queueEl = document.getElementById("new-queue-number");
-  if (queueEl) queueEl.textContent = newRows[0].queue_no;
-  renderPage("checker", false);
+    if (!plateList.length) {
+      showToast("Plat number wajib diisi.");
+      return;
+    }
+    if (!driverList.length) {
+      showToast("Driver name wajib diisi.");
+      return;
+    }
+    if (!phoneList.length) {
+      showToast("Phone number wajib diisi.");
+      return;
+    }
+
+    const rows = getLocalTickets();
+    const newRows = [];
+    const registerTime = base.register_time || formatDateTimeLocal(new Date());
+    let queuePool = (state.dashboard?.queue || []).concat(rows);
+
+    for (const [index, item] of poItems.entries()) {
+      const rowSlot =
+        String(base.ticket_type || "").toUpperCase() === "DROP"
+          ? base.slot || item.slot || "3"
+          : item.slot || base.slot || "3";
+
+      const plate = pickMultiValue(plateList, index);
+      const driver = pickMultiValue(driverList, index);
+      const phone = pickMultiValue(phoneList, index);
+
+      const row = {
+        ...base,
+        ticket_id:
+          "IBT-" +
+          Date.now().toString(36).toUpperCase() +
+          "-" +
+          String(newRows.length + 1).padStart(2, "0"),
+        po_number: item.po_number,
+        po_numbers: lookup.summary.po_numbers,
+        vendor_name: item.vendor_name || base.vendor_name || "",
+        slot: rowSlot,
+        plat_number: plate,
+        driver_name: driver,
+        phone_number: phone,
+        status: "WAITING",
+        total_po_qty: toNumberV2(item.total_po_qty),
+        count_po_sku: toNumberV2(item.count_po_sku),
+        created_at: registerTime,
+        register_time: registerTime,
+        queue_no: nextLocalQueueNoFromList(
+          base.ticket_type,
+          rowSlot,
+          queuePool.concat(newRows),
+        ),
+        gate: "-",
+        unload_sla: "",
+        source: "SECURITY_INPUT",
+      };
+
+      newRows.push(row);
+    }
+
+    // Local fallback tetap disimpan supaya UI langsung punya data walau backend lambat.
+    rows.unshift(...newRows);
+    saveLocalTickets(rows);
+
+    try {
+      showToast("Menyimpan ticket ke Output form...");
+      const result = await submitSecurityRowsToBackend(newRows);
+
+      // Tidak fetch full API lagi. Row hasil POST langsung dimasukkan ke state.
+      const savedRows =
+        Array.isArray(result?.rows) && result.rows.length
+          ? result.rows
+          : newRows;
+
+      upsertOutputRowsToRawResponse(savedRows);
+      state.dashboard = buildDashboardFromV2(v2RawResponse);
+      state.options = state.dashboard.options || state.options;
+
+      showToast(`${newRows.length} ticket masuk Output form`);
+    } catch (err) {
+      console.error(err);
+
+      // Tetap tampilkan ticket lokal supaya Checker langsung bisa proses.
+      if (v2RawResponse) {
+        upsertOutputRowsToRawResponse(newRows);
+        state.dashboard = buildDashboardFromV2(v2RawResponse);
+        state.options = state.dashboard.options || state.options;
+      } else {
+        state.dashboard.queue.unshift(...newRows);
+        state.dashboard.report_preview.unshift(...newRows);
+      }
+
+      showToast("Backend gagal, ticket tersimpan lokal: " + err.message);
+    }
+
+    state.lastCalled = newRows[0];
+    const queueEl = document.getElementById("new-queue-number");
+    if (queueEl) queueEl.textContent = newRows[0].queue_no;
+    renderPage("checker", false);
+  } finally {
+    securitySubmitBusy = false;
+    const activeBtn = document.getElementById("security-submit-btn");
+    const activeText = document.getElementById("security-submit-text");
+    if (activeBtn) activeBtn.disabled = false;
+    if (activeText) activeText.textContent = "Buat Nomor";
+  }
 }
 
 function getQueueRowByCheckerBody(body = {}) {
@@ -1210,6 +1235,13 @@ async function submitChecker(e) {
   }
 
   const body = Object.fromEntries(new FormData(form).entries());
+
+  // Kalau status sudah UNLOADING, gate dikunci/disabled.
+  // FormData tidak mengambil disabled select, jadi gate diambil manual dari value/dataset.
+  if (!body.gate && form.gate) {
+    body.gate = form.gate.dataset.lockedGate || form.gate.value || "Dock 01";
+  }
+
   body.plat_number = normalizePlateValue(body.plat_number);
 
   const targetStatus = String(body.status || "UNLOADING")

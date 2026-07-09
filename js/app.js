@@ -138,6 +138,141 @@ function renderPoLookupSummary(lookup) {
   </div>`;
 }
 
+function splitPlateParts(value = "") {
+  const cleaned = normalizePlateValue(value);
+  const match = cleaned.match(/^([A-Z]{1,2})(\d{1,4})([A-Z]{0,3})$/);
+  return {
+    prefix: match ? match[1] : "",
+    number: match ? match[2] : "",
+    suffix: match ? match[3] : "",
+  };
+}
+
+function buildPlateFromParts(prefix = "", number = "", suffix = "") {
+  return (
+    String(prefix || "")
+      .toUpperCase()
+      .replace(/[^A-Z]/g, "")
+      .slice(0, 2) +
+    String(number || "")
+      .replace(/\D/g, "")
+      .slice(0, 4) +
+    String(suffix || "")
+      .toUpperCase()
+      .replace(/[^A-Z]/g, "")
+      .slice(0, 3)
+  );
+}
+
+function plateMultiInput(value = "") {
+  const plates = parsePlateValues(value);
+  const initial = plates.length ? plates : [""];
+  return `<div class="md:col-span-2 flex flex-col gap-2">
+    <div class="flex items-center justify-between gap-3">
+      <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Plat Number</span>
+      <button type="button" onclick="addPlateRow()" class="thin-tab rounded-lg px-3 py-1 text-xs font-bold flex items-center gap-1">
+        <span class="material-symbols-outlined text-sm">add</span>Tambah Plat
+      </button>
+    </div>
+    <input type="hidden" id="plat-number-hidden" name="plat_number" value="${esc(initial.filter(Boolean).join(", "))}" />
+    <div id="plate-multi-rows" class="space-y-2">
+      ${initial.map((plate, idx) => plateRowInput(plate, idx)).join("")}
+    </div>
+    <div class="text-[11px] text-on-surface-variant">Format dipisah: huruf depan / angka / huruf belakang. Contoh: <b>B</b> | <b>1234</b> | <b>XYZ</b>. Bisa tambah lebih dari 1 plat.</div>
+  </div>`;
+}
+
+function plateRowInput(value = "", index = 0) {
+  const p = splitPlateParts(value);
+  return `<div class="plate-row grid grid-cols-[72px_120px_92px_auto] gap-2 items-center" data-plate-row="${index}">
+    <input data-plate-part="prefix" class="form-input text-center uppercase" maxlength="2" placeholder="B" value="${esc(p.prefix)}" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'').slice(0,2); syncPlateMultiInput();" />
+    <input data-plate-part="number" class="form-input text-center" maxlength="4" inputmode="numeric" placeholder="1234" value="${esc(p.number)}" oninput="this.value=this.value.replace(/\\D/g,'').slice(0,4); syncPlateMultiInput();" />
+    <input data-plate-part="suffix" class="form-input text-center uppercase" maxlength="3" placeholder="XYZ" value="${esc(p.suffix)}" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'').slice(0,3); syncPlateMultiInput();" />
+    <button type="button" onclick="removePlateRow(this)" class="thin-tab rounded-lg px-3 py-3 flex items-center justify-center" title="Hapus plat">
+      <span class="material-symbols-outlined text-base">delete</span>
+    </button>
+  </div>`;
+}
+
+function addPlateRow(value = "") {
+  const wrap = document.getElementById("plate-multi-rows");
+  if (!wrap) return;
+  const holder = document.createElement("div");
+  holder.innerHTML = plateRowInput(
+    value,
+    wrap.querySelectorAll(".plate-row").length,
+  ).trim();
+  wrap.appendChild(holder.firstElementChild);
+  syncPlateMultiInput();
+}
+
+function removePlateRow(btn) {
+  const wrap = document.getElementById("plate-multi-rows");
+  const row = btn?.closest(".plate-row");
+  if (!wrap || !row) return;
+  if (wrap.querySelectorAll(".plate-row").length <= 1) {
+    row.querySelectorAll("input").forEach((input) => (input.value = ""));
+  } else row.remove();
+  syncPlateMultiInput();
+}
+
+function collectPlateRows() {
+  const rows = [...document.querySelectorAll("#plate-multi-rows .plate-row")];
+  return rows
+    .map((row) => {
+      const prefix =
+        row.querySelector('[data-plate-part="prefix"]')?.value || "";
+      const number =
+        row.querySelector('[data-plate-part="number"]')?.value || "";
+      const suffix =
+        row.querySelector('[data-plate-part="suffix"]')?.value || "";
+      return buildPlateFromParts(prefix, number, suffix);
+    })
+    .filter(Boolean);
+}
+
+function syncPlateMultiInput() {
+  const hidden = document.getElementById("plat-number-hidden");
+  if (!hidden) return "";
+  const plates = collectPlateRows();
+  hidden.value = plates.join(", ");
+  return hidden.value;
+}
+
+function validatePlateRows() {
+  const rows = [...document.querySelectorAll("#plate-multi-rows .plate-row")];
+  if (!rows.length) return false;
+
+  let ok = false;
+  let allValid = true;
+
+  rows.forEach((row) => {
+    const prefixEl = row.querySelector('[data-plate-part="prefix"]');
+    const numberEl = row.querySelector('[data-plate-part="number"]');
+    const suffixEl = row.querySelector('[data-plate-part="suffix"]');
+    const plate = buildPlateFromParts(
+      prefixEl?.value,
+      numberEl?.value,
+      suffixEl?.value,
+    );
+    const rowEmpty =
+      !String(prefixEl?.value || "").trim() &&
+      !String(numberEl?.value || "").trim() &&
+      !String(suffixEl?.value || "").trim();
+    const rowValid = rowEmpty || isValidPlate(plate);
+
+    [prefixEl, numberEl, suffixEl].forEach((el) => {
+      if (el) el.classList.toggle("invalid", !rowValid);
+    });
+
+    if (!rowEmpty) ok = true;
+    if (!rowValid) allValid = false;
+  });
+
+  syncPlateMultiInput();
+  return ok && allValid;
+}
+
 function pageDaftar() {
   const o = state.options;
   const lookup = state.poLookup;
@@ -161,7 +296,7 @@ function pageDaftar() {
           ${selectInput("slot", "Slot", buildSlotOptions(lookup?.summary?.slot), lookup?.summary?.slot || "3", "required")}
           ${selectInput("fleet_type", "Fleet Type", getFleetTypeOptions(), getFleetDefaultType(), 'required onchange="updateFleetPreview()"')}
           ${fleetPreviewCard(getFleetDefaultType())}
-          ${textareaInput("plat_number", "Plat Number", "B 1234 XYZ, B 5678 ABC / pisah baris juga bisa", "", 'required onblur="normalizePlateMultiInput(this); validatePlateMultiInput(this)" autocomplete="off"')}
+          ${plateMultiInput()}
           ${textInput("driver_name", "Driver's Name", "Nama driver", "", "", "required")}
           ${textInput("ktp_6_digit", "6 Digit No KTP", "Optional. Contoh: 123456", "", "", 'maxlength="6" inputmode="numeric" pattern="[0-9]{6}" oninput="this.value=this.value.replace(/\\D/g, \'\').slice(0,6)"')}
           ${textareaInput("phone_number", "Phone Number", "08xxxxxxxxxx, 08xxxxxxxxxx / pisah baris juga bisa", "", 'required inputmode="tel"')}
@@ -179,8 +314,8 @@ function pageDaftar() {
         ${renderPoLookupSummary(lookup)}
         <p class="form-help mt-3">Catatan: Plat, Driver, dan Phone bisa multiple pakai koma / enter. Kalau jumlahnya sama dengan PO, mapping per urutan PO. Kalau cuma isi 1, nilainya dipakai untuk semua PO. Plat otomatis disimpan tanpa spasi; contoh B 1234 XYZ jadi B1234XYZ.</p>
         ${datalists()}
-        <button class="mt-6 bg-primary-container text-on-primary-container px-6 py-3 rounded-lg font-bold flex items-center gap-2 hover:brightness-110" type="submit">
-          <span class="material-symbols-outlined">confirmation_number</span>Buat Nomor
+        <button id="security-submit-btn" class="mt-6 bg-primary-container text-on-primary-container px-6 py-3 rounded-lg font-bold flex items-center gap-2 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed" type="submit">
+          <span class="material-symbols-outlined">confirmation_number</span><span id="security-submit-text">Buat Nomor</span>
         </button>
       </form>
     </div>
@@ -842,6 +977,7 @@ function populateCheckerFromTicket(index) {
   const nextStatus = currentStatus.includes("UNLOADING")
     ? "COMPLETED"
     : "UNLOADING";
+  const lockGate = nextStatus === "COMPLETED";
 
   if (form.ticket_id) form.ticket_id.value = row.ticket_id || "";
   if (form.queue_no)
@@ -850,7 +986,14 @@ function populateCheckerFromTicket(index) {
   if (form.fleet_type) form.fleet_type.value = row.fleet_type || "";
   if (form.plat_number)
     form.plat_number.value = normalizePlateValue(row.plat_number || "");
-  if (form.gate && row.gate && row.gate !== "-") form.gate.value = row.gate;
+  if (form.gate) {
+    const currentGate = row.gate && row.gate !== "-" ? row.gate : "Dock 01";
+    form.gate.value = currentGate;
+    form.gate.dataset.lockedGate = currentGate;
+    form.gate.disabled = lockGate;
+    form.gate.classList.toggle("opacity-60", lockGate);
+    form.gate.classList.toggle("cursor-not-allowed", lockGate);
+  }
   if (form.status) form.status.value = nextStatus;
   if (form.unload_sla)
     form.unload_sla.value =
@@ -862,7 +1005,7 @@ function populateCheckerFromTicket(index) {
     nextStatus === "COMPLETED"
       ? "Data " +
           (row.queue_no || row.plat_number || "") +
-          " siap diselesaikan."
+          " siap diselesaikan. Gate terkunci."
       : "Data " +
           (row.queue_no || row.plat_number || "") +
           " masuk form Checker.",
@@ -886,6 +1029,14 @@ function updateCheckerStatusPreview(status = "UNLOADING") {
   if (label) label.textContent = isDone ? "SELESAI UNLOADING" : "UNLOADING";
   if (btnText)
     btnText.textContent = isDone ? "Selesai Unloading" : "Simpan Gate";
+
+  const form = document.getElementById("checker-form");
+  if (form?.gate) {
+    const locked = isDone;
+    form.gate.disabled = locked;
+    form.gate.classList.toggle("opacity-60", locked);
+    form.gate.classList.toggle("cursor-not-allowed", locked);
+  }
 }
 
 function filterCheckerStatus(status) {
@@ -1182,6 +1333,18 @@ function normalizePlateMultiInput(input) {
 }
 
 function validatePlateMultiInput(input) {
+  // New separated plate UI.
+  if (document.getElementById("plate-multi-rows")) {
+    const ok = validatePlateRows();
+    const hidden = document.getElementById("plat-number-hidden");
+    if (hidden) {
+      hidden.setCustomValidity(ok ? "" : "Plat nomor wajib valid.");
+      hidden.classList.toggle("invalid", !ok);
+    }
+    return ok;
+  }
+
+  // Fallback old textarea mode.
   if (!input) return true;
   const values = parsePlateValues(input.value);
   const invalid = values.filter((x) => !isValidPlate(x));
@@ -1235,8 +1398,11 @@ function validateRequiredFields(form) {
 }
 
 function validateSecurityForm(form) {
+  syncPlateMultiInput();
   const requiredOk = validateRequiredFields(form);
-  const plateOk = validatePlateMultiInput(form.plat_number);
+  const plateOk = validatePlateMultiInput(
+    form.plat_number || document.getElementById("plat-number-hidden"),
+  );
   const ktp = String(form.ktp_6_digit?.value || "").trim();
 
   if (ktp && !/^\d{6}$/.test(ktp)) {
@@ -1250,7 +1416,7 @@ function validateSecurityForm(form) {
   }
   if (!plateOk) {
     showToast(
-      "Plat nomor wajib valid. Pisahkan multiple plat pakai koma / enter.",
+      "Plat nomor wajib valid. Lengkapi kotak huruf depan, angka, dan huruf belakang.",
     );
     return false;
   }
