@@ -14,14 +14,7 @@ const state = {
       "GRANDMAX",
     ],
     security_status: ["WAITING"],
-    checker_status: [
-      "ARRIVED",
-      "ON_DOCK",
-      "UNLOADING",
-      "CHECKING",
-      "COMPLETED",
-      "HOLD",
-    ],
+    checker_status: ["UNLOADING"],
     unload_sla: ["SLA OK", "SLA MISS", "ON PROCESS"],
     gate: [
       "Dock 01",
@@ -213,7 +206,7 @@ function pageChecker() {
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
         <div>
           <h3 class="font-headline-md text-headline-md mb-1">List Security</h3>
-          <p class="text-on-surface-variant">Pilih mobil dari hasil Security Input, lalu tentukan gate/status bongkar.</p>
+          <p class="text-on-surface-variant">Urutan otomatis berdasarkan slot: Slot 1 selesai dulu, lalu Slot 2, dan seterusnya.</p>
         </div>
         <button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-2 font-bold flex items-center gap-2 w-fit"><span class="material-symbols-outlined">refresh</span>Refresh</button>
       </div>
@@ -222,7 +215,6 @@ function pageChecker() {
         <select id="checker-status-filter" class="form-select md:max-w-[180px]" onchange="filterCheckerStatus(this.value)">
           <option value="ALL">Semua Status</option>
           <option value="WAITING">WAITING</option>
-          <option value="ON_DOCK">ON_DOCK</option>
           <option value="UNLOADING">UNLOADING</option>
           <option value="COMPLETED">COMPLETED</option>
           <option value="HOLD">HOLD</option>
@@ -241,21 +233,28 @@ function pageChecker() {
     </div>
     <div class="xl:col-span-5 glass-card rounded-xl p-6">
       <h3 class="font-headline-md text-headline-md mb-1">Checker Input</h3>
-      <p class="text-on-surface-variant mb-6">Data dari list akan otomatis masuk form. Checker tinggal pilih gate, status, dan SLA.</p>
+      <p class="text-on-surface-variant mb-6">Pilih data dari list. Checker hanya isi Gate; status otomatis menjadi UNLOADING.</p>
       <form id="checker-form" onsubmit="submitChecker(event)">
         <input type="hidden" name="ticket_id" />
         <input type="hidden" name="queue_no" />
+        <input type="hidden" name="status" value="UNLOADING" />
+        <input type="hidden" name="unload_sla" value="ON PROCESS" />
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          ${textInput("vendor_name", "Vendor Name", "Pilih dari list", "vendor-list", "", "required")}
-          ${selectInput("fleet_type", "Fleet Type", getFleetTypeOptions(), getFleetDefaultType(), "required")}
-          ${textInput("plat_number", "Plat Number", "Pilih dari list", "", "", 'required oninput="normalizePlateInput(this)" onblur="normalizePlateInput(this); validatePlateInput(this)"')}
+          ${textInput("vendor_name", "Vendor Name", "Pilih dari list", "", "", "required readonly")}
+          ${textInput("fleet_type", "Fleet Type", "Pilih dari list", "", "", "required readonly")}
+          ${textInput("plat_number", "Plat Number", "Pilih dari list", "", "", 'required readonly onblur="validatePlateInput(this)"')}
           ${selectInput("gate", "Gate", o.gate, "Dock 01", "required")}
-          ${selectInput("status", "Status", o.checker_status, "ON_DOCK", "required")}
-          ${selectInput("unload_sla", "Unload SLA", o.unload_sla, "ON PROCESS")}
+          <label class="flex flex-col gap-2 md:col-span-2">
+            <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Status Checker</span>
+            <div class="bg-primary/15 border border-primary/30 rounded-lg px-4 py-3 text-primary font-bold flex items-center gap-2">
+              <span class="material-symbols-outlined text-base">local_shipping</span>
+              UNLOADING
+            </div>
+          </label>
         </div>
         ${datalists()}
         <button class="mt-6 bg-primary-container text-on-primary-container px-6 py-3 rounded-lg font-bold flex items-center gap-2 hover:brightness-110" type="submit">
-          <span class="material-symbols-outlined">save</span>Simpan Checker
+          <span class="material-symbols-outlined">save</span>Simpan Gate
         </button>
       </form>
     </div>
@@ -376,7 +375,7 @@ function monitorRow(r) {
     <td class="px-4 py-3 text-sm">${esc(r.po_number || "-")}</td>
     <td class="px-4 py-3">${esc(r.gate || "-")}</td>
     <td class="px-4 py-3">${esc(st || "-")}</td>
-    <td class="px-4 py-3 font-queue-id ${danger ? "text-error" : "text-tertiary"}">${esc(wait)}</td>
+    <td class="px-4 py-3 font-queue-id ${danger ? "text-error" : "text-tertiary"} live-waiting-cell" data-live-waiting="1" data-created="${esc(r.created_at || "")}" data-completed="${esc(r.completed_at || "")}">${esc(wait)}</td>
   </tr>`;
 }
 
@@ -817,7 +816,7 @@ function checkerListRow(r, i) {
     <td class="px-4 py-3">${esc(r.driver_name || "-")}</td>
     <td class="px-4 py-3">${esc(r.gate || "-")}</td>
     <td class="px-4 py-3">${esc(st || "-")}</td>
-    <td class="px-4 py-3 font-queue-id text-tertiary">${esc(wait)}</td>
+    <td class="px-4 py-3 font-queue-id text-tertiary live-waiting-cell" data-live-waiting="1" data-created="${esc(r.created_at || "")}" data-completed="${esc(r.completed_at || "")}">${esc(wait)}</td>
   </tr>`;
 }
 
@@ -828,15 +827,12 @@ function populateCheckerFromTicket(index) {
   if (form.ticket_id) form.ticket_id.value = row.ticket_id || "";
   if (form.queue_no) form.queue_no.value = row.queue_no || "";
   if (form.vendor_name) form.vendor_name.value = row.vendor_name || "";
-  if (form.fleet_type)
-    form.fleet_type.value = row.fleet_type || form.fleet_type.value;
+  if (form.fleet_type) form.fleet_type.value = row.fleet_type || "";
   if (form.plat_number)
     form.plat_number.value = normalizePlateValue(row.plat_number || "");
   if (form.gate && row.gate && row.gate !== "-") form.gate.value = row.gate;
-  if (form.status)
-    form.status.value =
-      row.status && row.status !== "WAITING" ? row.status : "ON_DOCK";
-  if (form.unload_sla && row.unload_sla) form.unload_sla.value = row.unload_sla;
+  if (form.status) form.status.value = "UNLOADING";
+  if (form.unload_sla) form.unload_sla.value = "ON PROCESS";
   showToast(
     "Data " + (row.queue_no || row.plat_number || "") + " masuk form Checker",
   );
@@ -885,7 +881,7 @@ function queueRow(q) {
     <td class="px-6 py-4 text-sm">${esc(q.po_number || "-")}</td>
     <td class="px-6 py-4"><span class="px-3 py-1 rounded-full text-[10px] font-bold ${color} border">${esc(st || "-")}</span></td>
     <td class="px-6 py-4">${esc(q.gate || "-")}</td>
-    <td class="px-6 py-4 font-queue-id text-sm ${st.includes("WAIT") ? "text-tertiary" : "text-on-surface"}">${esc(q.waiting_text || liveWaitingText(q.created_at, q.completed_at))}</td>
+    <td class="px-6 py-4 font-queue-id text-sm ${st.includes("WAIT") ? "text-tertiary" : "text-on-surface"} live-waiting-cell" data-live-waiting="1" data-created="${esc(q.created_at || "")}" data-completed="${esc(q.completed_at || "")}">${esc(q.waiting_text || liveWaitingText(q.created_at, q.completed_at))}</td>
     <td class="px-6 py-4">${num(q.total_po_qty || 0)}</td>
     <td class="px-6 py-4">${num(q.count_po_sku || 0)}</td>
   </tr>`;
@@ -911,13 +907,27 @@ function reportTable(rows) {
       <tr>${["Created", "Queue", "Vendor", "Fleet", "Plat", "PO", "Gate", "Status", "Menunggu", "Qty", "SKU", "SLA"].map((h) => `<th class="px-4 py-3 font-label-sm uppercase">${h}</th>`).join("")}</tr>
     </thead>
     <tbody class="divide-y divide-outline-variant/10">
-      ${rows.map((r) => `<tr class="hover:bg-primary/5">${["created_at", "queue_no", "vendor_name", "fleet_type", "plat_number", "po_number", "gate", "status"].map((k) => `<td class="px-4 py-3 text-sm">${esc(r[k] ?? "")}</td>`).join("")}<td class="px-4 py-3 text-sm font-queue-id text-tertiary">${esc(r.waiting_text || liveWaitingText(r.created_at, r.completed_at))}</td><td class="px-4 py-3 text-sm">${esc(r.total_po_qty ?? "")}</td><td class="px-4 py-3 text-sm">${esc(r.count_po_sku ?? "")}</td><td class="px-4 py-3 text-sm">${esc(r.unload_sla ?? "")}</td></tr>`).join("") || `<tr><td colspan="14" class="px-6 py-8 text-center text-on-surface-variant">Belum ada waiting list.</td></tr>`}
+      ${rows.map((r) => `<tr class="hover:bg-primary/5">${["created_at", "queue_no", "vendor_name", "fleet_type", "plat_number", "po_number", "gate", "status"].map((k) => `<td class="px-4 py-3 text-sm">${esc(r[k] ?? "")}</td>`).join("")}<td class="px-4 py-3 text-sm font-queue-id text-tertiary live-waiting-cell" data-live-waiting="1" data-created="${esc(r.created_at || "")}" data-completed="${esc(r.completed_at || "")}">${esc(r.waiting_text || liveWaitingText(r.created_at, r.completed_at))}</td><td class="px-4 py-3 text-sm">${esc(r.total_po_qty ?? "")}</td><td class="px-4 py-3 text-sm">${esc(r.count_po_sku ?? "")}</td><td class="px-4 py-3 text-sm">${esc(r.unload_sla ?? "")}</td></tr>`).join("") || `<tr><td colspan="14" class="px-6 py-8 text-center text-on-surface-variant">Belum ada waiting list.</td></tr>`}
     </tbody>
   </table></div>`;
 }
 
 function emptyBox(t) {
   return `<div class="p-6 rounded-lg border border-outline-variant text-on-surface-variant text-center">${esc(t)}</div>`;
+}
+
+let liveWaitingTimer = null;
+
+function refreshLiveWaitingCells() {
+  document.querySelectorAll('[data-live-waiting="1"]').forEach((el) => {
+    el.textContent = liveWaitingText(el.dataset.created, el.dataset.completed);
+  });
+}
+
+function startLiveWaitingTimer() {
+  if (liveWaitingTimer) clearInterval(liveWaitingTimer);
+  refreshLiveWaitingCells();
+  liveWaitingTimer = setInterval(refreshLiveWaitingCells, 1000);
 }
 
 function renderPage(page, toast = true) {
@@ -946,6 +956,7 @@ function renderPage(page, toast = true) {
       filterPoDropdown();
     }, 0);
   updateActiveNav(safe);
+  startLiveWaitingTimer();
   requestAnimationFrame(() => updateActiveNav(safe));
   history.replaceState(null, "", "#" + safe);
   if (toast) showToast("Buka menu " + pageMeta[safe].title);
@@ -1029,10 +1040,14 @@ function minutesFromCreated(createdAt) {
 
 function liveWaitingText(createdAt, completedAt) {
   if (completedAt) return "Selesai";
-  const mins = minutesFromCreated(createdAt);
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return h > 0 ? `${h}j ${m}m` : `${m}m`;
+  const d = parseDateLocal(createdAt);
+  if (!d) return "00:00:00";
+
+  const total = Math.max(0, Math.floor((Date.now() - d.getTime()) / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
 function formatDateTimeLocal(date = new Date()) {

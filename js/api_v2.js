@@ -390,6 +390,95 @@ function mergeTicketQueues(serverQueue = [], localQueue = []) {
   return out;
 }
 
+function queueSlotValue(row = {}) {
+  const slotRaw =
+    row.slot || String(row.queue_no || "").match(/\s(\d+)-/)?.[1] || "999";
+  const n = Number(String(slotRaw).replace(/[^0-9]/g, ""));
+  return Number.isFinite(n) && n > 0 ? n : 999;
+}
+
+function queueCreatedValue(row = {}) {
+  const raw = row.created_at || row.register_time || row.Timestamp || "";
+  if (!raw) return 0;
+
+  if (/^\d{4}-\d{2}-\d{2}T/.test(String(raw))) {
+    const d = new Date(raw);
+    return isNaN(d.getTime()) ? 0 : d.getTime();
+  }
+
+  if (/^\d{2}\/\d{2}\/\d{4}/.test(String(raw))) {
+    const p = String(raw).split(/[\/ :]/);
+    const d = new Date(
+      Number(p[2]),
+      Number(p[1]) - 1,
+      Number(p[0]),
+      Number(p[3] || 0),
+      Number(p[4] || 0),
+      Number(p[5] || 0),
+    );
+    return isNaN(d.getTime()) ? 0 : d.getTime();
+  }
+
+  const d = new Date(raw);
+  return isNaN(d.getTime()) ? 0 : d.getTime();
+}
+
+function queueTypeValue(row = {}) {
+  const type = String(row.ticket_type || row.queue_no || "REG").toUpperCase();
+  if (type.includes("VIP")) return 0;
+  if (type.includes("REG")) return 1;
+  if (type.includes("DROP")) return 2;
+  return 9;
+}
+
+function sortQueueBySlotSequence(queue = []) {
+  return [...queue].sort((a, b) => {
+    const slotDiff = queueSlotValue(a) - queueSlotValue(b);
+    if (slotDiff) return slotDiff;
+
+    const createdDiff = queueCreatedValue(a) - queueCreatedValue(b);
+    if (createdDiff) return createdDiff;
+
+    const typeDiff = queueTypeValue(a) - queueTypeValue(b);
+    if (typeDiff) return typeDiff;
+
+    return String(a.ticket_id || a.queue_no || "").localeCompare(
+      String(b.ticket_id || b.queue_no || ""),
+    );
+  });
+}
+
+function normalizeQueueSequenceBySlot(queue = []) {
+  const sorted = sortQueueBySlotSequence(queue);
+  const seqBySlot = {};
+
+  return sorted.map((row) => {
+    const slot = String(row.slot || queueSlotValue(row) || "3").trim() || "3";
+    const type = String(row.ticket_type || row.queue_no || "REG")
+      .toUpperCase()
+      .includes("VIP")
+      ? "VIP"
+      : String(row.ticket_type || row.queue_no || "REG")
+            .toUpperCase()
+            .includes("DROP")
+        ? "DROP"
+        : "REG";
+
+    seqBySlot[slot] = (seqBySlot[slot] || 0) + 1;
+
+    return {
+      ...row,
+      original_queue_no: row.original_queue_no || row.queue_no || "",
+      queue_no:
+        type === "DROP"
+          ? `DROP ${slot}-${seqBySlot[slot]}`
+          : `${type} ${slot}-${seqBySlot[slot]}`,
+      slot,
+      queue_sequence: seqBySlot[slot],
+    };
+  });
+}
+
 function buildQueueFromOutputForm(outputRows = []) {
   return outputRows.map((row, idx) => {
     const created = getCell(row, ["created_at", "register_time", "Timestamp"]);
@@ -650,7 +739,10 @@ function buildDashboardFromV2(response) {
   // Queue/Checker wajib dari hasil input Security: Output form + local fallback.
   const serverQueue = buildQueueFromOutputForm(outputRows);
   const localQueue = getLocalTickets();
-  const queue = mergeTicketQueues(serverQueue, localQueue);
+  const queue = normalizeQueueSequenceBySlot(
+    mergeTicketQueues(serverQueue, localQueue),
+  );
+
   const summary = buildSummary(kpiRaw, tableRows, queue);
   const kpis = buildKpis(kpiRaw, tableRows, queue);
 
@@ -852,19 +944,21 @@ function updatePoLookupUi(lookup) {
 
 function nextLocalQueueNoFromList(ticketType, slot, queue = []) {
   const type = String(ticketType || "REG").toUpperCase();
-  const slotText = String(slot || "3");
+  const slotText = String(slot || "3").trim() || "3";
 
   if (type === "DROP") {
     const count =
-      queue.filter((q) => String(q.queue_no || "").startsWith("DROP")).length +
-      1;
-    return `DROP-${count}`;
+      queue.filter((q) => String(q.slot || "").trim() === slotText).length + 1;
+    return `DROP ${slotText}-${count}`;
   }
 
+  // Sequence sekarang berbasis SLOT, bukan cuma type.
+  // Jadi Slot 1 akan jadi REG 1-1, REG/VIP 1-2, dst; baru lanjut Slot 2.
   const count =
-    queue.filter((q) =>
-      String(q.queue_no || "").startsWith(`${type} ${slotText}-`),
+    queue.filter(
+      (q) => String(q.slot || queueSlotValue(q) || "").trim() === slotText,
     ).length + 1;
+
   return `${type} ${slotText}-${count}`;
 }
 
@@ -1031,18 +1125,16 @@ async function submitChecker(e) {
   const requiredOk = validateRequiredFields(form);
   const plateOk = validatePlateInput(form.plat_number);
   if (!requiredOk || !plateOk) {
-    showToast("Checker belum lengkap / plat tidak valid.");
+    showToast("Pilih data dari List Security dan isi Gate.");
     return;
   }
 
   const body = Object.fromEntries(new FormData(form).entries());
   body.plat_number = normalizePlateValue(body.plat_number);
+  body.status = "UNLOADING";
+  body.unload_sla = body.unload_sla || "ON PROCESS";
   body.updated_at = formatDateTimeLocal(new Date());
-  body.completed_at = String(body.status || "")
-    .toUpperCase()
-    .includes("COMPLETED")
-    ? formatDateTimeLocal(new Date())
-    : "";
+  body.completed_at = "";
 
   const local = getLocalTickets();
   let updatedLocal = false;
@@ -1054,7 +1146,9 @@ async function submitChecker(e) {
 
     if (match) {
       Object.assign(row, body, {
-        completed_at: body.completed_at || row.completed_at || "",
+        status: "UNLOADING",
+        unload_sla: body.unload_sla,
+        completed_at: "",
       });
       updatedLocal = true;
     }
@@ -1071,7 +1165,7 @@ async function submitChecker(e) {
     } else if (v2RawResponse) {
       state.dashboard = buildDashboardFromV2(v2RawResponse);
     }
-    showToast("Checker tersimpan ke Output form");
+    showToast("Gate tersimpan, status otomatis UNLOADING");
   } catch (err) {
     console.error(err);
     showToast(
