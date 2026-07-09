@@ -734,16 +734,43 @@ function getKpiRawRows(response) {
   return [];
 }
 
+function hasAuthoritativeOutputForm(response = {}) {
+  return (
+    Array.isArray(response?.outputForm) ||
+    Array.isArray(response?.output_form) ||
+    Array.isArray(response?.data?.outputForm) ||
+    Array.isArray(response?.data?.output_form)
+  );
+}
+
+function clearLocalTicketsCache(reason = "") {
+  try {
+    localStorage.removeItem(LOCAL_TICKETS_KEY);
+    console.info("Local tickets cache cleared", reason || "");
+  } catch (err) {
+    console.warn("Failed clear local tickets cache", err);
+  }
+}
+
 function buildDashboardFromV2(response) {
   const tableRows = getTableV2Rows(response);
   const kpiRaw = getKpiRawRows(response);
   const outputRows = getOutputFormRows(response);
+  const outputIsAuthoritative = hasAuthoritativeOutputForm(response);
   v2PoIndex = buildPoIndex(tableRows);
 
   // Data V2 hanya dipakai untuk PO lookup/options.
-  // Queue/Checker wajib dari hasil input Security: Output form + local fallback.
+  // Queue/Checker wajib dari hasil input Security: Output form.
+  // Local tickets hanya fallback kalau backend belum pernah return outputForm.
   const serverQueue = buildQueueFromOutputForm(outputRows);
-  const localQueue = getLocalTickets();
+  const localQueue = outputIsAuthoritative ? [] : getLocalTickets();
+
+  // Kalau backend sudah return Output form dan kosong, berarti sheet memang kosong.
+  // Wajib clear cache browser supaya data lama tidak muncul lagi di Checker.
+  if (outputIsAuthoritative && outputRows.length === 0) {
+    clearLocalTicketsCache("Output form kosong dari backend");
+  }
+
   const queue = normalizeQueueSequenceBySlot(
     mergeTicketQueues(serverQueue, localQueue),
   );
@@ -887,10 +914,19 @@ async function refreshDashboard() {
     ) {
       updateApiPill("loading", "Refresh Output form...");
       const outputResponse = await fetchOutputFormData();
+      const outputRows = getOutputFormRows(outputResponse);
+
+      if (
+        hasAuthoritativeOutputForm(outputResponse) &&
+        outputRows.length === 0
+      ) {
+        clearLocalTicketsCache("Manual refresh Output form kosong");
+      }
+
       v2RawResponse = {
         ...v2RawResponse,
         timestamp: outputResponse?.timestamp || new Date().toISOString(),
-        outputForm: getOutputFormRows(outputResponse),
+        outputForm: outputRows,
       };
       state.dashboard = buildDashboardFromV2(v2RawResponse);
       state.options = state.dashboard.options || state.options;
@@ -1400,10 +1436,16 @@ async function refreshCallMonitorData(renderAfter = false) {
 
   try {
     const outputResponse = await fetchOutputFormData();
+    const outputRows = getOutputFormRows(outputResponse);
+
+    if (hasAuthoritativeOutputForm(outputResponse) && outputRows.length === 0) {
+      clearLocalTicketsCache("TV monitor Output form kosong");
+    }
+
     v2RawResponse = {
       ...v2RawResponse,
       timestamp: outputResponse?.timestamp || new Date().toISOString(),
-      outputForm: getOutputFormRows(outputResponse),
+      outputForm: outputRows,
     };
     state.dashboard = buildDashboardFromV2(v2RawResponse);
     state.options = state.dashboard.options || state.options;
@@ -1541,3 +1583,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }, 60000);
 });
+
+// Emergency manual cleanup from browser console:
+// clearInboundLocalTickets()
+window.clearInboundLocalTickets = function clearInboundLocalTickets() {
+  clearLocalTicketsCache("Manual console clear");
+  if (v2RawResponse) {
+    v2RawResponse = { ...v2RawResponse, outputForm: [] };
+    state.dashboard = buildDashboardFromV2(v2RawResponse);
+    if (typeof renderPage === "function")
+      renderPage(state.page || "checker", false);
+  }
+  return "OK - local tickets cache cleared";
+};
