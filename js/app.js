@@ -353,12 +353,13 @@ function kpiCard(k) {
 function renderPoLookupSummary(lookup) {
   if (!lookup) {
     return `<div id="po-lookup-summary" class="mt-3 text-[12px] text-on-surface-variant">
-      Input bisa multiple PO pakai koma. Contoh: <b>PO1, PO2, PO3</b>.
+      Pilih Vendor Name dulu, lalu pilih PO. 1 plat + banyak PO vendor sama akan jadi 1 baris antrian.
     </div>`;
   }
 
   const found = lookup.items || [];
   const missing = lookup.missing_po || [];
+  const vendorMismatch = lookup.vendor_mismatch || [];
   const chips = found
     .map(
       (x) =>
@@ -373,11 +374,19 @@ function renderPoLookupSummary(lookup) {
     )
     .join("");
 
+  const mismatchChips = vendorMismatch
+    .map(
+      (x) =>
+        `<span class="inline-flex items-center rounded-full bg-warning/10 border border-warning/20 text-warning px-2 py-1 mr-1 mb-1 text-[11px] font-bold">${esc(x.po_number || x.po_input || "-")} ≠ ${esc(x.vendor_name || "-")}</span>`,
+    )
+    .join("");
+
   return `<div id="po-lookup-summary" class="mt-3 rounded-lg border border-outline-variant/40 bg-surface-container/35 p-3 text-[12px] text-on-surface-variant">
-    <div class="font-bold text-on-surface mb-2">PO terdeteksi: ${num(found.length)} ditemukan${missing.length ? `, ${num(missing.length)} tidak ketemu` : ""}</div>
+    <div class="font-bold text-on-surface mb-2">PO terdeteksi: ${num(found.length)} valid${missing.length ? `, ${num(missing.length)} tidak ketemu` : ""}${vendorMismatch.length ? `, ${num(vendorMismatch.length)} beda vendor` : ""}</div>
     <div>${chips || `<span class="text-on-surface-variant">Belum ada PO valid.</span>`}</div>
     ${missing.length ? `<div class="mt-2"><span class="font-bold text-error">Missing:</span> ${missingChips}</div>` : ""}
-    <div class="mt-2">Delimiter pakai koma. Saat submit, setiap PO akan dibuat row/ticket sendiri.</div>
+    ${vendorMismatch.length ? `<div class="mt-2"><span class="font-bold text-warning">Beda vendor:</span> ${mismatchChips}</div>` : ""}
+    <div class="mt-2">Submit: 1 plat = 1 mobil/antrian. Banyak PO dengan vendor sama di 1 plat akan digabung di 1 baris Output form.</div>
   </div>`;
 }
 
@@ -525,7 +534,7 @@ function pageDaftar() {
       <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-6">
         <div>
           <h3 class="font-headline-md text-headline-md mb-1">Security Input</h3>
-          <p class="text-on-surface-variant">Isi PO dulu. PO bisa multiple pakai koma; vendor, qty, SKU, dan slot auto lookup dari Data V2.</p>
+          <p class="text-on-surface-variant">Isi Vendor dulu. PO Number otomatis filter sesuai vendor; qty, SKU, dan slot tetap auto lookup dari Data V2.</p>
         </div>
         <div class="thin-tab rounded-lg px-4 py-2 font-label-sm flex items-center gap-2 w-fit opacity-80">
           <span class="material-symbols-outlined">sync</span>Auto lookup PO
@@ -533,8 +542,8 @@ function pageDaftar() {
       </div>
       <form id="security-form" onsubmit="submitSecurity(event)">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          ${textInput("vendor_name", "Vendor Name", "Pilih / ketik vendor dulu", "vendor-list", lookup?.summary?.vendor_name, 'required oninput="handleVendorFilterInput(this)" onchange="handleVendorFilterInput(this)" autocomplete="off"')}
           ${poMultiSelectInput(lookup?.summary?.po_number || "")}
-          ${textInput("vendor_name", "Vendor Name", "Auto dari PO terpilih", "vendor-list", lookup?.summary?.vendor_name, "required readonly")}
           ${selectInput("ticket_type", "Tipe Tiket", ["REG", "VIP", "DROP"], "REG", 'required onchange="handleTicketTypeChange()"')}
           ${selectInput("slot", "Slot", buildSlotOptions(lookup?.summary?.slot), lookup?.summary?.slot || "3", "required")}
           ${selectInput("fleet_type", "Fleet Type", getFleetTypeOptions(), getFleetDefaultType(), 'required onchange="updateFleetPreview()"')}
@@ -555,7 +564,7 @@ function pageDaftar() {
           </div></label>
         </div>
         ${renderPoLookupSummary(lookup)}
-        <p class="form-help mt-3">Catatan: Plat, Driver, dan Phone bisa multiple pakai koma / enter. Kalau jumlahnya sama dengan PO, mapping per urutan PO. Kalau cuma isi 1, nilainya dipakai untuk semua PO. Plat otomatis disimpan tanpa spasi; contoh B 1234 XYZ jadi B1234XYZ.</p>
+        <p class="form-help mt-3">Catatan: Jika 1 plat berisi banyak PO dengan vendor yang sama, Checker hanya tampil 1 baris karena 1 plat = 1 mobil. Jika input banyak plat, data dipecah per plat dan nomor antrian mengikuti jumlah plat yang diregister.</p>
         ${datalists()}
         <button id="security-submit-btn" class="mt-6 bg-primary-container text-on-primary-container px-6 py-3 rounded-lg font-bold flex items-center gap-2 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed" type="submit">
           <span class="material-symbols-outlined">confirmation_number</span><span id="security-submit-text">Buat Nomor</span>
@@ -577,7 +586,7 @@ function pageChecker() {
     <div class="xl:col-span-7 glass-card rounded-xl p-6">
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
         <div>
-          <h3 class="font-headline-md text-headline-md mb-1">List Checker</h3>
+          <h3 class="font-headline-md text-headline-md mb-1">List Security</h3>
           <p class="text-on-surface-variant">Pilih data, isi Gate, lalu simpan. Data otomatis tampil di monitor Panggil dan voice TV.</p>
         </div>
         <button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-2 font-bold flex items-center gap-2 w-fit"><span class="material-symbols-outlined">refresh</span>Refresh</button>
@@ -1641,16 +1650,65 @@ function renderPoSelectedChips(values) {
     : `<span class="text-[12px] text-on-surface-variant px-1">Belum ada PO dipilih</span>`;
 }
 
+function getSelectedVendorFilter() {
+  const form = document.getElementById("security-form");
+  return String(form?.vendor_name?.value || "").trim();
+}
+
+function getPoMeta(po) {
+  return typeof v2PoIndex !== "undefined"
+    ? v2PoIndex?.[normalizeKey(po)]
+    : null;
+}
+
+function getPoVendor(po) {
+  return String(getPoMeta(po)?.vendor_name || "").trim();
+}
+
+function vendorMatchesFilter(vendor, filter) {
+  const v = normalizeKey(vendor);
+  const f = normalizeKey(filter);
+  if (!f) return true;
+  return v.includes(f);
+}
+
+function handleVendorFilterInput(input) {
+  const currentVendor = String(input?.value || "").trim();
+  const selected = getSelectedPoNumbers();
+  if (selected.length) {
+    const kept = selected.filter((po) =>
+      vendorMatchesFilter(getPoVendor(po), currentVendor),
+    );
+    if (kept.length !== selected.length) {
+      setSelectedPoNumbers(kept, true);
+      showToast("PO yang beda vendor otomatis dilepas.");
+    }
+  }
+
+  filterPoDropdown();
+  if (typeof lookupPo === "function") lookupPo(true);
+}
+
 function getFilteredPoOptions() {
   const q = normalizeKey(
     document.getElementById("po-search-input")?.value || "",
   );
+  const vendorFilter = getSelectedVendorFilter();
   const selected = new Set(getSelectedPoNumbers().map((x) => normalizeKey(x)));
+
   return (state.options.po_number || [])
     .filter((po) => {
       const key = normalizeKey(po);
       if (!key || selected.has(key)) return false;
-      return !q || key.includes(q);
+
+      const meta = getPoMeta(po);
+      const vendorOk = vendorMatchesFilter(
+        meta?.vendor_name || "",
+        vendorFilter,
+      );
+      const poOk = !q || key.includes(q);
+
+      return vendorOk && poOk;
     })
     .slice(0, 120);
 }
@@ -1662,19 +1720,30 @@ function filterPoDropdown() {
   const q = String(
     document.getElementById("po-search-input")?.value || "",
   ).trim();
+  const vendorFilter = getSelectedVendorFilter();
+
   if (!options.length) {
-    list.innerHTML = `<div class="px-3 py-3 text-[12px] text-on-surface-variant">${q ? "PO tidak ada di list. Klik Tambah untuk input manual; saat submit tetap divalidasi ke Data V2." : "Ketik PO untuk cari dari Data V2."}</div>`;
+    const msg = vendorFilter
+      ? q
+        ? "PO tidak ada untuk vendor/filter tersebut. Cek Vendor Name atau keyword PO."
+        : "Belum ada PO untuk vendor ini. Ketik PO atau pilih vendor lain."
+      : "Pilih / ketik Vendor Name dulu supaya list PO terfilter.";
+    list.innerHTML = `<div class="px-3 py-3 text-[12px] text-on-surface-variant">${msg}</div>`;
     return;
   }
+
   list.innerHTML = options
     .map((po) => {
-      const meta =
-        typeof v2PoIndex !== "undefined" ? v2PoIndex?.[normalizeKey(po)] : null;
+      const meta = getPoMeta(po);
       const vendor = meta?.vendor_name
         ? `<span class="text-[10px] text-on-surface-variant font-bold truncate">${esc(meta.vendor_name)}</span>`
         : "";
+      const sku = meta?.count_po_sku
+        ? `<span class="text-[10px] text-primary font-bold">SKU ${esc(meta.count_po_sku)}</span>`
+        : "";
       return `<button type="button" onclick="selectPoChoice('${poEncode(po)}')" class="w-full px-3 py-2 rounded-lg hover:bg-primary/10 text-left flex items-center justify-between gap-3">
-        <span class="font-queue-id text-[12px] text-on-surface">${esc(po)}</span>${vendor}
+        <span class="font-queue-id text-[12px] text-on-surface">${esc(po)}</span>
+        <span class="flex flex-col items-end min-w-0">${vendor}${sku}</span>
       </button>`;
     })
     .join("");
@@ -1759,14 +1828,14 @@ function poMultiSelectInput(value = "") {
     <div class="relative">
       <div class="form-input min-h-[48px] flex items-center flex-wrap gap-2 py-2 cursor-text" onclick="document.getElementById('po-search-input')?.focus(); openPoDropdown();">
         <div id="po-selected-chips" class="contents">${chipHtml}</div>
-        <input id="po-search-input" type="text" class="min-w-[220px] flex-1 bg-transparent border-0 outline-none focus:ring-0 p-1 text-on-surface placeholder:text-on-surface-variant/70" placeholder="Cari PO, klik banyak pilihan, atau paste PO1, PO2" autocomplete="off" onfocus="openPoDropdown()" onblur="closePoDropdownSoon()" oninput="handlePoSearchInput(this)" onkeydown="handlePoSearchKeydown(event)" />
+        <input id="po-search-input" type="text" class="min-w-[220px] flex-1 bg-transparent border-0 outline-none focus:ring-0 p-1 text-on-surface placeholder:text-on-surface-variant/70" placeholder="Cari PO sesuai vendor, klik banyak pilihan, atau paste PO1, PO2" autocomplete="off" onfocus="openPoDropdown()" onblur="closePoDropdownSoon()" oninput="handlePoSearchInput(this)" onkeydown="handlePoSearchKeydown(event)" />
         <button type="button" class="thin-tab rounded-md px-3 py-2 text-[11px] font-extrabold" onclick="event.stopPropagation(); addPoFromSearch()">Tambah</button>
       </div>
       <div id="po-dropdown" class="hidden absolute z-50 left-0 right-0 mt-2 rounded-xl border border-outline-variant bg-surface-container-lowest shadow-2xl max-h-[320px] overflow-y-auto p-2">
         <div id="po-dropdown-list"></div>
       </div>
     </div>
-    <span class="form-help">Bisa pilih banyak PO dari dropdown. Vendor Name otomatis mengikuti PO yang dipilih.</span>
+    <span class="form-help">PO list otomatis mengikuti Vendor Name. Jika 1 plat memilih banyak PO vendor sama, tetap jadi 1 antrian/mobil.</span>
   </label>`;
 }
 

@@ -691,7 +691,9 @@ function buildSummary(kpiRaw = [], tableRows = [], queue = []) {
 function buildOptionsFromV2(tableRows = []) {
   const vendors = [
     ...new Set(
-      tableRows.map((r) => getCell(r, ["vendor_name"])).filter(Boolean),
+      tableRows
+        .map((r) => getCell(r, ["vendor_name", "Vendor Name", "VENDOR NAME"]))
+        .filter(Boolean),
     ),
   ].sort();
   const po = [
@@ -734,43 +736,16 @@ function getKpiRawRows(response) {
   return [];
 }
 
-function hasAuthoritativeOutputForm(response = {}) {
-  return (
-    Array.isArray(response?.outputForm) ||
-    Array.isArray(response?.output_form) ||
-    Array.isArray(response?.data?.outputForm) ||
-    Array.isArray(response?.data?.output_form)
-  );
-}
-
-function clearLocalTicketsCache(reason = "") {
-  try {
-    localStorage.removeItem(LOCAL_TICKETS_KEY);
-    console.info("Local tickets cache cleared", reason || "");
-  } catch (err) {
-    console.warn("Failed clear local tickets cache", err);
-  }
-}
-
 function buildDashboardFromV2(response) {
   const tableRows = getTableV2Rows(response);
   const kpiRaw = getKpiRawRows(response);
   const outputRows = getOutputFormRows(response);
-  const outputIsAuthoritative = hasAuthoritativeOutputForm(response);
   v2PoIndex = buildPoIndex(tableRows);
 
   // Data V2 hanya dipakai untuk PO lookup/options.
-  // Queue/Checker wajib dari hasil input Security: Output form.
-  // Local tickets hanya fallback kalau backend belum pernah return outputForm.
+  // Queue/Checker wajib dari hasil input Security: Output form + local fallback.
   const serverQueue = buildQueueFromOutputForm(outputRows);
-  const localQueue = outputIsAuthoritative ? [] : getLocalTickets();
-
-  // Kalau backend sudah return Output form dan kosong, berarti sheet memang kosong.
-  // Wajib clear cache browser supaya data lama tidak muncul lagi di Checker.
-  if (outputIsAuthoritative && outputRows.length === 0) {
-    clearLocalTicketsCache("Output form kosong dari backend");
-  }
-
+  const localQueue = getLocalTickets();
   const queue = normalizeQueueSequenceBySlot(
     mergeTicketQueues(serverQueue, localQueue),
   );
@@ -914,19 +889,10 @@ async function refreshDashboard() {
     ) {
       updateApiPill("loading", "Refresh Output form...");
       const outputResponse = await fetchOutputFormData();
-      const outputRows = getOutputFormRows(outputResponse);
-
-      if (
-        hasAuthoritativeOutputForm(outputResponse) &&
-        outputRows.length === 0
-      ) {
-        clearLocalTicketsCache("Manual refresh Output form kosong");
-      }
-
       v2RawResponse = {
         ...v2RawResponse,
         timestamp: outputResponse?.timestamp || new Date().toISOString(),
-        outputForm: outputRows,
+        outputForm: getOutputFormRows(outputResponse),
       };
       state.dashboard = buildDashboardFromV2(v2RawResponse);
       state.options = state.dashboard.options || state.options;
@@ -960,15 +926,36 @@ function parsePoNumbers(value) {
   ];
 }
 
-function lookupMultiplePo(poText) {
+function lookupMultiplePo(poText, vendorText = "") {
   const poNumbers = parsePoNumbers(poText);
+  const selectedVendor = String(vendorText || "").trim();
+  const selectedVendorKey = normalizeKey(selectedVendor);
   const items = [];
   const missing = [];
+  const vendorMismatch = [];
 
   for (const po of poNumbers) {
     const key = normalizeKey(po);
     const found = v2PoIndex?.[key];
     if (found) {
+      const foundVendor = String(found.vendor_name || "").trim();
+      const foundVendorKey = normalizeKey(foundVendor);
+
+      if (
+        selectedVendorKey &&
+        foundVendorKey &&
+        !foundVendorKey.includes(selectedVendorKey) &&
+        !selectedVendorKey.includes(foundVendorKey)
+      ) {
+        vendorMismatch.push({
+          ...found,
+          po_number: found.po_number || po,
+          po_input: po,
+          vendor_name: foundVendor,
+        });
+        continue;
+      }
+
       items.push({
         ...found,
         po_number: found.po_number || po,
@@ -1000,14 +987,18 @@ function lookupMultiplePo(poText) {
 
   return {
     found: items.length > 0,
-    all_found: poNumbers.length > 0 && missing.length === 0,
+    all_found:
+      poNumbers.length > 0 &&
+      missing.length === 0 &&
+      vendorMismatch.length === 0,
     po_numbers: poNumbers,
     items,
     missing_po: missing,
+    vendor_mismatch: vendorMismatch,
     summary: {
       po_number: poNumbers.join(", "),
       po_numbers: poNumbers,
-      vendor_name: vendors.join(", "),
+      vendor_name: selectedVendor || vendors.join(", "),
       vendor_names: vendors,
       slot: slots[0] || "3",
       slots,
@@ -1015,6 +1006,7 @@ function lookupMultiplePo(poText) {
       count_po_sku: totalSku,
       found_count: items.length,
       missing_count: missing.length,
+      vendor_mismatch_count: vendorMismatch.length,
     },
   };
 }
@@ -1023,8 +1015,13 @@ function updatePoLookupUi(lookup) {
   const form = document.getElementById("security-form");
   if (!form) return;
 
-  if (form.vendor_name)
-    form.vendor_name.value = lookup?.summary?.vendor_name || "";
+  if (form.vendor_name && lookup?.summary?.vendor_name) {
+    const currentVendor = String(form.vendor_name.value || "").trim();
+    // Vendor tetap bisa diinput manual. Auto-fill hanya kalau field masih kosong.
+    if (!currentVendor)
+      form.vendor_name.value = lookup.summary.vendor_name || "";
+  }
+
   if (form.slot && lookup?.summary?.slot)
     form.slot.value = String(lookup.summary.slot || form.slot.value || "3");
 
@@ -1077,6 +1074,7 @@ function lookupPo(silent = false) {
   if (!form) return null;
 
   const poText = form.po_number?.value || "";
+  const vendorText = form.vendor_name?.value || "";
   const poNumbers = parsePoNumbers(poText);
   if (!poNumbers.length) {
     state.poLookup = null;
@@ -1084,13 +1082,17 @@ function lookupPo(silent = false) {
     return null;
   }
 
-  const lookup = lookupMultiplePo(poText);
+  const lookup = lookupMultiplePo(poText, vendorText);
   state.poLookup = lookup;
   updatePoLookupUi(lookup);
 
   if (!silent) {
     if (lookup.all_found) {
-      showToast(`${lookup.items.length} PO ditemukan dari Data V2`);
+      showToast(`${lookup.items.length} PO valid dari Data V2`);
+    } else if (lookup.vendor_mismatch?.length) {
+      showToast(
+        `${lookup.vendor_mismatch.length} PO beda vendor dari Vendor Name yang dipilih`,
+      );
     } else if (lookup.found) {
       showToast(
         `${lookup.items.length} PO ditemukan, ${lookup.missing_po.length} tidak ketemu`,
@@ -1139,6 +1141,52 @@ function pickMultiValue(list = [], index = 0) {
   return list[index] || list[list.length - 1] || list[0] || "";
 }
 
+function sumPoItems(items = []) {
+  return {
+    po_number: items
+      .map((x) => x.po_number)
+      .filter(Boolean)
+      .join(", "),
+    po_numbers: items.map((x) => x.po_number).filter(Boolean),
+    vendor_name: [
+      ...new Set(
+        items.map((x) => String(x.vendor_name || "").trim()).filter(Boolean),
+      ),
+    ].join(", "),
+    total_po_qty: items.reduce((sum, x) => sum + toNumberV2(x.total_po_qty), 0),
+    count_po_sku: items.reduce((sum, x) => sum + toNumberV2(x.count_po_sku), 0),
+    slot: String(items[0]?.slot || "3"),
+  };
+}
+
+function splitPoItemsByPlate(poItems = [], plateCount = 1) {
+  const count = Math.max(1, Number(plateCount || 1));
+
+  // 1 plat = 1 mobil. Semua PO vendor sama digabung jadi 1 row/antrian.
+  if (count === 1) return [poItems];
+
+  // Jika jumlah PO sama dengan jumlah plat, mapping 1 PO per plat sesuai urutan.
+  if (poItems.length === count) return poItems.map((item) => [item]);
+
+  // Jika PO lebih banyak dari plat, bagi rata berurutan tanpa duplikasi.
+  if (poItems.length > count) {
+    const groups = Array.from({ length: count }, () => []);
+    poItems.forEach((item, idx) => {
+      const groupIndex = Math.min(
+        count - 1,
+        Math.floor((idx * count) / poItems.length),
+      );
+      groups[groupIndex].push(item);
+    });
+    return groups.map((group) => (group.length ? group : [poItems[0]]));
+  }
+
+  // Jika plat lebih banyak dari PO, PO akan dipakai bergilir sebagai fallback.
+  return Array.from({ length: count }, (_, idx) => [
+    poItems[idx % poItems.length],
+  ]);
+}
+
 async function submitSecurity(e) {
   e.preventDefault();
 
@@ -1154,10 +1202,18 @@ async function submitSecurity(e) {
 
   const lookup = lookupPo(true);
   if (!lookup || !lookup.all_found) {
+    const mismatchText = lookup?.vendor_mismatch?.length
+      ? " PO beda vendor: " +
+        lookup.vendor_mismatch.map((x) => x.po_number || x.po_input).join(", ")
+      : "";
     const missingText = lookup?.missing_po?.length
       ? " Missing: " + lookup.missing_po.join(", ")
       : "";
-    showToast("Semua PO wajib valid sebelum buat nomor." + missingText);
+    showToast(
+      "Semua PO wajib valid dan sesuai Vendor Name." +
+        mismatchText +
+        missingText,
+    );
     return;
   }
 
@@ -1198,13 +1254,16 @@ async function submitSecurity(e) {
     const registerTime = base.register_time || formatDateTimeLocal(new Date());
     let queuePool = (state.dashboard?.queue || []).concat(rows);
 
-    for (const [index, item] of poItems.entries()) {
+    const poGroups = splitPoItemsByPlate(poItems, plateList.length);
+
+    for (const [index, plate] of plateList.entries()) {
+      const groupItems = poGroups[index] || poItems;
+      const grouped = sumPoItems(groupItems);
       const rowSlot =
         String(base.ticket_type || "").toUpperCase() === "DROP"
-          ? base.slot || item.slot || "3"
-          : item.slot || base.slot || "3";
+          ? base.slot || grouped.slot || "3"
+          : grouped.slot || base.slot || "3";
 
-      const plate = pickMultiValue(plateList, index);
       const driver = pickMultiValue(driverList, index);
       const phone = pickMultiValue(phoneList, index);
 
@@ -1215,16 +1274,16 @@ async function submitSecurity(e) {
           Date.now().toString(36).toUpperCase() +
           "-" +
           String(newRows.length + 1).padStart(2, "0"),
-        po_number: item.po_number,
-        po_numbers: lookup.summary.po_numbers,
-        vendor_name: item.vendor_name || base.vendor_name || "",
+        po_number: grouped.po_number,
+        po_numbers: grouped.po_numbers,
+        vendor_name: base.vendor_name || grouped.vendor_name || "",
         slot: rowSlot,
         plat_number: plate,
         driver_name: driver,
         phone_number: phone,
         status: "WAITING",
-        total_po_qty: toNumberV2(item.total_po_qty),
-        count_po_sku: toNumberV2(item.count_po_sku),
+        total_po_qty: grouped.total_po_qty,
+        count_po_sku: grouped.count_po_sku,
         created_at: registerTime,
         register_time: registerTime,
         queue_no: nextLocalQueueNoFromList(
@@ -1258,7 +1317,7 @@ async function submitSecurity(e) {
       state.dashboard = buildDashboardFromV2(v2RawResponse);
       state.options = state.dashboard.options || state.options;
 
-      showToast(`${newRows.length} ticket masuk Output form`);
+      showToast(`${newRows.length} mobil/antrian masuk Output form`);
     } catch (err) {
       console.error(err);
 
@@ -1436,16 +1495,10 @@ async function refreshCallMonitorData(renderAfter = false) {
 
   try {
     const outputResponse = await fetchOutputFormData();
-    const outputRows = getOutputFormRows(outputResponse);
-
-    if (hasAuthoritativeOutputForm(outputResponse) && outputRows.length === 0) {
-      clearLocalTicketsCache("TV monitor Output form kosong");
-    }
-
     v2RawResponse = {
       ...v2RawResponse,
       timestamp: outputResponse?.timestamp || new Date().toISOString(),
-      outputForm: outputRows,
+      outputForm: getOutputFormRows(outputResponse),
     };
     state.dashboard = buildDashboardFromV2(v2RawResponse);
     state.options = state.dashboard.options || state.options;
@@ -1583,16 +1636,3 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }, 60000);
 });
-
-// Emergency manual cleanup from browser console:
-// clearInboundLocalTickets()
-window.clearInboundLocalTickets = function clearInboundLocalTickets() {
-  clearLocalTicketsCache("Manual console clear");
-  if (v2RawResponse) {
-    v2RawResponse = { ...v2RawResponse, outputForm: [] };
-    state.dashboard = buildDashboardFromV2(v2RawResponse);
-    if (typeof renderPage === "function")
-      renderPage(state.page || "checker", false);
-  }
-  return "OK - local tickets cache cleared";
-};
