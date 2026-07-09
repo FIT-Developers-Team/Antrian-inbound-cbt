@@ -2729,7 +2729,10 @@ function filterPoDropdown() {
       const meta = getPoMeta(po);
       const vendor = meta?.vendor_name || "";
       const sku = meta?.count_po_sku || 0;
-      return `<button type="button" onclick="selectPoChoice('${poEncode(po)}')" class="w-full px-3 py-3 rounded-lg hover:bg-primary/10 text-left grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-1 sm:gap-3 border-b border-outline-variant/20 last:border-b-0">
+      return `<button type="button"
+        onpointerdown="preventDropdownBlurSelect(event); selectPoChoice('${poEncode(po)}')"
+        onmousedown="preventDropdownBlurSelect(event)"
+        class="w-full px-3 py-3 rounded-lg hover:bg-primary/10 text-left grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-1 sm:gap-3 border-b border-outline-variant/20 last:border-b-0 touch-manipulation">
         <span class="font-queue-id text-[12px] sm:text-[13px] text-on-surface break-all leading-5">${esc(po)}</span>
         <span class="flex flex-col sm:items-end gap-0.5 min-w-0">
           <span class="text-[10px] sm:text-[11px] text-on-surface-variant font-bold break-words leading-4">${esc(vendor || "-")}</span>
@@ -2819,7 +2822,13 @@ function openPoDropdown() {
 function closePoDropdownSoon() {
   setTimeout(() => {
     document.getElementById("po-dropdown")?.classList.add("hidden");
-  }, 180);
+  }, 280);
+}
+
+function preventDropdownBlurSelect(event) {
+  if (!event) return;
+  event.preventDefault();
+  event.stopPropagation();
 }
 
 function getVendorSearchText() {
@@ -2903,7 +2912,7 @@ function openVendorDropdown() {
 function closeVendorDropdownSoon() {
   setTimeout(() => {
     document.getElementById("vendor-dropdown")?.classList.add("hidden");
-  }, 180);
+  }, 280);
 }
 
 function filterVendorDropdown() {
@@ -2922,11 +2931,13 @@ function filterVendorDropdown() {
 
   list.innerHTML = options
     .map((vendor) => {
-      const key = normalizeKey(vendor);
       const poCount = (state.options.po_number || []).filter((po) =>
         vendorMatchesFilter(getPoVendor(po), vendor),
       ).length;
-      return `<button type="button" onclick="selectVendorChoice('${poEncode(vendor)}')" class="w-full px-3 py-3 rounded-lg hover:bg-primary/10 text-left grid grid-cols-[1fr_auto] gap-3 border-b border-outline-variant/20 last:border-b-0">
+      return `<button type="button"
+        onpointerdown="preventDropdownBlurSelect(event); selectVendorChoice('${poEncode(vendor)}')"
+        onmousedown="preventDropdownBlurSelect(event)"
+        class="w-full px-3 py-3 rounded-lg hover:bg-primary/10 text-left grid grid-cols-[1fr_auto] gap-3 border-b border-outline-variant/20 last:border-b-0 touch-manipulation">
         <span class="font-bold text-[12px] sm:text-[13px] text-on-surface break-words leading-5">${esc(vendor)}</span>
         <span class="text-[10px] text-primary font-bold whitespace-nowrap">${num(poCount)} PO</span>
       </button>`;
