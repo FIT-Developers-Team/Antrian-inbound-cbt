@@ -653,7 +653,7 @@ function pageDaftar() {
       </div>
       <form id="security-form" onsubmit="submitSecurity(event)">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          ${vendorSelectInput(lookup?.summary?.vendor_name || "")}
+          ${vendorCustomSelectInput(lookup?.summary?.vendor_name || "")}
           ${poMultiSelectInput(lookup?.summary?.po_number || "")}
           ${selectInput("ticket_type", "Tipe Tiket", ["REG", "VIP", "DROP"], "REG", 'required onchange="handleTicketTypeChange()"')}
           ${selectInput("slot", "Slot", buildSlotOptions(lookup?.summary?.slot), lookup?.summary?.slot || "3", "required")}
@@ -2026,6 +2026,8 @@ function clearSecurityFormState() {
     form.reset();
   } catch (err) {}
 
+  setVendorValue?.("", false);
+
   if (form.po_number) form.po_number.value = "";
   const poSearch = document.getElementById("po-search-input");
   if (poSearch) poSearch.value = "";
@@ -2042,8 +2044,7 @@ function clearSecurityFormState() {
 }
 
 function getSelectedVendorFilter() {
-  const form = document.getElementById("security-form");
-  return String(form?.vendor_name?.value || "").trim();
+  return getVendorValue();
 }
 
 function getPoMeta(po) {
@@ -2064,7 +2065,7 @@ function vendorMatchesFilter(vendor, filter) {
 }
 
 function handleVendorFilterInput(input) {
-  const currentVendor = String(input?.value || "").trim();
+  const currentVendor = getVendorValue() || String(input?.value || "").trim();
   const selected = getSelectedPoNumbers();
 
   if (selected.length) {
@@ -2227,24 +2228,148 @@ function closePoDropdownSoon() {
   }, 180);
 }
 
-function vendorSelectInput(value = "") {
-  const vendors = state.options.vendor_name || [];
-  const selected = String(value || "").trim();
-  const options = vendors
-    .map(
-      (vendor) =>
-        `<option value="${esc(vendor)}" ${String(vendor) === selected ? "selected" : ""}>${esc(vendor)}</option>`,
-    )
-    .join("");
+function getVendorSearchText() {
+  return String(
+    document.getElementById("vendor-search-input")?.value || "",
+  ).trim();
+}
 
+function getVendorValue() {
+  const form = document.getElementById("security-form");
+  return String(
+    document.getElementById("vendor-name-value")?.value ||
+      form?.vendor_name?.value ||
+      "",
+  ).trim();
+}
+
+function setVendorValue(value = "", trigger = true) {
+  const safeValue = String(value || "").trim();
+  const hidden = document.getElementById("vendor-name-value");
+  const search = document.getElementById("vendor-search-input");
+  const label = document.getElementById("vendor-selected-label");
+
+  if (hidden) hidden.value = safeValue;
+  if (search) search.value = "";
+  if (label) {
+    label.innerHTML = safeValue
+      ? `<span class="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/25 text-primary px-2 py-1 text-[11px] font-extrabold max-w-full">
+          <span class="break-words">${esc(safeValue)}</span>
+          <button type="button" class="w-5 h-5 rounded-full bg-primary/10 hover:bg-primary/20 leading-none shrink-0" onclick="event.stopPropagation(); clearVendorChoice()" title="Hapus vendor">×</button>
+        </span>`
+      : `<span class="text-[12px] text-on-surface-variant px-1">Belum ada vendor dipilih</span>`;
+  }
+
+  if (trigger) handleVendorFilterInput(hidden || { value: safeValue });
+}
+
+function getFilteredVendorOptions() {
+  const q = normalizeKey(getVendorSearchText());
+  const vendors = state.options.vendor_name || [];
+
+  return vendors
+    .filter((vendor) => {
+      const key = normalizeKey(vendor);
+      return key && (!q || key.includes(q));
+    })
+    .slice(0, 120);
+}
+
+function vendorCustomSelectInput(value = "") {
+  const selected = String(value || "").trim();
   return `<label class="flex flex-col gap-2 md:col-span-2">
     <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Vendor Name</span>
-    <select name="vendor_name" class="form-select" required onchange="handleVendorFilterInput(this)">
-      <option value="">Pilih vendor dulu</option>
-      ${options}
-    </select>
-    <span class="form-help">Di HP pakai dropdown select supaya vendor tidak muncul di suggestion keyboard.</span>
+    <input type="hidden" name="vendor_name" id="vendor-name-value" value="${esc(selected)}" required />
+    <div class="relative">
+      <div class="form-input min-h-[48px] flex items-center flex-wrap gap-2 py-2 cursor-text" onclick="document.getElementById('vendor-search-input')?.focus(); openVendorDropdown();">
+        <div id="vendor-selected-label" class="contents">${
+          selected
+            ? `<span class="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/25 text-primary px-2 py-1 text-[11px] font-extrabold max-w-full">
+                <span class="break-words">${esc(selected)}</span>
+                <button type="button" class="w-5 h-5 rounded-full bg-primary/10 hover:bg-primary/20 leading-none shrink-0" onclick="event.stopPropagation(); clearVendorChoice()" title="Hapus vendor">×</button>
+              </span>`
+            : `<span class="text-[12px] text-on-surface-variant px-1">Belum ada vendor dipilih</span>`
+        }</div>
+        <input id="vendor-search-input" type="text" class="min-w-[150px] sm:min-w-[220px] flex-1 bg-transparent border-0 outline-none focus:ring-0 p-1 text-on-surface placeholder:text-on-surface-variant/70 text-sm sm:text-base" placeholder="Cari vendor, klik pilihan..." autocomplete="off" autocapitalize="off" spellcheck="false" onfocus="openVendorDropdown()" onblur="closeVendorDropdownSoon()" oninput="handleVendorSearchInput(this)" onkeydown="handleVendorSearchKeydown(event)" />
+      </div>
+      <div id="vendor-dropdown" class="hidden absolute z-50 left-0 right-0 mt-2 rounded-xl border border-outline-variant bg-surface-container-lowest shadow-2xl max-h-[60vh] sm:max-h-[320px] overflow-y-auto p-2">
+        <div id="vendor-dropdown-list"></div>
+      </div>
+    </div>
+    <span class="form-help">Pilih vendor dari dropdown custom. Setelah vendor dipilih, PO Number otomatis filter sesuai vendor.</span>
   </label>`;
+}
+
+function openVendorDropdown() {
+  const dd = document.getElementById("vendor-dropdown");
+  if (dd) dd.classList.remove("hidden");
+  filterVendorDropdown();
+}
+
+function closeVendorDropdownSoon() {
+  setTimeout(() => {
+    document.getElementById("vendor-dropdown")?.classList.add("hidden");
+  }, 180);
+}
+
+function filterVendorDropdown() {
+  const list = document.getElementById("vendor-dropdown-list");
+  if (!list) return;
+
+  const options = getFilteredVendorOptions();
+  const q = getVendorSearchText();
+
+  if (!options.length) {
+    list.innerHTML = `<div class="px-3 py-3 text-[12px] text-on-surface-variant">${
+      q ? "Vendor tidak ditemukan." : "Vendor belum tersedia dari Data V2."
+    }</div>`;
+    return;
+  }
+
+  list.innerHTML = options
+    .map((vendor) => {
+      const key = normalizeKey(vendor);
+      const poCount = (state.options.po_number || []).filter((po) =>
+        vendorMatchesFilter(getPoVendor(po), vendor),
+      ).length;
+      return `<button type="button" onclick="selectVendorChoice('${poEncode(vendor)}')" class="w-full px-3 py-3 rounded-lg hover:bg-primary/10 text-left grid grid-cols-[1fr_auto] gap-3 border-b border-outline-variant/20 last:border-b-0">
+        <span class="font-bold text-[12px] sm:text-[13px] text-on-surface break-words leading-5">${esc(vendor)}</span>
+        <span class="text-[10px] text-primary font-bold whitespace-nowrap">${num(poCount)} PO</span>
+      </button>`;
+    })
+    .join("");
+}
+
+function selectVendorChoice(encoded) {
+  const vendor = poDecode(encoded);
+  setVendorValue(vendor, true);
+  document.getElementById("vendor-dropdown")?.classList.add("hidden");
+  const poSearch = document.getElementById("po-search-input");
+  if (poSearch) poSearch.focus();
+}
+
+function clearVendorChoice() {
+  setVendorValue("", true);
+  filterVendorDropdown();
+}
+
+function handleVendorSearchInput(input) {
+  openVendorDropdown();
+  filterVendorDropdown();
+}
+
+function handleVendorSearchKeydown(event) {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    const first = getFilteredVendorOptions()[0];
+    if (first) selectVendorChoice(poEncode(first));
+  } else if (event.key === "Escape") {
+    document.getElementById("vendor-dropdown")?.classList.add("hidden");
+  }
+}
+
+function vendorSelectInput(value = "") {
+  return vendorCustomSelectInput(value);
 }
 
 function poMultiSelectInput(value = "") {
@@ -2639,6 +2764,7 @@ function renderPage(page, toast = true) {
       handleTicketTypeChange();
       updateFleetPreview();
       renderPoSelectedChips(getSelectedPoNumbers());
+      filterVendorDropdown?.();
       filterPoDropdown();
     }, 0);
   updateActiveNav(safe);
