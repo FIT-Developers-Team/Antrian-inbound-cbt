@@ -195,6 +195,9 @@ function pageDaftar() {
 function pageChecker() {
   const o = state.options;
   const rows = state.dashboard?.queue || [];
+  const vendors = [
+    ...new Set(rows.map((r) => r.vendor_name).filter(Boolean)),
+  ].sort();
   return `<div class="grid grid-cols-1 xl:grid-cols-12 gap-gutter">
     <div class="xl:col-span-7 glass-card rounded-xl p-6">
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-5">
@@ -204,15 +207,18 @@ function pageChecker() {
         </div>
         <button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-2 font-bold flex items-center gap-2 w-fit"><span class="material-symbols-outlined">refresh</span>Refresh</button>
       </div>
-      <div class="flex flex-col md:flex-row gap-3 mb-4">
-        <input id="checker-filter" oninput="filterTable('checker-security-table', this.value)" class="form-input" placeholder="Cari vendor / PO / nopol / driver..." />
-        <select id="checker-status-filter" class="form-select md:max-w-[180px]" onchange="filterCheckerStatus(this.value)">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
+        <input id="checker-vendor-filter" oninput="filterCheckerAdvanced()" class="form-input" placeholder="Filter vendor..." list="checker-vendor-list" />
+        <input id="checker-queue-filter" oninput="filterCheckerAdvanced()" class="form-input" placeholder="Filter no antrian..." />
+        <input id="checker-po-filter" oninput="filterCheckerAdvanced()" class="form-input" placeholder="Filter PO..." />
+        <select id="checker-status-filter" class="form-select" onchange="filterCheckerAdvanced()">
           <option value="ALL">Semua Status</option>
           <option value="WAITING">WAITING</option>
           <option value="UNLOADING">UNLOADING</option>
-          <option value="COMPLETED">COMPLETED</option>
+          <option value="COMPLETED">SELESAI UNLOADING</option>
           <option value="HOLD">HOLD</option>
         </select>
+        <datalist id="checker-vendor-list">${vendors.map((v) => `<option value="${esc(v)}"></option>`).join("")}</datalist>
       </div>
       <div class="overflow-x-auto max-h-[520px] overflow-y-auto border border-outline-variant/30 rounded-lg">
         <table id="checker-security-table" class="w-full text-left">
@@ -804,9 +810,17 @@ function priorityItem(r) {
 
 function checkerListRow(r, i) {
   const st = String(r.status || "").toUpperCase();
+  const isDone = st.includes("COMPLETED");
   const wait = r.waiting_text || liveWaitingText(r.created_at, r.completed_at);
   const actionLabel = st.includes("UNLOADING") ? "Selesai" : "Pilih";
-  return `<tr data-status="${esc(st || "-")}" class="hover:bg-primary/5 transition-colors">
+  const statusLabel = isDone ? "SELESAI UNLOADING" : st || "-";
+  return `<tr
+    data-status="${esc(st || "-")}"
+    data-vendor="${esc(String(r.vendor_name || "").toLowerCase())}"
+    data-queue="${esc(String(r.queue_no || "").toLowerCase())}"
+    data-po="${esc(String(r.po_number || "").toLowerCase())}"
+    class="hover:bg-primary/5 transition-colors"
+  >
     <td class="px-4 py-3"><button type="button" onclick="populateCheckerFromTicket(${i})" class="bg-primary-container text-on-primary-container px-3 py-2 rounded-lg font-bold text-xs">${esc(actionLabel)}</button></td>
     <td class="px-4 py-3 font-queue-id text-primary">${esc(r.queue_no || "-")}</td>
     <td class="px-4 py-3">${esc(r.vendor_name || "-")}</td>
@@ -814,8 +828,8 @@ function checkerListRow(r, i) {
     <td class="px-4 py-3 font-queue-id text-sm">${esc(r.plat_number || "-")}</td>
     <td class="px-4 py-3">${esc(r.driver_name || "-")}</td>
     <td class="px-4 py-3">${esc(r.gate || "-")}</td>
-    <td class="px-4 py-3">${esc(st || "-")}</td>
-    <td class="px-4 py-3 font-queue-id text-tertiary live-waiting-cell" data-live-waiting="1" data-created="${esc(r.created_at || "")}" data-completed="${esc(r.completed_at || "")}">${esc(wait)}</td>
+    <td class="px-4 py-3">${esc(statusLabel)}</td>
+    <td class="px-4 py-3 font-queue-id ${isDone ? "text-success" : "text-tertiary"} live-waiting-cell" data-live-waiting="1" data-created="${esc(r.created_at || "")}" data-completed="${esc(r.completed_at || "")}">${esc(wait)}</td>
   </tr>`;
 }
 
@@ -830,7 +844,8 @@ function populateCheckerFromTicket(index) {
     : "UNLOADING";
 
   if (form.ticket_id) form.ticket_id.value = row.ticket_id || "";
-  if (form.queue_no) form.queue_no.value = row.queue_no || "";
+  if (form.queue_no)
+    form.queue_no.value = row.original_queue_no || row.queue_no || "";
   if (form.vendor_name) form.vendor_name.value = row.vendor_name || "";
   if (form.fleet_type) form.fleet_type.value = row.fleet_type || "";
   if (form.plat_number)
@@ -874,15 +889,38 @@ function updateCheckerStatusPreview(status = "UNLOADING") {
 }
 
 function filterCheckerStatus(status) {
-  const target = String(status || "ALL").toUpperCase();
+  const el = document.getElementById("checker-status-filter");
+  if (el && status) el.value = status;
+  filterCheckerAdvanced();
+}
+
+function filterCheckerAdvanced() {
+  const vendor = String(
+    document.getElementById("checker-vendor-filter")?.value || "",
+  )
+    .toLowerCase()
+    .trim();
+  const queue = String(
+    document.getElementById("checker-queue-filter")?.value || "",
+  )
+    .toLowerCase()
+    .trim();
+  const po = String(document.getElementById("checker-po-filter")?.value || "")
+    .toLowerCase()
+    .trim();
+  const status = String(
+    document.getElementById("checker-status-filter")?.value || "ALL",
+  ).toUpperCase();
+
   document
     .querySelectorAll("#checker-security-table tbody tr")
     .forEach((tr) => {
-      if (target === "ALL") tr.style.display = "";
-      else
-        tr.style.display = (tr.dataset.status || "").includes(target)
-          ? ""
-          : "none";
+      const okVendor = !vendor || (tr.dataset.vendor || "").includes(vendor);
+      const okQueue = !queue || (tr.dataset.queue || "").includes(queue);
+      const okPo = !po || (tr.dataset.po || "").includes(po);
+      const rowStatus = String(tr.dataset.status || "").toUpperCase();
+      const okStatus = status === "ALL" || rowStatus.includes(status);
+      tr.style.display = okVendor && okQueue && okPo && okStatus ? "" : "none";
     });
 }
 
@@ -1020,9 +1058,12 @@ function renderPage(page, toast = true) {
 }
 
 function updateActiveNav(page) {
-  document.querySelectorAll(".nav-btn").forEach((btn) => {
-    const on = btn.dataset.page === page;
-    btn.className = on ? navActive : navBase;
+  const safePage = String(page || state.page || "daftar");
+
+  document.querySelectorAll("aside [data-page]").forEach((btn) => {
+    const on = btn.dataset.page === safePage;
+    btn.className = (on ? navActive : navBase) + " nav-btn";
+    btn.setAttribute("aria-current", on ? "page" : "false");
     const icon = btn.querySelector(".material-symbols-outlined");
     const label = btn.querySelector("span:not(.material-symbols-outlined)");
     if (icon) icon.style.fontVariationSettings = on ? "'FILL' 1" : "'FILL' 0";
@@ -1031,8 +1072,11 @@ function updateActiveNav(page) {
         ? "font-label-sm text-label-sm font-bold"
         : "font-label-sm text-label-sm";
   });
-  document.querySelectorAll(".mobile-nav-btn").forEach((btn) => {
-    btn.className = btn.dataset.page === page ? mobActive : mobBase;
+
+  document.querySelectorAll("#mobile-nav [data-page]").forEach((btn) => {
+    const on = btn.dataset.page === safePage;
+    btn.className = (on ? mobActive : mobBase) + " mobile-nav-btn";
+    btn.setAttribute("aria-current", on ? "page" : "false");
   });
 }
 

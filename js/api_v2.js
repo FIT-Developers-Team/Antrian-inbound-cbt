@@ -304,11 +304,13 @@ function applyCheckerUpdateToQueue(body = {}) {
   const nextQueue = queue.map((row) => {
     const rowTicket = String(row.ticket_id || "").trim();
     const rowQueue = String(row.queue_no || "").trim();
+    const rowOriginalQueue = String(row.original_queue_no || "").trim();
     const rowPlate = normalizePlateValue(row.plat_number || "");
 
     const match =
       (bodyTicket && rowTicket === bodyTicket) ||
-      (bodyQueue && rowQueue === bodyQueue) ||
+      (bodyQueue &&
+        (rowQueue === bodyQueue || rowOriginalQueue === bodyQueue)) ||
       (bodyPlate && rowPlate === bodyPlate);
 
     if (!match) return row;
@@ -317,9 +319,11 @@ function applyCheckerUpdateToQueue(body = {}) {
     return {
       ...row,
       ...body,
+      queue_no: row.queue_no,
+      original_queue_no: row.original_queue_no || body.queue_no || row.queue_no,
       plat_number: bodyPlate || row.plat_number,
       status: String(body.status || row.status || "WAITING").toUpperCase(),
-      completed_at: body.completed_at || row.completed_at || "",
+      completed_at: body.completed_at || "",
       updated_at: body.updated_at || formatDateTimeLocal(new Date()),
     };
   });
@@ -1159,6 +1163,42 @@ async function submitSecurity(e) {
   renderPage("checker", false);
 }
 
+function getQueueRowByCheckerBody(body = {}) {
+  const bodyTicket = String(body.ticket_id || "").trim();
+  const bodyQueue = String(body.queue_no || "").trim();
+  const bodyPlate = normalizePlateValue(body.plat_number || "");
+
+  return (state.dashboard?.queue || []).find((row) => {
+    const rowTicket = String(row.ticket_id || "").trim();
+    const rowQueue = String(row.queue_no || "").trim();
+    const rowOriginalQueue = String(row.original_queue_no || "").trim();
+    const rowPlate = normalizePlateValue(row.plat_number || "");
+    return (
+      (bodyTicket && rowTicket === bodyTicket) ||
+      (bodyQueue &&
+        (rowQueue === bodyQueue || rowOriginalQueue === bodyQueue)) ||
+      (bodyPlate && rowPlate === bodyPlate)
+    );
+  });
+}
+
+function buildUpdatedOutputRowFromBody(body = {}) {
+  const old = getQueueRowByCheckerBody(body) || {};
+  return {
+    ...old.raw,
+    ...old,
+    ...body,
+    queue_no: body.queue_no || old.original_queue_no || old.queue_no || "",
+    ticket_id: body.ticket_id || old.ticket_id || "",
+    plat_number: body.plat_number || old.plat_number || "",
+    gate: body.gate || old.gate || "-",
+    status: body.status || old.status || "WAITING",
+    unload_sla: body.unload_sla || old.unload_sla || "",
+    updated_at: body.updated_at || formatDateTimeLocal(new Date()),
+    completed_at: body.completed_at || "",
+  };
+}
+
 async function submitChecker(e) {
   e.preventDefault();
   const form = e.target;
@@ -1189,7 +1229,9 @@ async function submitChecker(e) {
   for (const row of local) {
     const match =
       (body.ticket_id && row.ticket_id === body.ticket_id) ||
-      (body.queue_no && row.queue_no === body.queue_no) ||
+      (body.queue_no &&
+        (row.queue_no === body.queue_no ||
+          row.original_queue_no === body.queue_no)) ||
       normalizePlateValue(row.plat_number) === body.plat_number;
 
     if (match) {
@@ -1203,7 +1245,14 @@ async function submitChecker(e) {
   }
   saveLocalTickets(local);
 
+  const optimisticRow = buildUpdatedOutputRowFromBody(body);
   const updatedUi = applyCheckerUpdateToQueue(body);
+
+  // Update raw response secara optimistic supaya status langsung berubah dan timer berhenti.
+  if (v2RawResponse) {
+    replaceOutputRowsInRawResponse([optimisticRow]);
+    state.dashboard = buildDashboardFromV2(v2RawResponse);
+  }
 
   try {
     const result = await updateCheckerToBackend(body);
@@ -1211,6 +1260,8 @@ async function submitChecker(e) {
       replaceOutputRowsInRawResponse(result.rows);
       state.dashboard = buildDashboardFromV2(v2RawResponse);
     } else if (v2RawResponse) {
+      // Jika backend tidak return row, pakai optimistic row yang sudah benar.
+      replaceOutputRowsInRawResponse([optimisticRow]);
       state.dashboard = buildDashboardFromV2(v2RawResponse);
     }
 
@@ -1322,7 +1373,10 @@ function openApi(action) {
 
 document.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-page]");
-  if (btn) switchPage(btn.dataset.page);
+  if (!btn) return;
+  e.preventDefault();
+  updateActiveNav(btn.dataset.page);
+  switchPage(btn.dataset.page);
 });
 
 window.addEventListener("hashchange", () =>
