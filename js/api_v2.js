@@ -1,4 +1,5 @@
-const API_URL_V2 = "https://script.google.com/macros/s/AKfycbyjby6UR8H0H397xkHbpx9F57BhPKeTCndn3Ic3aKpqvEeQnIGYUmwBMa9JzPBhIoeD/exec";
+const API_URL_V2 =
+  "https://script.google.com/macros/s/AKfycbyjby6UR8H0H397xkHbpx9F57BhPKeTCndn3Ic3aKpqvEeQnIGYUmwBMa9JzPBhIoeD/exec";
 
 const columns = [
   "Timestamp",
@@ -40,7 +41,7 @@ const columns = [
   "OLD SLA Status",
   "NEW SLA Status",
   "Active Duration",
-  "Qty Refrences"
+  "Qty Refrences",
 ];
 
 function hasApiV2() {
@@ -51,8 +52,7 @@ function apiUrlV2(action, params = {}) {
   const u = new URL(API_URL_V2);
   u.searchParams.set("action", action);
   Object.entries(params).forEach(([k, v]) => {
-    if (v !== undefined && v !== null && v !== "")
-      u.searchParams.set(k, v);
+    if (v !== undefined && v !== null && v !== "") u.searchParams.set(k, v);
   });
   u.searchParams.set("_", Date.now());
   return u.toString();
@@ -65,7 +65,8 @@ async function apiGetV2(action, params = {}) {
     redirect: "follow",
   });
   const json = await res.json();
-  if (!json.ok && json.status !== "success") throw new Error(json.error || "API V2 error");
+  if (!json.ok && json.status !== "success")
+    throw new Error(json.error || "API V2 error");
   return json.data || json;
 }
 
@@ -77,7 +78,8 @@ async function apiPostV2(action, payload = {}) {
     redirect: "follow",
   });
   const json = await res.json();
-  if (!json.ok && json.status !== "success") throw new Error(json.error || "API V2 error");
+  if (!json.ok && json.status !== "success")
+    throw new Error(json.error || "API V2 error");
   return json.data || json;
 }
 
@@ -90,7 +92,7 @@ async function fetchV2Data() {
     }
     const res = await fetch(API_URL_V2 + "?_=" + Date.now(), {
       method: "GET",
-      redirect: "follow"
+      redirect: "follow",
     });
     const json = await res.json();
     return json;
