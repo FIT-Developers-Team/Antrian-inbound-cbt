@@ -1,0 +1,194 @@
+.material-symbols-outlined {
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
+}
+html.dark {
+  color-scheme: dark;
+  --background: 8 20 37;
+  --surface: 8 20 37;
+  --surface-container-lowest: 4 14 31;
+  --surface-container-low: 17 28 45;
+  --surface-container: 21 32 49;
+  --surface-container-high: 31 42 60;
+  --surface-container-highest: 42 53 72;
+  --on-surface: 216 227 251;
+  --on-surface-variant: 195 198 215;
+  --primary: 180 197 255;
+  --primary-container: 37 99 235;
+  --on-primary: 0 42 120;
+  --on-primary-container: 238 239 255;
+  --secondary: 210 187 255;
+  --secondary-container: 96 1 209;
+  --on-secondary-container: 201 174 255;
+  --tertiary: 255 181 150;
+  --error: 255 180 171;
+  --error-container: 147 0 10;
+  --on-error-container: 255 218 214;
+  --outline: 141 144 160;
+  --outline-variant: 67 70 85;
+  --success: 74 222 128;
+  --warning: 251 191 36;
+  --shader-opacity: 0.8;
+  --shader-filter: saturate(1) brightness(1);
+  --shader-blend: normal;
+}
+html.light {
+  color-scheme: light;
+  --background: 245 248 255;
+  --surface: 245 248 255;
+  --surface-container-lowest: 238 244 255;
+  --surface-container-low: 255 255 255;
+  --surface-container: 237 243 252;
+  --surface-container-high: 223 233 248;
+  --surface-container-highest: 208 220 239;
+  --on-surface: 15 23 42;
+  --on-surface-variant: 71 85 105;
+  --primary: 29 78 216;
+  --primary-container: 37 99 235;
+  --on-primary: 255 255 255;
+  --on-primary-container: 239 246 255;
+  --secondary: 109 40 217;
+  --secondary-container: 109 40 217;
+  --on-secondary-container: 245 243 255;
+  --tertiary: 234 88 12;
+  --error: 220 38 38;
+  --error-container: 254 226 226;
+  --on-error-container: 127 29 29;
+  --outline: 100 116 139;
+  --outline-variant: 203 213 225;
+  --success: 22 163 74;
+  --warning: 217 119 6;
+  --shader-opacity: 0.24;
+  --shader-filter: saturate(1.25) brightness(1.55);
+  --shader-blend: multiply;
+}
+body {
+  background: rgb(var(--background));
+  color: rgb(var(--on-surface));
+}
+#shader-bg {
+  opacity: var(--shader-opacity) !important;
+  filter: var(--shader-filter);
+  mix-blend-mode: var(--shader-blend);
+  transition:
+    opacity 0.35s ease,
+    filter 0.35s ease;
+}
+.glass-card {
+  background: rgba(21, 32, 49, 0.64);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(67, 70, 85, 0.42);
+  transition:
+    background 0.35s ease,
+    border-color 0.35s ease,
+    color 0.35s ease;
+}
+.light .glass-card {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  box-shadow: 0 16px 45px rgba(15, 23, 42, 0.08);
+}
+.status-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+.calling-effect {
+  animation: calling 0.5s ease-out;
+}
+@keyframes calling {
+  0% {
+    transform: scale(1);
+    background-color: #2563eb;
+  }
+  50% {
+    transform: scale(1.05);
+    background-color: #b4c5ff;
+    color: #00174b;
+  }
+  100% {
+    transform: scale(1);
+    background-color: #2563eb;
+  }
+}
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #434655;
+  border-radius: 10px;
+}
+.light ::-webkit-scrollbar-thumb {
+  background: #c4c6cf;
+}
+.form-input,
+.form-select {
+  background: rgb(var(--surface-container-high) / 0.55);
+  border: 1px solid rgb(var(--outline-variant));
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  outline: none;
+  width: 100%;
+}
+.form-input:focus,
+.form-select:focus {
+  box-shadow: 0 0 0 1px rgb(var(--primary));
+  border-color: rgb(var(--primary));
+}
+.form-input.invalid,
+.form-select.invalid {
+  border-color: rgb(var(--error));
+  box-shadow: 0 0 0 1px rgb(var(--error));
+}
+.form-help {
+  font-size: 11px;
+  line-height: 14px;
+  color: rgb(var(--on-surface-variant));
+}
+
+.form-input,
+.form-select {
+  color: rgb(var(--on-surface)) !important;
+  caret-color: rgb(var(--primary));
+}
+.form-input::placeholder {
+  color: rgb(var(--on-surface-variant) / 0.72) !important;
+}
+.form-select option {
+  background: rgb(var(--surface-container-lowest)) !important;
+  color: rgb(var(--on-surface)) !important;
+}
+.light .form-select option {
+  background: white !important;
+  color: rgb(15 23 42) !important;
+}
+.dark .form-input,
+.dark .form-select {
+  background: rgb(var(--surface-container-high) / 0.68) !important;
+  color: rgb(var(--on-surface)) !important;
+}
+.thin-tab {
+  border: 1px solid rgb(var(--outline-variant));
+  background: rgb(var(--surface-container) / 0.65);
+  color: rgb(var(--on-surface-variant));
+}
+.thin-tab.active {
+  background: rgb(var(--secondary-container));
+  color: rgb(var(--on-secondary-container));
+  border-color: rgb(var(--secondary-container));
+  font-weight: 800;
+}
