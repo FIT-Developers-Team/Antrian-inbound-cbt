@@ -1631,13 +1631,64 @@ function getNextWaitingTickets(
   current = {},
 ) {
   const currentKey = ticketIdentity ? ticketIdentity(current) : "";
+
   return (queue || [])
     .filter((row) => {
       const st = parseStatus(row);
       const key = ticketIdentity ? ticketIdentity(row) : "";
-      return key !== currentKey && !st.includes("COMPLETED");
+
+      // Queue Berikutnya khusus nomor yang belum dipanggil.
+      // CALLED / UNLOADING / COMPLETED / EXPIRED tidak ditampilkan di list ini.
+      return (
+        key !== currentKey &&
+        st.includes("WAITING") &&
+        !st.includes("CALLED") &&
+        !st.includes("UNLOADING") &&
+        !st.includes("COMPLETED") &&
+        !st.includes("EXPIRED")
+      );
     })
-    .slice(0, 6);
+    .sort((a, b) => queueCreatedValue(a) - queueCreatedValue(b))
+    .slice(0, 8);
+}
+
+function queueWaitingStartValue(row = {}) {
+  return (
+    row.register_time ||
+    row.created_at ||
+    row.Timestamp ||
+    row.timestamp ||
+    row.arrived_time ||
+    ""
+  );
+}
+
+function queueWaitingText(row = {}) {
+  return liveWaitingText(queueWaitingStartValue(row), row.completed_at);
+}
+
+function upcomingQueueCard(x = {}) {
+  const waiting = queueWaitingText(x);
+  return `<div class="rounded-xl border border-outline-variant/40 bg-surface-container/55 p-4">
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <div class="font-queue-id text-primary text-xl">${esc(x.queue_no || "-")}</div>
+        <div class="mt-1 inline-flex items-center gap-1 rounded-full bg-tertiary/10 text-tertiary border border-tertiary/20 px-2 py-1 text-[11px] font-extrabold">
+          <span class="material-symbols-outlined text-sm">timer</span>Menunggu ${esc(waiting)}
+        </div>
+      </div>
+      <div class="text-xs font-bold text-on-surface-variant text-right">${esc(x.status || "WAITING")}</div>
+    </div>
+    <div class="mt-3 text-sm font-semibold">${esc(x.driver_name || "-")} · ${esc(x.plat_number || "-")}</div>
+    <div class="text-xs text-on-surface-variant mt-1 truncate">${esc(x.vendor_name || "-")}</div>
+    <div class="text-[11px] text-on-surface-variant mt-1 truncate">PO: ${esc(x.po_number || "-")}</div>
+  </div>`;
+}
+
+function renderUpcomingQueueList(upcoming = []) {
+  return upcoming.length
+    ? upcoming.map(upcomingQueueCard).join("")
+    : `<div class="text-on-surface-variant border border-dashed border-outline-variant rounded-xl p-6 text-center">Belum ada queue berikutnya yang masih WAITING.</div>`;
 }
 
 function callKey(row = {}) {
@@ -1980,12 +2031,15 @@ function callStatusBadge(row = {}) {
 function updatePanggilDom() {
   if (state.page !== "panggil") return;
   const latest = getLatestCallTicket();
+  const upcoming = getNextWaitingTickets(state.dashboard?.queue || [], latest);
   const queue = document.getElementById("display-queue");
   const dock = document.getElementById("display-dock");
   const driver = document.getElementById("display-driver");
   const plate = document.getElementById("display-plate");
   const vendor = document.getElementById("display-vendor");
   const badge = document.getElementById("display-status-badge");
+  const upcomingList = document.getElementById("display-upcoming-list");
+  const upcomingCount = document.getElementById("display-upcoming-count");
 
   if (queue) queue.textContent = latest.queue_no || "-";
   if (dock) dock.textContent = latest.gate || "-";
@@ -1993,6 +2047,8 @@ function updatePanggilDom() {
   if (plate) plate.textContent = latest.plat_number || "-";
   if (vendor) vendor.textContent = latest.vendor_name || "-";
   if (badge) badge.innerHTML = callStatusBadge(latest);
+  if (upcomingList) upcomingList.innerHTML = renderUpcomingQueueList(upcoming);
+  if (upcomingCount) upcomingCount.textContent = String(upcoming.length);
 }
 
 function pagePanggil() {
@@ -2053,26 +2109,15 @@ function pagePanggil() {
         </div>
 
         <div class="xl:col-span-4 border-t xl:border-t-0 xl:border-l border-outline-variant/30 bg-surface/25 p-6 flex flex-col">
-          <h3 class="font-headline-md text-headline-md mb-4">Queue Berikutnya</h3>
-          <div class="space-y-3 overflow-y-auto pr-1">
-            ${
-              upcoming.length
-                ? upcoming
-                    .map(
-                      (
-                        x,
-                      ) => `<div class="rounded-xl border border-outline-variant/40 bg-surface-container/55 p-4">
-                        <div class="flex items-center justify-between gap-3">
-                          <div class="font-queue-id text-primary text-xl">${esc(x.queue_no || "-")}</div>
-                          <div class="text-sm font-bold text-on-surface-variant">${esc(x.gate || x.status || "-")}</div>
-                        </div>
-                        <div class="mt-2 text-sm font-semibold">${esc(x.driver_name || "-")} · ${esc(x.plat_number || "-")}</div>
-                        <div class="text-xs text-on-surface-variant mt-1 truncate">${esc(x.vendor_name || "-")}</div>
-                      </div>`,
-                    )
-                    .join("")
-                : `<div class="text-on-surface-variant border border-dashed border-outline-variant rounded-xl p-6 text-center">Belum ada queue berikutnya.</div>`
-            }
+          <div class="flex items-start justify-between gap-3 mb-4">
+            <div>
+              <h3 class="font-headline-md text-headline-md">Queue Berikutnya</h3>
+              <div class="text-xs text-on-surface-variant mt-1">Hanya nomor yang belum dipanggil / status WAITING.</div>
+            </div>
+            <span class="rounded-full bg-primary/10 text-primary border border-primary/20 px-3 py-1 text-xs font-extrabold"><span id="display-upcoming-count">${num(upcoming.length)}</span> waiting</span>
+          </div>
+          <div id="display-upcoming-list" class="space-y-3 overflow-y-auto pr-1">
+            ${renderUpcomingQueueList(upcoming)}
           </div>
         </div>
       </div>
