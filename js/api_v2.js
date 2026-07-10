@@ -1718,7 +1718,25 @@ async function submitChecker(e) {
         : state.lastCalled;
 
     if (targetStatus === "CALLED") {
-      showToast("Nomor dipanggil ke monitor TV");
+      var freshRows = Array.isArray(result?.rows) ? result.rows : [];
+      var freshRow = freshRows[0] || buildUpdatedOutputRowFromBody(body);
+      var latestCallCount =
+        Number(
+          result?.call_count || freshRow.call_count || body.call_count || 1,
+        ) || 1;
+      showToast(
+        "Nomor dipanggil ke monitor TV (" +
+          Math.min(latestCallCount, 3) +
+          "/3)",
+      );
+      if (
+        latestCallCount >= 3 &&
+        typeof showDriverNoShowSuggestionFromKey === "function"
+      ) {
+        setTimeout(function () {
+          showDriverNoShowSuggestionFromKey(checkerRowKey(freshRow));
+        }, 250);
+      }
     } else if (targetStatus === "UNLOADING") {
       showToast("Status berubah menjadi UNLOADING");
     } else {
@@ -2006,3 +2024,192 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }, 60000);
 });
+
+/* =========================================================
+ * CALL LIMIT 3X - BACKEND ACTION OVERRIDES
+ * ========================================================= */
+function getDriverCallCountApi(row = {}) {
+  return Number(row.call_count || row.wa_call_count || 0) || 0;
+}
+
+function getFreshRowAfterAction(result = {}, fallback = {}) {
+  const rows = applyBackendActionResult(result);
+  return rows[0] || fallback || {};
+}
+
+async function recallDriverFromKey(encodedKey = "", btn = null) {
+  const row =
+    typeof findCheckerRowByKey === "function"
+      ? findCheckerRowByKey(encodedKey)
+      : null;
+  if (!row) {
+    showToast("Data ticket tidak ditemukan. Refresh dulu.");
+    return;
+  }
+
+  const callCount = getDriverCallCountApi(row);
+  if (callCount >= 3) {
+    if (typeof showDriverNoShowSuggestionFromKey === "function") {
+      showDriverNoShowSuggestionFromKey(encodedKey, btn);
+    } else {
+      showToast(
+        "Driver sudah dipanggil 3x. Driver wajib buat nomor antrian baru jika tidak datang.",
+      );
+    }
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add("opacity-60", "cursor-wait");
+  }
+
+  try {
+    const body = {
+      ...buildBackendActionBodyFromRow(row),
+      status: "CALLED",
+      unload_sla: "ON PROCESS",
+      gate: row.gate || "",
+      called_at: row.called_at || formatDateTimeLocal(new Date()),
+      updated_at: formatDateTimeLocal(new Date()),
+    };
+
+    const result = await updateCheckerToBackend(body);
+    const fresh = getFreshRowAfterAction(result, row);
+    const newCount =
+      Number(result?.call_count || fresh.call_count || callCount + 1) || 0;
+    showToast(`Driver dipanggil ulang (${Math.min(newCount, 3)}/3)`);
+
+    if (["checker", "laporan", "monitor", "panggil"].includes(state.page)) {
+      renderPage(state.page, false);
+    }
+
+    if (
+      newCount >= 3 &&
+      typeof showDriverNoShowSuggestionFromKey === "function"
+    ) {
+      setTimeout(
+        () => showDriverNoShowSuggestionFromKey(checkerRowKey(fresh || row)),
+        250,
+      );
+    }
+  } catch (err) {
+    console.error(err);
+    showToast("Panggil ulang gagal: " + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove("opacity-60", "cursor-wait");
+    }
+  }
+}
+
+async function sendDriverWhatsAppFromKey(encodedKey = "", btn = null) {
+  const row =
+    typeof findCheckerRowByKey === "function"
+      ? findCheckerRowByKey(encodedKey)
+      : null;
+  if (!row) {
+    showToast("Data ticket tidak ditemukan. Refresh dulu.");
+    return;
+  }
+
+  const callCount = getDriverCallCountApi(row);
+  if (callCount >= 3) {
+    if (typeof showDriverNoShowSuggestionFromKey === "function") {
+      showDriverNoShowSuggestionFromKey(encodedKey, btn);
+    } else {
+      showToast("Limit panggilan 3x sudah tercapai.");
+    }
+    return;
+  }
+
+  const phone = normalizePhoneInputValue(row.phone_number || "");
+  if (!phone) {
+    showToast("Nomor WhatsApp driver kosong / format tidak valid.");
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add("opacity-60", "cursor-wait");
+  }
+
+  try {
+    const result = await sendDriverWhatsAppToBackend(
+      buildBackendActionBodyFromRow(row),
+    );
+    const fresh = getFreshRowAfterAction(result, row);
+    const newCount =
+      Number(result?.call_count || fresh.call_count || callCount + 1) || 0;
+
+    showToast(
+      "WhatsApp terkirim ke driver" +
+        (newCount ? ` (${Math.min(newCount, 3)}/3)` : ""),
+    );
+    if (["checker", "laporan", "monitor"].includes(state.page)) {
+      renderPage(state.page, false);
+    }
+
+    if (
+      newCount >= 3 &&
+      typeof showDriverNoShowSuggestionFromKey === "function"
+    ) {
+      setTimeout(
+        () => showDriverNoShowSuggestionFromKey(checkerRowKey(fresh || row)),
+        250,
+      );
+    }
+  } catch (err) {
+    console.error(err);
+    showToast("WA gagal: " + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove("opacity-60", "cursor-wait");
+    }
+  }
+}
+
+async function markDriverCallFailedFromKey(encodedKey = "", btn = null) {
+  const row =
+    typeof findCheckerRowByKey === "function"
+      ? findCheckerRowByKey(encodedKey)
+      : null;
+  if (!row) {
+    showToast("Data ticket tidak ditemukan. Refresh dulu.");
+    return;
+  }
+
+  const callCount = getDriverCallCountApi(row);
+  if (callCount < 3) {
+    showToast("Gagal panggil baru bisa dipakai setelah driver dipanggil 3x.");
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add("opacity-60", "cursor-wait");
+  }
+
+  try {
+    const result = await failCallToBackend({
+      ...buildBackendActionBodyFromRow(row),
+      reason:
+        "Driver tidak hadir setelah dipanggil 3x. Driver wajib buat nomor antrian baru.",
+    });
+    applyBackendActionResult(result);
+    showToast("Antrian EXPIRED. Driver wajib buat nomor antrian baru.");
+    if (["checker", "laporan", "monitor", "panggil"].includes(state.page)) {
+      renderPage(state.page, false);
+    }
+  } catch (err) {
+    console.error(err);
+    showToast("Gagal expire antrian: " + err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove("opacity-60", "cursor-wait");
+    }
+  }
+}

@@ -4534,3 +4534,169 @@ try {
     }));
   }
 } catch (err) {}
+
+/* =========================================================
+ * CALL LIMIT 3X - CHECKER MEMANGGIL UX
+ * - CALLED ticket bisa dipanggil ulang maksimal 3x.
+ * - Setelah 3x, tampilkan popup saran driver wajib buat nomor antrian baru.
+ * - Gagal Panggil tetap lewat backend failCall agar status jadi EXPIRED.
+ * ========================================================= */
+function getDriverCallCount(row = {}) {
+  return Number(row.call_count || row.wa_call_count || 0) || 0;
+}
+
+function callLimitBadge(row = {}) {
+  const count = Math.min(getDriverCallCount(row), 3);
+  const cls =
+    count >= 3
+      ? "bg-error/10 text-error border-error/30"
+      : count > 0
+        ? "bg-warning/10 text-warning border-warning/30"
+        : "bg-surface-container-high text-on-surface-variant border-outline-variant";
+  return `<span class="inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-extrabold ${cls}">${count}/3 CALL</span>`;
+}
+
+function showDriverNoShowSuggestionFromKey(encodedKey = "", btn = null) {
+  const row =
+    typeof findCheckerRowByKey === "function"
+      ? findCheckerRowByKey(encodedKey)
+      : null;
+  if (!row) {
+    showToast("Data ticket tidak ditemukan. Refresh dulu.");
+    return;
+  }
+  const callCount = getDriverCallCount(row);
+  const message = [
+    `Driver ${row.driver_name || "-"} / ${row.plat_number || "-"} sudah dipanggil ${callCount}x.`,
+    "",
+    "Saran operasional:",
+    "Jika driver tidak datang setelah 3x panggilan, antrian ini dibuat EXPIRED.",
+    "Driver wajib registrasi ulang / buat nomor antrian baru kalau datang kembali.",
+    "",
+    "Klik OK untuk tandai Gagal Panggil / EXPIRED sekarang.",
+  ].join("\n");
+
+  const ok = confirm(message);
+  if (ok && typeof markDriverCallFailedFromKey === "function") {
+    markDriverCallFailedFromKey(encodedKey, btn);
+  }
+}
+
+function checkerTicketCard(row = {}, i = 0) {
+  const st = String(row.status || "WAITING").toUpperCase();
+  const terminal = isTerminalQueueStatus(st);
+  const isUnloading = st.includes("UNLOADING");
+  const isCalled = st.includes("CALLED");
+  const callCount = getDriverCallCount(row);
+  const key = checkerRowKey(row);
+  const waitText = terminal
+    ? st.includes("EXPIRED")
+      ? "Expired"
+      : "Selesai"
+    : row.waiting_text || liveWaitingText(row.created_at, row.completed_at);
+
+  const primaryLabel = terminal
+    ? "Read Only"
+    : isUnloading
+      ? "Selesai Unloading"
+      : isCalled
+        ? "Mulai Unloading"
+        : "Panggil Gate";
+
+  const primaryIcon = terminal
+    ? "visibility"
+    : isUnloading
+      ? "task_alt"
+      : isCalled
+        ? "warehouse"
+        : "campaign";
+
+  const primaryButton = terminal
+    ? ""
+    : `<button type="button" onclick="populateCheckerFromTicketKey('${key}')" class="bg-primary-container text-on-primary-container px-3 py-2 rounded-lg font-bold text-xs flex-1 inline-flex items-center justify-center gap-1">
+        <span class="material-symbols-outlined text-base">${primaryIcon}</span>${primaryLabel}
+      </button>`;
+
+  const recallButton =
+    terminal || isUnloading
+      ? ""
+      : isCalled
+        ? callCount >= 3
+          ? `<button type="button" onclick="showDriverNoShowSuggestionFromKey('${key}', this)" class="bg-error/15 border border-error/30 text-error px-3 py-2 rounded-lg font-bold text-xs inline-flex items-center justify-center gap-1" title="Sudah 3x dipanggil">
+            <span class="material-symbols-outlined text-base">warning</span>3/3
+          </button>`
+          : `<button type="button" onclick="recallDriverFromKey('${key}', this)" class="bg-warning/15 border border-warning/30 text-warning px-3 py-2 rounded-lg font-bold text-xs inline-flex items-center justify-center gap-1" title="Panggil ulang maksimal 3x">
+            <span class="material-symbols-outlined text-base">campaign</span>Panggil Ulang ${callCount}/3
+          </button>`
+        : "";
+
+  const waButton =
+    terminal || isUnloading
+      ? ""
+      : callCount >= 3
+        ? `<button type="button" onclick="showDriverNoShowSuggestionFromKey('${key}', this)" class="bg-outline-variant text-on-surface-variant px-3 py-2 rounded-lg font-bold text-xs inline-flex items-center justify-center gap-1 opacity-70" title="Limit 3x tercapai">
+          <span class="material-symbols-outlined text-base">chat</span>WA Limit
+        </button>`
+        : `<button type="button" onclick="sendDriverWhatsAppFromKey('${key}', this)" class="bg-success/15 border border-success/30 text-success px-3 py-2 rounded-lg font-bold text-xs inline-flex items-center justify-center gap-1">
+          <span class="material-symbols-outlined text-base">chat</span>WA${callCount ? ` ${callCount}x` : ""}
+        </button>`;
+
+  const failButton =
+    !terminal && isCalled
+      ? callCount >= 3
+        ? `<button type="button" onclick="showDriverNoShowSuggestionFromKey('${key}', this)" class="bg-error/15 border border-error/30 text-error px-3 py-2 rounded-lg font-bold text-xs inline-flex items-center justify-center gap-1">
+            <span class="material-symbols-outlined text-base">person_cancel</span>Gagal Panggil
+          </button>`
+        : `<button type="button" disabled class="bg-outline-variant text-on-surface-variant px-3 py-2 rounded-lg font-bold text-xs cursor-not-allowed opacity-60">${callCount}/3</button>`
+      : "";
+
+  return `<article
+    class="checker-card rounded-2xl border border-outline-variant/40 bg-surface-container/45 p-4 shadow-sm"
+    data-status="${esc(st)}"
+    data-vendor="${esc(String(row.vendor_name || "").toLowerCase())}"
+    data-queue="${esc(String(row.queue_no || row.original_queue_no || "").toLowerCase())}"
+    data-po="${esc(String(row.po_number || "").toLowerCase())}"
+    data-plate="${esc(String(row.plat_number || "").toLowerCase())}">
+    <div class="flex items-start justify-between gap-3">
+      <div class="min-w-0">
+        <div class="font-queue-id text-primary text-2xl">${esc(row.queue_no || "-")}</div>
+        <div class="text-[11px] uppercase text-on-surface-variant font-bold mt-1 truncate">${esc(row.vendor_name || "-")}</div>
+      </div>
+      <div class="flex flex-col items-end gap-1">
+        ${checkerStatusPill(st)}
+        ${!terminal && !isUnloading ? callLimitBadge(row) : ""}
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-2 mt-4 text-xs">
+      <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3">
+        <div class="text-[10px] uppercase text-on-surface-variant font-bold">Plat</div>
+        <div class="font-queue-id text-sm mt-1">${esc(row.plat_number || "-")}</div>
+      </div>
+      <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3">
+        <div class="text-[10px] uppercase text-on-surface-variant font-bold">Gate</div>
+        <div class="font-bold text-sm mt-1">${esc(row.gate || "-")}</div>
+      </div>
+      <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3">
+        <div class="text-[10px] uppercase text-on-surface-variant font-bold">Driver</div>
+        <div class="font-bold truncate mt-1">${esc(row.driver_name || "-")}</div>
+      </div>
+      <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3">
+        <div class="text-[10px] uppercase text-on-surface-variant font-bold">Menunggu</div>
+        <div class="font-queue-id text-tertiary mt-1 live-waiting-cell" data-live-waiting="1" data-created="${esc(row.created_at || "")}" data-completed="${esc(row.completed_at || "")}" data-status="${esc(st)}">${esc(waitText)}</div>
+      </div>
+    </div>
+
+    <div class="mt-3 text-xs text-on-surface-variant">
+      <div><b>Fleet:</b> ${esc(row.fleet_type || "-")}</div>
+      <div class="truncate"><b>PO:</b> ${esc(row.po_number || "-")}</div>
+      ${isUnloading ? `<div><b>Estimasi selesai:</b> ${esc(getEstimatedFinishedAt(row) || row.sla_finished_at || "-")}</div>` : ""}
+      ${callCount >= 3 && isCalled ? `<div class="mt-2 rounded-lg border border-error/30 bg-error/10 p-2 text-error font-bold">Sudah 3x dipanggil. Jika driver tidak datang, arahkan buat nomor antrian baru.</div>` : ""}
+      ${st.includes("EXPIRED") ? `<div class="text-error font-bold"><b>Reason:</b> ${esc(row.expired_reason || "Driver tidak hadir")}</div>` : ""}
+    </div>
+
+    <div class="mt-4 flex flex-wrap gap-2">
+      ${primaryButton}${recallButton}${waButton}${failButton}
+    </div>
+  </article>`;
+}
