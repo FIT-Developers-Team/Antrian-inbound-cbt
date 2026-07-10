@@ -707,6 +707,7 @@ function refreshDriverTrackDom() {
   const lastRefresh = document.getElementById("driver-track-last-refresh");
   const liveBadge = document.getElementById("driver-track-live-badge");
   const runningQueue = document.getElementById("driver-track-running-queue");
+  const runningDetail = document.getElementById("driver-track-running-detail");
   const estFinish = document.getElementById("driver-track-est-finish");
 
   if (wait) wait.textContent = driverWaitingLabel(row);
@@ -714,6 +715,11 @@ function refreshDriverTrackDom() {
   if (gate) gate.textContent = row.gate || "-";
   if (lastRefresh) lastRefresh.textContent = driverTrackLastRefreshAt || "-";
   if (runningQueue) runningQueue.textContent = running?.queue_no || "-";
+  if (runningDetail) {
+    runningDetail.textContent = running
+      ? `${running.gate || "-"} · ${String(running.status || "-").toUpperCase()}`
+      : "Belum ada gate aktif";
+  }
   if (estFinish) estFinish.textContent = finishAt || "-";
 
   if (liveBadge) {
@@ -778,18 +784,21 @@ function pageDriverTrack() {
         <div class="font-queue-id text-[56px] sm:text-[76px] leading-none text-primary font-black mt-3">${esc(row.queue_no || "-")}</div>
       </div>
 
-      <div class="mt-5 rounded-2xl border border-primary/30 bg-primary/10 p-4">
+      <div class="mt-5 rounded-2xl border border-primary/30 bg-primary/10 p-4 shadow-sm">
+        <div class="text-[11px] uppercase tracking-[0.28em] text-on-surface-variant font-extrabold mb-3">Info Antrian Aktif Saat Ini</div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <div class="text-[10px] uppercase tracking-[0.2em] font-bold text-on-surface-variant">Sedang Berjalan</div>
-            <div id="driver-track-running-queue" class="font-queue-id text-3xl text-primary mt-2">${esc(running?.queue_no || "-")}</div>
+          <div class="rounded-xl bg-surface-container/50 border border-primary/20 p-4">
+            <div class="text-[10px] uppercase tracking-[0.2em] font-bold text-on-surface-variant">Antrian Sedang Berjalan</div>
+            <div id="driver-track-running-queue" class="font-queue-id text-4xl text-primary mt-2">${esc(running?.queue_no || "-")}</div>
+            <div id="driver-track-running-detail" class="mt-1 text-xs font-bold text-on-surface-variant">${running ? `${esc(running.gate || "-")} · ${esc(String(running.status || "-").toUpperCase())}` : "Belum ada gate aktif"}</div>
           </div>
-          <div>
+          <div class="rounded-xl bg-surface-container/50 border border-tertiary/20 p-4">
             <div class="text-[10px] uppercase tracking-[0.2em] font-bold text-on-surface-variant">Estimasi Selesai</div>
-            <div id="driver-track-est-finish" class="font-queue-id text-2xl text-tertiary mt-2">${esc(finishAt || "-")}</div>
+            <div id="driver-track-est-finish" class="font-queue-id text-3xl text-tertiary mt-2">${esc(finishAt || "-")}</div>
+            <div class="mt-1 text-xs font-bold text-on-surface-variant">Referensi: SLA Finished At</div>
           </div>
         </div>
-        <div class="mt-3 text-[11px] text-on-surface-variant">Estimasi mengacu ke <b>SLA Finished At</b> / target SLA unloading.</div>
+        <div class="mt-3 text-[11px] text-on-surface-variant">Driver bisa lihat nomor antrian yang sedang berjalan sekarang dan estimasi selesai dari <b>SLA Finished At</b>. Jika SLA Finished At kosong, sistem hitung dari waktu mulai unloading + target SLA fleet.</div>
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-6">
@@ -3963,18 +3972,14 @@ function getActiveGateSet(exclude = []) {
 }
 
 function getCurrentRunningTicket(queue = state.dashboard?.queue || []) {
-  const rows = [...(queue || [])].filter((row) => {
+  const activeRows = [...(queue || [])].filter((row) => {
     const st = String(row.status || "").toUpperCase();
-    const hasGate =
-      String(row.gate || "").trim() && String(row.gate || "").trim() !== "-";
-    return (
-      hasGate &&
-      !isTerminalQueueStatus(st) &&
-      (st.includes("UNLOADING") || st.includes("CALLED"))
-    );
+    const gateText = String(row.gate || "").trim();
+    const hasGate = gateText && gateText !== "-";
+    return hasGate && !isTerminalQueueStatus(st);
   });
 
-  rows.sort((a, b) => {
+  const sortByLatestOperationalTime = (a, b) => {
     const ta =
       parseDateLocal(
         a.start_unloading_at || a.called_at || a.updated_at || a.created_at,
@@ -3984,9 +3989,25 @@ function getCurrentRunningTicket(queue = state.dashboard?.queue || []) {
         b.start_unloading_at || b.called_at || b.updated_at || b.created_at,
       )?.getTime() || 0;
     return tb - ta;
-  });
+  };
 
-  return rows[0] || null;
+  // Untuk info driver, prioritas "sedang berjalan" adalah ticket yang sudah UNLOADING.
+  // Kalau belum ada yang unloading, fallback ke CALLED supaya driver tetap tahu antrian aktif saat ini.
+  const unloadingRows = activeRows.filter((row) =>
+    String(row.status || "")
+      .toUpperCase()
+      .includes("UNLOADING"),
+  );
+  unloadingRows.sort(sortByLatestOperationalTime);
+  if (unloadingRows.length) return unloadingRows[0];
+
+  const calledRows = activeRows.filter((row) =>
+    String(row.status || "")
+      .toUpperCase()
+      .includes("CALLED"),
+  );
+  calledRows.sort(sortByLatestOperationalTime);
+  return calledRows[0] || null;
 }
 
 function getEstimatedFinishedAt(row = {}) {
@@ -4013,8 +4034,8 @@ function getEstimatedFinishedAt(row = {}) {
 
 function getQueueRunningSummaryText() {
   const running = getCurrentRunningTicket();
-  if (!running) return "Sedang berjalan: -";
-  return `Sedang berjalan: ${running.queue_no || "-"} · estimasi selesai ${getEstimatedFinishedAt(running) || "-"}`;
+  if (!running) return "Sedang berjalan: - · estimasi selesai -";
+  return `Sedang berjalan: ${running.queue_no || "-"} (${running.gate || "-"}) · estimasi selesai ${getEstimatedFinishedAt(running) || "-"}`;
 }
 
 function demoDashboard() {
