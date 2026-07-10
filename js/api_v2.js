@@ -767,7 +767,7 @@ function buildOptionsFromV2(tableRows = []) {
       typeof getCibitungGateOptions === "function"
         ? getCibitungGateOptions()
         : Array.from(
-            { length: 24 },
+            { length: 10 },
             (_, i) => `Dock ${String(i + 1).padStart(2, "0")}`,
           ),
     vendor_name: vendors,
@@ -817,7 +817,7 @@ function buildDashboardFromV2(response) {
     typeof getCibitungGateOptions === "function"
       ? getCibitungGateOptions()
       : Array.from(
-          { length: 24 },
+          { length: 10 },
           (_, i) => `Dock ${String(i + 1).padStart(2, "0")}`,
         );
 
@@ -860,7 +860,7 @@ function buildDashboardFromV2(response) {
         return !st.includes("COMPLETED") && !st.includes("EXPIRED");
       }),
     ).slice(0, 8),
-    dock: Object.values(dockMap).slice(0, 24),
+    dock: Object.values(dockMap).slice(0, 10),
     report_preview: queue,
     raw: {
       kpiRaw,
@@ -1767,6 +1767,13 @@ async function refreshCallMonitorData(renderAfter = false) {
 function callNext(btn) {
   if (btn) btn.classList.add("calling-effect");
   const gate = document.getElementById("call-gate")?.value || "Dock 01";
+  const activeGateSet =
+    typeof getActiveGateSet === "function" ? getActiveGateSet([]) : new Set();
+  if (activeGateSet.has(gate)) {
+    showToast(gate + " sedang aktif. Pilih gate lain.");
+    if (btn) btn.classList.remove("calling-effect");
+    return;
+  }
   const local = getLocalTickets();
   const next = local.find((q) =>
     String(q.status || "")

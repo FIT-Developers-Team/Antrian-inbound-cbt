@@ -17,7 +17,7 @@ const state = {
     checker_status: ["UNLOADING"],
     unload_sla: ["SLA OK", "SLA MISS", "ON PROCESS"],
     gate: Array.from(
-      { length: 24 },
+      { length: 10 },
       (_, i) => `Dock ${String(i + 1).padStart(2, "0")}`,
     ),
     vendor_name: [],
@@ -2005,6 +2005,13 @@ function pagePanggil() {
           <div class="text-3xl md:text-4xl font-extrabold text-primary mt-1">Panggilan Dock</div>
         </div>
         <div class="flex flex-wrap gap-2">
+          <label class="inline-flex items-center gap-2 thin-tab rounded-lg px-3 py-2 font-bold text-xs">
+            <span class="material-symbols-outlined text-base">door_open</span>
+            <span>Gate Next</span>
+            <select id="call-gate" class="bg-transparent outline-none text-on-surface font-bold min-w-[120px]">
+              ${gateSelectOptions("", true)}
+            </select>
+          </label>
           ${voiceOn ? `<button onclick="deactivateVoiceMonitor()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">volume_up</span>Suara Aktif</button>` : `<button onclick="activateVoiceMonitor()" class="bg-primary-container text-on-primary-container rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">volume_up</span>Aktifkan Suara TV</button>`}
           <button onclick="recallVoice()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">replay</span>Panggil Ulang Suara</button>
           ${tvModeActive ? `<button onclick="exitTvFullScreen()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">fullscreen_exit</span>Exit TV</button>` : `<button onclick="enterTvFullScreen()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">fullscreen</span>Mode TV Full Screen</button>`}
@@ -2284,7 +2291,7 @@ function getGateVisibility(rows = []) {
   const gates = (
     state.options.gate ||
     Array.from(
-      { length: 24 },
+      { length: 10 },
       (_, i) => `Dock ${String(i + 1).padStart(2, "0")}`,
     )
   ).map((gate) => ({
@@ -3922,7 +3929,7 @@ function csvSafe(v) {
 
 function getCibitungGateOptions() {
   return Array.from(
-    { length: 24 },
+    { length: 10 },
     (_, i) => `Dock ${String(i + 1).padStart(2, "0")}`,
   );
 }
@@ -4080,7 +4087,7 @@ function demoDashboard() {
     queue: [],
     priority: [],
     dock: Array.from(
-      { length: 24 },
+      { length: 10 },
       (_, i) => `Dock ${String(i + 1).padStart(2, "0")}`,
     ).map((g) => ({ gate: g, status: "KOSONG" })),
     report_preview: [],
@@ -4143,4 +4150,387 @@ function initShader() {
 // Cibitung gate count normalization
 try {
   state.options.gate = getCibitungGateOptions();
+} catch (err) {}
+
+/* =========================================================
+   PATCH: Checker mobile sections + Cibitung 10 gates
+   ========================================================= */
+
+function getCibitungGateOptions() {
+  return Array.from(
+    { length: 10 },
+    (_, i) => `Dock ${String(i + 1).padStart(2, "0")}`,
+  );
+}
+
+function getActiveGateSet(exclude = []) {
+  const excludeSet = new Set(
+    (Array.isArray(exclude) ? exclude : parseGateList(exclude)).map((x) =>
+      String(x || "").trim(),
+    ),
+  );
+  const set = new Set();
+
+  (state.dashboard?.queue || []).forEach((row) => {
+    const st = String(row.status || "").toUpperCase();
+    if (isTerminalQueueStatus(st)) return;
+    if (!(st.includes("CALLED") || st.includes("UNLOADING"))) return;
+
+    parseGateList(row.gate || "").forEach((gate) => {
+      if (gate && !excludeSet.has(gate)) set.add(gate);
+    });
+  });
+
+  return set;
+}
+
+function gateSelectOptions(selected = "", allowBlank = false) {
+  const selectedList = parseGateList(selected);
+  const selectedSet = new Set(selectedList.map((x) => String(x || "").trim()));
+  const activeSet =
+    typeof getActiveGateSet === "function"
+      ? getActiveGateSet(selectedList)
+      : new Set();
+
+  const gates =
+    typeof getCibitungGateOptions === "function"
+      ? getCibitungGateOptions()
+      : state.options.gate || [];
+
+  const blank = allowBlank
+    ? `<option value="" ${!selected ? "selected" : ""}>- Pilih Gate -</option>`
+    : "";
+
+  return (
+    blank +
+    gates
+      .map((gate) => {
+        const gateText = String(gate || "").trim();
+        const isSelected =
+          selectedSet.has(gateText) || String(gate) === String(selected);
+        const isActive = activeSet.has(gateText) && !isSelected;
+        return `<option value="${esc(gate)}" ${isSelected ? "selected" : ""} ${isActive ? "disabled" : ""}>${esc(gate)}${isActive ? " — aktif" : ""}</option>`;
+      })
+      .join("")
+  );
+}
+
+function getGateVisibility(rows = []) {
+  const gates = getCibitungGateOptions().map((gate) => ({
+    gate,
+    rows: [],
+  }));
+
+  const byGate = {};
+  gates.forEach((item) => {
+    byGate[item.gate] = item;
+  });
+
+  rows
+    .filter((row) => {
+      const st = String(row.status || "").toUpperCase();
+      return (
+        !isTerminalQueueStatus(st) &&
+        (st.includes("CALLED") || st.includes("UNLOADING"))
+      );
+    })
+    .forEach((row) => {
+      parseGateList(row.gate || "").forEach((gate) => {
+        if (!byGate[gate]) byGate[gate] = { gate, rows: [] };
+        byGate[gate].rows.push(row);
+      });
+    });
+
+  return Object.values(byGate).sort((a, b) =>
+    String(a.gate).localeCompare(String(b.gate), "id", { numeric: true }),
+  );
+}
+
+let checkerSectionState = "memanggil";
+
+function getCheckerSection() {
+  return checkerSectionState || "memanggil";
+}
+
+function setCheckerSection(section = "memanggil") {
+  checkerSectionState = String(section || "memanggil").toLowerCase();
+  renderPage("checker", false);
+}
+
+function getCheckerSectionRows(section = getCheckerSection()) {
+  const safe = String(section || "memanggil").toLowerCase();
+  const rows = state.dashboard?.queue || [];
+  const filtered = rows.filter((row) => {
+    const st = String(row.status || "").toUpperCase();
+    const terminal = isTerminalQueueStatus(st);
+
+    if (safe === "unloading") return !terminal && st.includes("UNLOADING");
+    if (safe === "selesai") return terminal;
+    return !terminal && !st.includes("UNLOADING");
+  });
+
+  return typeof sortQueueBySlotSequence === "function"
+    ? sortQueueBySlotSequence(filtered)
+    : filtered;
+}
+
+function checkerSectionCounts() {
+  const rows = state.dashboard?.queue || [];
+  const counts = { memanggil: 0, unloading: 0, selesai: 0 };
+
+  rows.forEach((row) => {
+    const st = String(row.status || "").toUpperCase();
+    if (isTerminalQueueStatus(st)) counts.selesai += 1;
+    else if (st.includes("UNLOADING")) counts.unloading += 1;
+    else counts.memanggil += 1;
+  });
+
+  return counts;
+}
+
+function checkerSectionTabs() {
+  const active = getCheckerSection();
+  const counts = checkerSectionCounts();
+  const tabs = [
+    ["memanggil", "Memanggil", counts.memanggil, "campaign"],
+    ["unloading", "Unloading", counts.unloading, "local_shipping"],
+    ["selesai", "Selesai Unloading", counts.selesai, "task_alt"],
+  ];
+
+  return `<div class="sticky top-0 z-20 bg-surface/80 backdrop-blur-xl border border-outline-variant/40 rounded-2xl p-2 mb-4">
+    <div class="grid grid-cols-3 gap-2">
+      ${tabs
+        .map(([key, label, count, icon]) => {
+          const on = active === key;
+          return `<button type="button" onclick="setCheckerSection('${key}')" class="${on ? "bg-secondary-container text-on-secondary-container border-secondary-container" : "bg-surface-container/60 text-on-surface-variant border-outline-variant"} border rounded-xl px-2 py-3 font-bold text-[11px] sm:text-xs flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2">
+            <span class="material-symbols-outlined text-base">${icon}</span>
+            <span>${label}</span>
+            <span class="rounded-full px-2 py-0.5 text-[10px] ${on ? "bg-on-secondary-container/20" : "bg-surface-container-high"}">${count}</span>
+          </button>`;
+        })
+        .join("")}
+    </div>
+  </div>`;
+}
+
+function checkerStatusPill(status = "") {
+  const st = String(status || "WAITING").toUpperCase();
+  const cls = st.includes("EXPIRED")
+    ? "bg-error/10 text-error border-error/30"
+    : st.includes("COMPLETED")
+      ? "bg-success/10 text-success border-success/30"
+      : st.includes("UNLOADING")
+        ? "bg-warning/10 text-warning border-warning/30"
+        : st.includes("CALLED")
+          ? "bg-primary/10 text-primary border-primary/30"
+          : "bg-tertiary/10 text-tertiary border-tertiary/30";
+  return `<span class="inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-extrabold ${cls}">${esc(st || "-")}</span>`;
+}
+
+function checkerTicketCard(row = {}, i = 0) {
+  const st = String(row.status || "WAITING").toUpperCase();
+  const terminal = isTerminalQueueStatus(st);
+  const isUnloading = st.includes("UNLOADING");
+  const isCalled = st.includes("CALLED");
+  const callCount = Number(row.call_count || row.wa_call_count || 0) || 0;
+  const key = checkerRowKey(row);
+  const waitText = terminal
+    ? st.includes("EXPIRED")
+      ? "Expired"
+      : "Selesai"
+    : row.waiting_text || liveWaitingText(row.created_at, row.completed_at);
+
+  const primaryLabel = terminal
+    ? "Read Only"
+    : isUnloading
+      ? "Selesai Unloading"
+      : isCalled
+        ? "Mulai Unloading"
+        : "Panggil Gate";
+
+  const primaryIcon = terminal
+    ? "visibility"
+    : isUnloading
+      ? "task_alt"
+      : isCalled
+        ? "warehouse"
+        : "campaign";
+
+  const primaryButton = terminal
+    ? ""
+    : `<button type="button" onclick="populateCheckerFromTicketKey('${key}')" class="bg-primary-container text-on-primary-container px-3 py-2 rounded-lg font-bold text-xs flex-1 inline-flex items-center justify-center gap-1">
+        <span class="material-symbols-outlined text-base">${primaryIcon}</span>${primaryLabel}
+      </button>`;
+
+  const waButton = terminal
+    ? ""
+    : `<button type="button" onclick="sendDriverWhatsAppFromKey('${key}', this)" class="bg-success/15 border border-success/30 text-success px-3 py-2 rounded-lg font-bold text-xs inline-flex items-center justify-center gap-1">
+        <span class="material-symbols-outlined text-base">chat</span>WA${callCount ? ` ${callCount}x` : ""}
+      </button>`;
+
+  const failButton =
+    !terminal && isCalled
+      ? callCount >= 3
+        ? `<button type="button" onclick="markDriverCallFailedFromKey('${key}', this)" class="bg-error/15 border border-error/30 text-error px-3 py-2 rounded-lg font-bold text-xs inline-flex items-center justify-center gap-1">
+            <span class="material-symbols-outlined text-base">person_cancel</span>Gagal
+          </button>`
+        : `<button type="button" disabled class="bg-outline-variant text-on-surface-variant px-3 py-2 rounded-lg font-bold text-xs cursor-not-allowed opacity-60">${callCount}/3</button>`
+      : "";
+
+  return `<article
+    class="checker-card rounded-2xl border border-outline-variant/40 bg-surface-container/45 p-4 shadow-sm"
+    data-status="${esc(st)}"
+    data-vendor="${esc(String(row.vendor_name || "").toLowerCase())}"
+    data-queue="${esc(String(row.queue_no || row.original_queue_no || "").toLowerCase())}"
+    data-po="${esc(String(row.po_number || "").toLowerCase())}"
+    data-plate="${esc(String(row.plat_number || "").toLowerCase())}">
+    <div class="flex items-start justify-between gap-3">
+      <div class="min-w-0">
+        <div class="font-queue-id text-primary text-2xl">${esc(row.queue_no || "-")}</div>
+        <div class="text-[11px] uppercase text-on-surface-variant font-bold mt-1 truncate">${esc(row.vendor_name || "-")}</div>
+      </div>
+      ${checkerStatusPill(st)}
+    </div>
+
+    <div class="grid grid-cols-2 gap-2 mt-4 text-xs">
+      <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3">
+        <div class="text-[10px] uppercase text-on-surface-variant font-bold">Plat</div>
+        <div class="font-queue-id text-sm mt-1">${esc(row.plat_number || "-")}</div>
+      </div>
+      <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3">
+        <div class="text-[10px] uppercase text-on-surface-variant font-bold">Gate</div>
+        <div class="font-bold text-sm mt-1">${esc(row.gate || "-")}</div>
+      </div>
+      <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3">
+        <div class="text-[10px] uppercase text-on-surface-variant font-bold">Driver</div>
+        <div class="font-bold truncate mt-1">${esc(row.driver_name || "-")}</div>
+      </div>
+      <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3">
+        <div class="text-[10px] uppercase text-on-surface-variant font-bold">Menunggu</div>
+        <div class="font-queue-id text-tertiary mt-1 live-waiting-cell" data-live-waiting="1" data-created="${esc(row.created_at || "")}" data-completed="${esc(row.completed_at || "")}" data-status="${esc(st)}">${esc(waitText)}</div>
+      </div>
+    </div>
+
+    <div class="mt-3 text-xs text-on-surface-variant">
+      <div><b>Fleet:</b> ${esc(row.fleet_type || "-")}</div>
+      <div class="truncate"><b>PO:</b> ${esc(row.po_number || "-")}</div>
+      ${isUnloading ? `<div><b>Estimasi selesai:</b> ${esc(getEstimatedFinishedAt(row) || row.sla_finished_at || "-")}</div>` : ""}
+      ${st.includes("EXPIRED") ? `<div class="text-error font-bold"><b>Reason:</b> ${esc(row.expired_reason || "Driver tidak hadir")}</div>` : ""}
+    </div>
+
+    <div class="mt-4 flex flex-wrap gap-2">
+      ${primaryButton}${waButton}${failButton}
+    </div>
+  </article>`;
+}
+
+function filterCheckerCards() {
+  const query = String(
+    document.getElementById("checker-mobile-search")?.value || "",
+  )
+    .toLowerCase()
+    .trim();
+
+  document.querySelectorAll(".checker-card").forEach((card) => {
+    const hay = [
+      card.dataset.status,
+      card.dataset.vendor,
+      card.dataset.queue,
+      card.dataset.po,
+      card.dataset.plate,
+    ].join(" ");
+    card.style.display = !query || hay.includes(query) ? "" : "none";
+  });
+}
+
+function filterCheckerAdvanced() {
+  filterCheckerCards();
+}
+
+function pageChecker() {
+  const section = getCheckerSection();
+  const rows = getCheckerSectionRows(section);
+  const counts = checkerSectionCounts();
+  const sectionTitle =
+    section === "unloading"
+      ? "Unloading"
+      : section === "selesai"
+        ? "Selesai Unloading"
+        : "Memanggil";
+
+  return `<div class="grid grid-cols-1 xl:grid-cols-12 gap-gutter">
+    <div class="xl:col-span-8 glass-card rounded-xl p-4 sm:p-6">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+        <div>
+          <h3 class="font-headline-md text-headline-md mb-1">Checker Gate</h3>
+          <p class="text-on-surface-variant">Mobile-first: pilih section, cari ticket, lalu eksekusi aksi langsung dari card.</p>
+        </div>
+        <button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-2 font-bold flex items-center gap-2 w-fit"><span class="material-symbols-outlined">refresh</span>Refresh</button>
+      </div>
+
+      ${checkerSectionTabs()}
+
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+        ${miniMetric("Memanggil", counts.memanggil, "text-primary")}
+        ${miniMetric("Unloading", counts.unloading, "text-warning")}
+        ${miniMetric("Selesai/Expired", counts.selesai, "text-success")}
+      </div>
+
+      <div class="mb-4">
+        <input id="checker-mobile-search" oninput="filterCheckerCards()" class="form-input" placeholder="Cari queue / plat / vendor / PO / status..." />
+      </div>
+
+      <div class="flex items-center justify-between mb-3">
+        <div class="font-bold text-on-surface">${esc(sectionTitle)}</div>
+        <div class="text-xs text-on-surface-variant">${num(rows.length)} ticket</div>
+      </div>
+
+      <div id="checker-card-list" class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[68vh] overflow-y-auto pr-1">
+        ${rows.map((row, i) => checkerTicketCard(row, i)).join("") || `<div class="md:col-span-2 rounded-xl border border-dashed border-outline-variant p-8 text-center text-on-surface-variant">Belum ada data di section ${esc(sectionTitle)}.</div>`}
+      </div>
+    </div>
+
+    <div class="xl:col-span-4 glass-card rounded-xl p-4 sm:p-6">
+      <h3 class="font-headline-md text-headline-md mb-1">Action Panel</h3>
+      <p class="text-on-surface-variant mb-5">Flow: WAITING → CALLED → UNLOADING → SELESAI UNLOADING. Gate aktif otomatis grey out.</p>
+      <form id="checker-form" onsubmit="submitChecker(event)">
+        <input type="hidden" name="ticket_id" />
+        <input type="hidden" name="queue_no" />
+        <input type="hidden" name="status" value="CALLED" />
+        <input type="hidden" name="unload_sla" value="ON PROCESS" />
+        <div class="grid grid-cols-1 gap-4">
+          ${textInput("vendor_name", "Vendor Name", "Pilih dari card", "", "", "required readonly")}
+          ${textInput("fleet_type", "Fleet Type", "Pilih dari card", "", "", "required readonly")}
+          ${textInput("plat_number", "Plat Number", "Pilih dari card", "", "", 'required readonly onblur="validatePlateInput(this)"')}
+          ${checkerGatePicker()}
+          <label class="flex flex-col gap-2">
+            <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Status Berikutnya</span>
+            <div id="checker-status-box" class="bg-primary/15 border border-primary/30 rounded-lg px-4 py-3 text-primary font-bold flex items-center gap-2">
+              <span id="checker-status-icon" class="material-symbols-outlined text-base">campaign</span>
+              <span id="checker-status-preview">PANGGIL DRIVER</span>
+            </div>
+          </label>
+        </div>
+        ${datalists()}
+        <button id="checker-submit-btn" class="mt-6 bg-primary-container text-on-primary-container px-6 py-3 rounded-lg font-bold flex items-center gap-2 hover:brightness-110 w-full justify-center" type="submit">
+          <span class="material-symbols-outlined">save</span><span id="checker-submit-text">Panggil ke Gate</span>
+        </button>
+      </form>
+
+      <div class="mt-5 rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4 text-xs text-on-surface-variant">
+        <div class="font-bold text-on-surface mb-2">Gate aktif grey out</div>
+        <div>Gate terkunci jika ada ticket status <b>CALLED</b> atau <b>UNLOADING</b>. Selesai/Expired akan melepas gate.</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+try {
+  state.options.gate = getCibitungGateOptions();
+  if (state.dashboard) {
+    state.dashboard.dock = getCibitungGateOptions().map((g) => ({
+      gate: g,
+      status: "KOSONG",
+    }));
+  }
 } catch (err) {}
