@@ -2679,36 +2679,44 @@ function getUnloadingEstimateInfo(row = {}) {
   const expiredDate = parseDateLocal(expiredText);
   const directDate = parseDateLocal(directFinish);
 
-  // Prioritas estimasi:
+  // Estimasi selesai bongkar hanya valid kalau proses bongkar sudah mulai.
+  // WAITING/CALLED belum punya estimasi selesai bongkar karena belum ada Start Bongkar.
+  // Prioritas saat sudah bongkar:
   // 1. SLA Finished At dari backend/sheet.
-  // 2. Start bongkar + SLA fleet.
-  // 3. Kalau belum mulai bongkar, estimasi operasional dari register/called time + SLA fleet
-  //    supaya driver/monitor tetap punya jam target yang jelas, bukan hanya "2 jam".
-  const baseDate = startDate || calledDate || registerDate;
-  const baseText = startText || calledText || registerText || "";
-  const estimateSource = directDate
-    ? "SLA Finished At"
-    : startDate
-      ? "Start Bongkar + SLA"
-      : calledDate
-        ? "Called + SLA"
-        : registerDate
-          ? "Register + SLA"
-          : "";
+  // 2. Start Bongkar + SLA fleet.
+  const hasStartedBongkar = !!(
+    startDate ||
+    status.includes("UNLOADING") ||
+    status.includes("COMPLETED")
+  );
+  const baseDate = hasStartedBongkar ? startDate : null;
+  const baseText = hasStartedBongkar ? startText || "" : "";
+  const estimateSource = hasStartedBongkar
+    ? directDate
+      ? "SLA Finished At"
+      : startDate
+        ? "Start Bongkar + SLA Fleet"
+        : ""
+    : "Belum mulai bongkar";
 
-  let estimateDate = directDate;
-  if (!estimateDate && baseDate && targetHours) {
-    estimateDate = new Date(baseDate.getTime() + targetHours * 60 * 60 * 1000);
+  let estimateDate = null;
+  if (hasStartedBongkar) {
+    estimateDate = directDate || null;
+    if (!estimateDate && baseDate && targetHours) {
+      estimateDate = new Date(
+        baseDate.getTime() + targetHours * 60 * 60 * 1000,
+      );
+    }
   }
 
-  const estimateText = estimateDate
-    ? formatDateTimeLocal(estimateDate)
-    : directFinish || "";
+  const estimateText = estimateDate ? formatDateTimeLocal(estimateDate) : "";
   const now = new Date();
   const compareDate = completedDate || expiredDate || now;
   const hasEstimate = !!estimateDate;
   const outSla = !!(
-    hasEstimate && compareDate.getTime() > estimateDate.getTime()
+    hasStartedBongkar &&
+    hasEstimate &&
+    compareDate.getTime() > estimateDate.getTime()
   );
   const diffMinutes = hasEstimate
     ? Math.floor((estimateDate.getTime() - compareDate.getTime()) / 60000)
@@ -2722,13 +2730,19 @@ function getUnloadingEstimateInfo(row = {}) {
   );
 
   let label = "BELUM START";
-  let badgeClass =
-    "bg-surface-container text-on-surface-variant border-outline-variant";
+  let badgeClass = "bg-warning/10 text-warning border-warning/30";
 
   if (!targetHours) {
     label = "NO SLA";
+    badgeClass =
+      "bg-surface-container text-on-surface-variant border-outline-variant";
+  } else if (!hasStartedBongkar) {
+    label = "BELUM START";
+    badgeClass = "bg-warning/10 text-warning border-warning/30";
   } else if (!hasEstimate) {
     label = "NO ESTIMATE";
+    badgeClass =
+      "bg-surface-container text-on-surface-variant border-outline-variant";
   } else if (outSla) {
     label = status.includes("UNLOADING") ? "OUT SLA BONGKAR" : "OUT SLA";
     badgeClass = "bg-error/10 text-error border-error/30";
@@ -2738,9 +2752,6 @@ function getUnloadingEstimateInfo(row = {}) {
   } else if (status.includes("UNLOADING")) {
     label = "ON TRACK";
     badgeClass = "bg-success/10 text-success border-success/30";
-  } else {
-    label = "BELUM START";
-    badgeClass = "bg-warning/10 text-warning border-warning/30";
   }
 
   return {
@@ -2752,6 +2763,7 @@ function getUnloadingEstimateInfo(row = {}) {
     startText,
     completedText,
     expiredText,
+    hasStartedBongkar,
     baseText,
     estimateSource,
     estimateText,
@@ -2844,7 +2856,7 @@ function monitorChartReport(rows = []) {
     )
     .map((x) => x.row);
   const noEstimateRows = estimateInfos
-    .filter((x) => !x.info.estimateText)
+    .filter((x) => x.info.label === "NO ESTIMATE")
     .map((x) => x.row);
   const onTrackRows = estimateInfos
     .filter((x) => x.info.label === "ON TRACK" || x.info.label === "SLA OK")
@@ -3039,7 +3051,7 @@ function unloadingEstimateReport(rows = []) {
       <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
         <div>
           <h4 class="font-bold text-on-surface">Report Estimasi Selesai Bongkar per Mobil</h4>
-          <p class="text-xs text-on-surface-variant">Estimasi prioritas dari <b>SLA Finished At</b>. Kalau kosong: Start Bongkar + SLA. Kalau belum start: Register/Called + SLA supaya jam target tetap jelas.</p>
+          <p class="text-xs text-on-surface-variant">Estimasi selesai bongkar hanya tampil saat mobil sudah <b>UNLOADING</b>. Sumber estimasi: <b>SLA Finished At</b>; kalau kosong dihitung dari <b>Start Bongkar + SLA Fleet</b>. Status WAITING/CALLED belum dibuat estimasi bongkar.</p>
         </div>
         <div class="flex flex-wrap gap-2 text-xs font-bold">
           <span class="rounded-full bg-error/10 text-error border border-error/30 px-3 py-1">OUT SLA TOTAL: ${num(outSlaCount)}</span>
@@ -3052,7 +3064,7 @@ function unloadingEstimateReport(rows = []) {
     <div class="overflow-x-auto">
       <table class="w-full text-left text-sm">
         <thead class="bg-surface-container text-on-surface-variant">
-          <tr>${["Queue", "Jam Berjalan", "Plat", "Vendor", "Fleet", "Gate", "Status", "Basis Hitung", "SLA Target", "Estimasi Selesai", "Sisa/Lewat", "SLA Bongkar"].map((h) => `<th class="px-4 py-3 font-label-sm uppercase whitespace-nowrap">${h}</th>`).join("")}</tr>
+          <tr>${["Queue", "Jam Berjalan Status Ini", "Plat", "Vendor", "Fleet", "Gate", "Status", "Basis Estimasi Bongkar", "SLA Fleet", "Estimasi Selesai Bongkar", "Sisa/Lewat Target", "Status SLA Bongkar"].map((h) => `<th class="px-4 py-3 font-label-sm uppercase whitespace-nowrap">${h}</th>`).join("")}</tr>
         </thead>
         <tbody class="divide-y divide-outline-variant/10">
           ${
@@ -3075,9 +3087,11 @@ function unloadingEstimateReport(rows = []) {
                 const runningText = runningDone
                   ? formatMinutesCompact(info.runningMinutes)
                   : liveWaitingText(info.runningStartText, "");
-                const basis = info.estimateSource
-                  ? `${info.estimateSource}${info.baseText ? ` · ${info.baseText}` : ""}`
-                  : "-";
+                const basis = info.hasStartedBongkar
+                  ? info.estimateSource
+                    ? `${info.estimateSource}${info.baseText ? ` · ${info.baseText}` : ""}`
+                    : "-"
+                  : "Belum mulai bongkar";
                 return `<tr class="hover:bg-primary/5 ${info.outSla ? "bg-error/5" : ""}">
               <td class="px-4 py-3 font-queue-id text-primary whitespace-nowrap">${esc(row.queue_no || "-")}</td>
               <td class="px-4 py-3 font-queue-id whitespace-nowrap ${info.outSla ? "text-error" : "text-tertiary"} live-waiting-cell" data-live-waiting="1" data-created="${esc(info.runningStartText || "")}" data-completed="${esc(runningDone)}" data-status="${esc(status)}">${esc(runningText)}</td>
