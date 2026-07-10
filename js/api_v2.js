@@ -2260,3 +2260,251 @@ async function markDriverCallFailedFromKey(encodedKey = "", btn = null) {
     }
   }
 }
+
+/* ==========================================================================
+ * PATCH: Submit Security per Kendaraan
+ * 1 kendaraan = 1 row Output form. Fleet Type, plat, driver, dan WA diambil dari
+ * card Data Kendaraan, bukan field global.
+ * ========================================================================== */
+
+async function submitSecurity(e) {
+  e.preventDefault();
+
+  if (securitySubmitBusy) {
+    showToast("Submit sedang diproses, tunggu sebentar.");
+    return;
+  }
+
+  const form = e.target;
+  if (typeof syncVehicleMultiInput === "function") syncVehicleMultiInput();
+  else if (typeof syncPlateMultiInput === "function") syncPlateMultiInput();
+
+  if (!validateSecurityForm(form)) return;
+
+  const lookup = lookupPo(true);
+  if (!lookup || !lookup.all_found) {
+    const mismatchText = lookup?.vendor_mismatch?.length
+      ? " PO beda vendor: " +
+        lookup.vendor_mismatch.map((x) => x.po_number || x.po_input).join(", ")
+      : "";
+    const missingText = lookup?.missing_po?.length
+      ? " Missing: " + lookup.missing_po.join(", ")
+      : "";
+    showToast(
+      "Semua PO wajib valid dan sesuai Vendor Name." +
+        mismatchText +
+        missingText,
+    );
+    return;
+  }
+
+  securitySubmitBusy = true;
+  const submitBtn = document.getElementById("security-submit-btn");
+  const submitText = document.getElementById("security-submit-text");
+  if (submitBtn) submitBtn.disabled = true;
+  if (submitText) submitText.textContent = "Menyimpan...";
+
+  try {
+    const base = Object.fromEntries(new FormData(form).entries());
+    const poItems = lookup.items || [];
+
+    if (!poItems.length) {
+      showToast("PO belum valid.");
+      return;
+    }
+
+    const registeredSet = getRegisteredPoSetApi();
+    const duplicatedPo = poItems
+      .map((item) => item.po_number || item.po_input)
+      .filter((po) => registeredSet.has(normalizeKey(po)));
+
+    if (duplicatedPo.length) {
+      showToast(
+        "PO sudah daftar dan tidak bisa didaftarkan lagi: " +
+          duplicatedPo.join(", "),
+      );
+      return;
+    }
+
+    const vehicleList =
+      typeof getSecurityVehicleRows === "function"
+        ? getSecurityVehicleRows()
+        : parseMultiPlateValues(base.plat_number).map((plate, index) => ({
+            index,
+            fleet_type: base.fleet_type,
+            plat_number: plate,
+            driver_name: pickMultiValue(
+              parseMultiInputValues(base.driver_name),
+              index,
+            ),
+            phone_number: pickMultiValue(
+              parseAndNormalizePhones(base.phone_number),
+              index,
+            ),
+            ktp_6_digit: base.ktp_6_digit || "",
+          }));
+
+    if (!vehicleList.length) {
+      showToast("Data kendaraan wajib diisi.");
+      return;
+    }
+
+    const duplicatePlates = vehicleList
+      .map((v) => normalizePlateValue(v.plat_number))
+      .filter((plate, idx, arr) => plate && arr.indexOf(plate) !== idx);
+    if (duplicatePlates.length) {
+      showToast(
+        "Plat duplicate tidak boleh: " +
+          [...new Set(duplicatePlates)].join(", "),
+      );
+      return;
+    }
+
+    for (const vehicle of vehicleList) {
+      if (
+        !vehicle.fleet_type ||
+        !vehicle.plat_number ||
+        !vehicle.driver_name ||
+        !vehicle.phone_number
+      ) {
+        showToast(
+          "Setiap kendaraan wajib isi Fleet Type, Plat, Driver, dan WhatsApp.",
+        );
+        return;
+      }
+      if (!isValidPlate(vehicle.plat_number)) {
+        showToast("Plat belum valid: " + vehicle.plat_number);
+        return;
+      }
+      if (vehicle.ktp_6_digit && !/^\d{6}$/.test(String(vehicle.ktp_6_digit))) {
+        showToast("KTP driver opsional, tapi kalau diisi harus 6 digit angka.");
+        return;
+      }
+    }
+
+    const rows = getLocalTickets();
+    const newRows = [];
+    const registerTime = base.register_time || formatDateTimeLocal(new Date());
+    let queuePool = (state.dashboard?.queue || []).concat(rows);
+    const poGroups = splitPoItemsByPlate(poItems, vehicleList.length);
+
+    vehicleList.forEach((vehicle, index) => {
+      const groupItems = poGroups[index] || poItems;
+      const grouped = sumPoItems(groupItems);
+      const rowSlot =
+        String(base.ticket_type || "").toUpperCase() === "DROP"
+          ? base.slot || grouped.slot || "3"
+          : grouped.slot || base.slot || "3";
+
+      const row = {
+        ...base,
+        ticket_id:
+          "IBT-" +
+          Date.now().toString(36).toUpperCase() +
+          "-" +
+          String(newRows.length + 1).padStart(2, "0"),
+        po_number: grouped.po_number,
+        po_numbers: grouped.po_numbers,
+        vendor_name: base.vendor_name || grouped.vendor_name || "",
+        slot: rowSlot,
+        fleet_type: vehicle.fleet_type,
+        plat_number: normalizePlateValue(vehicle.plat_number),
+        driver_name: vehicle.driver_name,
+        phone_number: vehicle.phone_number,
+        ktp_6_digit: vehicle.ktp_6_digit || "",
+        status: "WAITING",
+        total_po_qty: grouped.total_po_qty,
+        count_po_sku: grouped.count_po_sku,
+        created_at: registerTime,
+        register_time: registerTime,
+        queue_no: nextLocalQueueNoFromList(
+          base.ticket_type,
+          rowSlot,
+          queuePool.concat(newRows),
+        ),
+        gate: "-",
+        unload_sla: "",
+        source: "SECURITY_INPUT",
+      };
+
+      newRows.push(row);
+    });
+
+    const printWindow =
+      typeof openSecurityPrintWindow === "function"
+        ? openSecurityPrintWindow("Menyimpan ticket dan menyiapkan print...")
+        : null;
+
+    rows.unshift(...newRows);
+    saveLocalTickets(rows);
+
+    try {
+      showToast("Menyimpan ticket ke Output form...");
+      const result = await submitSecurityRowsToBackend(newRows);
+      const savedRows =
+        Array.isArray(result?.rows) && result.rows.length
+          ? result.rows
+          : newRows;
+
+      state.lastSecurityRows = savedRows;
+      try {
+        localStorage.setItem(
+          "inbound_cbt_last_print_rows",
+          JSON.stringify(savedRows),
+        );
+      } catch (err) {}
+
+      if (typeof printSecurityTickets === "function") {
+        printSecurityTickets(savedRows, printWindow);
+      }
+
+      upsertOutputRowsToRawResponse(savedRows);
+      state.dashboard = buildDashboardFromV2(v2RawResponse);
+      state.options = state.dashboard.options || state.options;
+
+      showToast(`${newRows.length} kendaraan/antrian masuk Output form`);
+    } catch (err) {
+      console.error(err);
+
+      if (v2RawResponse) {
+        upsertOutputRowsToRawResponse(newRows);
+        state.dashboard = buildDashboardFromV2(v2RawResponse);
+        state.options = state.dashboard.options || state.options;
+      } else {
+        state.dashboard.queue.unshift(...newRows);
+        state.dashboard.report_preview.unshift(...newRows);
+      }
+
+      if (typeof showSecurityPrintError === "function") {
+        showSecurityPrintError(
+          printWindow,
+          "Backend gagal menyimpan ticket: " + err.message,
+        );
+      }
+      showToast("Backend gagal, ticket tersimpan lokal: " + err.message);
+    }
+
+    state.lastCalled =
+      (state.lastSecurityRows && state.lastSecurityRows[0]) || newRows[0];
+    if (!state.lastSecurityRows || !state.lastSecurityRows.length) {
+      state.lastSecurityRows = newRows;
+      try {
+        localStorage.setItem(
+          "inbound_cbt_last_print_rows",
+          JSON.stringify(newRows),
+        );
+      } catch (err) {}
+    }
+
+    const queueEl = document.getElementById("new-queue-number");
+    if (queueEl)
+      queueEl.textContent = state.lastCalled?.queue_no || newRows[0].queue_no;
+    renderPage("checker", false);
+  } finally {
+    securitySubmitBusy = false;
+    const activeBtn = document.getElementById("security-submit-btn");
+    const activeText = document.getElementById("security-submit-text");
+    if (activeBtn) activeBtn.disabled = false;
+    if (activeText) activeText.textContent = "Buat Nomor";
+  }
+}

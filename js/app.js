@@ -5604,3 +5604,530 @@ function checkerTicketCard(row = {}, i = 0) {
     </div>
   </article>`;
 }
+
+/* ==========================================================================
+ * PATCH: Multi Kendaraan Security Input
+ * Requirement: 1 plat = 1 mobil = 1 fleet type = 1 driver = 1 WA = 1 ticket.
+ * Patch sengaja diletakkan di bawah supaya override function lama tanpa ganggu menu lain.
+ * ========================================================================== */
+
+function vehicleFleetOptionsHtml(selected = "") {
+  const safeSelected = normalizeFleetType(selected || getFleetDefaultType());
+  return getFleetTypeOptions()
+    .map((type) => {
+      const value = normalizeFleetType(type);
+      return `<option value="${esc(value)}" ${value === safeSelected ? "selected" : ""}>${esc(getFleetDisplayLabel(value))}</option>`;
+    })
+    .join("");
+}
+
+function vehicleRowInput(vehicle = {}, index = 0) {
+  const plate = splitPlateParts(vehicle.plat_number || "");
+  const fleet = normalizeFleetType(vehicle.fleet_type || getFleetDefaultType());
+  const label = getFleetDisplayLabel(fleet);
+  const img = getFleetImageUrl(fleet);
+  return `<div class="vehicle-row rounded-2xl border border-outline-variant bg-surface-container/40 p-4" data-vehicle-row="${index}">
+    <div class="flex items-center justify-between gap-3 mb-4">
+      <div>
+        <div class="text-[10px] uppercase font-bold text-on-surface-variant tracking-[0.2em]">Kendaraan</div>
+        <div class="font-extrabold text-on-surface">Mobil ${index + 1}</div>
+      </div>
+      <button type="button" onclick="removeVehicleRow(this)" class="thin-tab rounded-lg px-3 py-2 flex items-center gap-1 text-xs font-bold" title="Hapus kendaraan">
+        <span class="material-symbols-outlined text-base">delete</span>Hapus
+      </button>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-[180px_1fr] gap-4 items-start">
+      <div class="rounded-xl border border-outline-variant bg-surface-container-high/60 p-3 flex flex-col items-center justify-center min-h-[150px]">
+        <img data-vehicle-fleet-img="1" src="${esc(img)}" alt="${esc(label)}" class="w-full h-[92px] object-contain" onerror="this.onerror=null;this.src=FLEET_IMAGE_DATA.default;" />
+        <div data-vehicle-fleet-label="1" class="mt-2 text-primary font-extrabold text-center">${esc(label)}</div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <label class="flex flex-col gap-2 md:col-span-2">
+          <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Fleet Type Mobil Ini</span>
+          <select data-vehicle-field="fleet_type" class="form-select" required onchange="syncVehicleMultiInput(); updateVehicleFleetPreview(this);">
+            ${vehicleFleetOptionsHtml(fleet)}
+          </select>
+        </label>
+
+        <div class="md:col-span-2 flex flex-col gap-2">
+          <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Plat Number Mobil Ini</span>
+          <div class="grid grid-cols-[72px_120px_92px] gap-2 items-center max-w-[330px]">
+            <input data-vehicle-plate-part="prefix" class="form-input text-center uppercase" maxlength="2" placeholder="B" value="${esc(plate.prefix)}" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'').slice(0,2); syncVehicleMultiInput();" />
+            <input data-vehicle-plate-part="number" class="form-input text-center" maxlength="4" inputmode="numeric" placeholder="1234" value="${esc(plate.number)}" oninput="this.value=this.value.replace(/\\D/g,'').slice(0,4); syncVehicleMultiInput();" />
+            <input data-vehicle-plate-part="suffix" class="form-input text-center uppercase" maxlength="3" placeholder="XYZ" value="${esc(plate.suffix)}" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'').slice(0,3); syncVehicleMultiInput();" />
+          </div>
+          <div class="text-[11px] text-on-surface-variant">Contoh: <b>B</b> | <b>1234</b> | <b>XYZ</b>. Fleet Type di atas hanya berlaku untuk plat ini.</div>
+        </div>
+
+        <label class="flex flex-col gap-2">
+          <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Driver Mobil Ini</span>
+          <input data-vehicle-field="driver_name" class="form-input" placeholder="Nama driver" value="${esc(vehicle.driver_name || "")}" required oninput="syncVehicleMultiInput()" />
+        </label>
+        <label class="flex flex-col gap-2">
+          <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">WhatsApp Mobil Ini</span>
+          <input data-vehicle-field="phone_number" class="form-input" placeholder="0812xxxx" inputmode="tel" value="${esc(vehicle.phone_number || "")}" required onblur="normalizeVehiclePhoneInput(this)" oninput="syncVehicleMultiInput()" />
+        </label>
+        <label class="flex flex-col gap-2 md:col-span-2">
+          <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">6 Digit No KTP Driver</span>
+          <input data-vehicle-field="ktp_6_digit" class="form-input" placeholder="Optional. Contoh: 123456" maxlength="6" inputmode="numeric" value="${esc(vehicle.ktp_6_digit || "")}" oninput="this.value=this.value.replace(/\\D/g,'').slice(0,6); syncVehicleMultiInput();" />
+        </label>
+      </div>
+    </div>
+  </div>`;
+}
+
+function vehicleMultiInput() {
+  return `<div class="md:col-span-2 flex flex-col gap-3">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div>
+        <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Data Kendaraan</span>
+        <div class="text-[11px] text-on-surface-variant mt-1">1 plat = 1 mobil = 1 fleet type = 1 driver = 1 nomor WA = 1 ticket/antrian.</div>
+      </div>
+      <button type="button" onclick="addVehicleRow()" class="thin-tab rounded-lg px-3 py-2 text-xs font-bold flex items-center gap-1 w-fit">
+        <span class="material-symbols-outlined text-sm">add</span>Tambah Kendaraan
+      </button>
+    </div>
+    <input type="hidden" id="fleet-type-hidden" name="fleet_type" value="${esc(getFleetDefaultType())}" />
+    <input type="hidden" id="plat-number-hidden" name="plat_number" value="" />
+    <input type="hidden" id="driver-name-hidden" name="driver_name" value="" />
+    <input type="hidden" id="phone-number-hidden" name="phone_number" value="" />
+    <input type="hidden" id="ktp-hidden" name="ktp_6_digit" value="" />
+    <div id="vehicle-multi-rows" class="space-y-3">
+      ${vehicleRowInput({}, 0)}
+    </div>
+  </div>`;
+}
+
+function addVehicleRow(vehicle = {}) {
+  const wrap = document.getElementById("vehicle-multi-rows");
+  if (!wrap) return;
+  const holder = document.createElement("div");
+  holder.innerHTML = vehicleRowInput(
+    vehicle,
+    wrap.querySelectorAll(".vehicle-row").length,
+  ).trim();
+  wrap.appendChild(holder.firstElementChild);
+  reindexVehicleRows();
+  syncVehicleMultiInput();
+}
+
+function removeVehicleRow(btn) {
+  const wrap = document.getElementById("vehicle-multi-rows");
+  const row = btn?.closest(".vehicle-row");
+  if (!wrap || !row) return;
+  if (wrap.querySelectorAll(".vehicle-row").length <= 1) {
+    row.querySelectorAll("input").forEach((input) => (input.value = ""));
+    const select = row.querySelector('[data-vehicle-field="fleet_type"]');
+    if (select) select.value = getFleetDefaultType();
+    updateVehicleFleetPreview(select);
+  } else {
+    row.remove();
+  }
+  reindexVehicleRows();
+  syncVehicleMultiInput();
+}
+
+function reindexVehicleRows() {
+  document
+    .querySelectorAll("#vehicle-multi-rows .vehicle-row")
+    .forEach((row, idx) => {
+      row.dataset.vehicleRow = String(idx);
+      const title = row.querySelector(".font-extrabold.text-on-surface");
+      if (title) title.textContent = `Mobil ${idx + 1}`;
+    });
+}
+
+function updateVehicleFleetPreview(selectEl) {
+  const row = selectEl?.closest(".vehicle-row");
+  if (!row) return;
+  const fleet = normalizeFleetType(selectEl.value || getFleetDefaultType());
+  const img = row.querySelector("[data-vehicle-fleet-img]");
+  const labelEl = row.querySelector("[data-vehicle-fleet-label]");
+  const label = getFleetDisplayLabel(fleet);
+  if (img) {
+    img.src = getFleetImageUrl(fleet);
+    img.alt = label;
+  }
+  if (labelEl) labelEl.textContent = label;
+}
+
+function normalizeVehiclePhoneInput(el) {
+  if (!el) return "";
+  const list =
+    typeof parseAndNormalizePhones === "function"
+      ? parseAndNormalizePhones(el.value)
+      : parseMultiValues(el.value);
+  el.value = list[0] || "";
+  el.classList.remove("invalid");
+  syncVehicleMultiInput();
+  return el.value;
+}
+
+function collectVehicleRows() {
+  const rows = [
+    ...document.querySelectorAll("#vehicle-multi-rows .vehicle-row"),
+  ];
+  return rows
+    .map((row, idx) => {
+      const prefix =
+        row.querySelector('[data-vehicle-plate-part="prefix"]')?.value || "";
+      const number =
+        row.querySelector('[data-vehicle-plate-part="number"]')?.value || "";
+      const suffix =
+        row.querySelector('[data-vehicle-plate-part="suffix"]')?.value || "";
+      const rawPhone =
+        row.querySelector('[data-vehicle-field="phone_number"]')?.value || "";
+      const normalizedPhones =
+        typeof parseAndNormalizePhones === "function"
+          ? parseAndNormalizePhones(rawPhone)
+          : parseMultiValues(rawPhone);
+      return {
+        index: idx,
+        fleet_type: normalizeFleetType(
+          row.querySelector('[data-vehicle-field="fleet_type"]')?.value ||
+            getFleetDefaultType(),
+        ),
+        plat_number: buildPlateFromParts(prefix, number, suffix),
+        driver_name: String(
+          row.querySelector('[data-vehicle-field="driver_name"]')?.value || "",
+        ).trim(),
+        phone_number: normalizedPhones[0] || "",
+        ktp_6_digit: String(
+          row.querySelector('[data-vehicle-field="ktp_6_digit"]')?.value || "",
+        ).trim(),
+      };
+    })
+    .filter(
+      (v) =>
+        v.fleet_type ||
+        v.plat_number ||
+        v.driver_name ||
+        v.phone_number ||
+        v.ktp_6_digit,
+    );
+}
+
+function syncVehicleMultiInput() {
+  const vehicles = collectVehicleRows();
+  const fleetHidden = document.getElementById("fleet-type-hidden");
+  const plateHidden = document.getElementById("plat-number-hidden");
+  const driverHidden = document.getElementById("driver-name-hidden");
+  const phoneHidden = document.getElementById("phone-number-hidden");
+  const ktpHidden = document.getElementById("ktp-hidden");
+  if (fleetHidden)
+    fleetHidden.value = vehicles
+      .map((v) => v.fleet_type)
+      .filter(Boolean)
+      .join(", ");
+  if (plateHidden)
+    plateHidden.value = vehicles
+      .map((v) => v.plat_number)
+      .filter(Boolean)
+      .join(", ");
+  if (driverHidden)
+    driverHidden.value = vehicles
+      .map((v) => v.driver_name)
+      .filter(Boolean)
+      .join(", ");
+  if (phoneHidden)
+    phoneHidden.value = vehicles
+      .map((v) => v.phone_number)
+      .filter(Boolean)
+      .join(", ");
+  if (ktpHidden)
+    ktpHidden.value = vehicles
+      .map((v) => v.ktp_6_digit)
+      .filter(Boolean)
+      .join(", ");
+  return vehicles;
+}
+
+function validateVehicleRows() {
+  const rows = [
+    ...document.querySelectorAll("#vehicle-multi-rows .vehicle-row"),
+  ];
+  if (!rows.length) return false;
+
+  let ok = true;
+  const plateSet = new Set();
+  const vehicles = collectVehicleRows();
+
+  rows.forEach((row) => {
+    const fleetEl = row.querySelector('[data-vehicle-field="fleet_type"]');
+    const driverEl = row.querySelector('[data-vehicle-field="driver_name"]');
+    const phoneEl = row.querySelector('[data-vehicle-field="phone_number"]');
+    const ktpEl = row.querySelector('[data-vehicle-field="ktp_6_digit"]');
+    const prefixEl = row.querySelector('[data-vehicle-plate-part="prefix"]');
+    const numberEl = row.querySelector('[data-vehicle-plate-part="number"]');
+    const suffixEl = row.querySelector('[data-vehicle-plate-part="suffix"]');
+    const plate = buildPlateFromParts(
+      prefixEl?.value,
+      numberEl?.value,
+      suffixEl?.value,
+    );
+    const phone =
+      typeof parseAndNormalizePhones === "function"
+        ? parseAndNormalizePhones(phoneEl?.value || "")[0] || ""
+        : String(phoneEl?.value || "").trim();
+    const ktp = String(ktpEl?.value || "").trim();
+
+    const fleetOk = !!String(fleetEl?.value || "").trim();
+    const plateOk = isValidPlate(plate) && !plateSet.has(plate);
+    const driverOk = !!String(driverEl?.value || "").trim();
+    const phoneOk = !!phone;
+    const ktpOk = !ktp || /^\d{6}$/.test(ktp);
+
+    if (plate) plateSet.add(plate);
+    if (fleetEl) fleetEl.classList.toggle("invalid", !fleetOk);
+    [prefixEl, numberEl, suffixEl].forEach((el) =>
+      el?.classList.toggle("invalid", !plateOk),
+    );
+    if (driverEl) driverEl.classList.toggle("invalid", !driverOk);
+    if (phoneEl) phoneEl.classList.toggle("invalid", !phoneOk);
+    if (ktpEl) ktpEl.classList.toggle("invalid", !ktpOk);
+
+    if (!fleetOk || !plateOk || !driverOk || !phoneOk || !ktpOk) ok = false;
+  });
+
+  if (!vehicles.length) ok = false;
+  syncVehicleMultiInput();
+  return ok;
+}
+
+function getSecurityVehicleRows() {
+  if (typeof syncVehicleMultiInput === "function")
+    return syncVehicleMultiInput();
+  return [];
+}
+
+function pageDaftar() {
+  const lookup = state.poLookup;
+  const nowText = formatDateTimeLocal(new Date());
+  return `<div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
+    <div class="lg:col-span-2 glass-card rounded-xl p-6">
+      <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-6">
+        <div>
+          <h3 class="font-headline-md text-headline-md mb-1">Security Input</h3>
+          <p class="text-on-surface-variant">Pilih Vendor dan PO, lalu isi Data Kendaraan. Setiap plat punya Fleet Type, Driver, dan WhatsApp masing-masing.</p>
+        </div>
+        <div class="thin-tab rounded-lg px-4 py-2 font-label-sm flex items-center gap-2 w-fit opacity-80">
+          <span class="material-symbols-outlined">sync</span>Auto lookup PO
+        </div>
+      </div>
+      <form id="security-form" onsubmit="submitSecurity(event)">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          ${vendorCustomSelectInput(lookup?.summary?.vendor_name || "")}
+          ${poMultiSelectInput(lookup?.summary?.po_number || "")}
+          ${selectInput("ticket_type", "Tipe Tiket", ["REG", "VIP", "DROP"], "REG", 'required onchange="handleTicketTypeChange()"')}
+          ${selectInput("slot", "Slot", buildSlotOptions(lookup?.summary?.slot), lookup?.summary?.slot || "3", "required")}
+          ${vehicleMultiInput()}
+          <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Register Time</span><input name="register_time" class="form-input opacity-80" value="${esc(nowText)}" readonly /></label>
+          <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Status Security</span><input type="hidden" name="status" value="WAITING" /><div class="bg-tertiary/15 border border-tertiary/30 rounded-lg px-4 py-3 text-tertiary font-bold">WAITING</div></label>
+          <label class="flex flex-col gap-2 md:col-span-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Auto Summary</span><div class="grid grid-cols-2 gap-2">
+            <div class="bg-surface-container/60 border border-outline-variant rounded-lg p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Total PO Qty</div><div id="security-total-qty" class="font-queue-id text-primary">${num(lookup?.summary?.total_po_qty || 0)}</div></div>
+            <div class="bg-surface-container/60 border border-outline-variant rounded-lg p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Count SKU</div><div id="security-count-sku" class="font-queue-id text-primary">${num(lookup?.summary?.count_po_sku || 0)}</div></div>
+          </div></label>
+        </div>
+        ${renderPoLookupSummary(lookup)}
+        <p class="form-help mt-3"><b>Logic baru:</b> 1 plat = 1 mobil = 1 fleet type = 1 ticket/antrian. Jika input banyak kendaraan, PO akan dibagi berurutan per kendaraan.</p>
+        ${datalists()}
+        <div class="mt-6 flex flex-col sm:flex-row gap-3">
+          <button id="security-submit-btn" class="bg-primary-container text-on-primary-container px-6 py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed" type="submit"><span class="material-symbols-outlined">confirmation_number</span><span id="security-submit-text">Buat Nomor</span></button>
+          <button type="button" onclick="printSecurityTickets()" class="thin-tab rounded-lg px-6 py-3 font-bold flex items-center justify-center gap-2"><span class="material-symbols-outlined">print</span>Print Nomor / QR</button>
+        </div>
+      </form>
+    </div>
+    <div class="glass-card rounded-xl p-6 flex flex-col justify-center items-center text-center">
+      <span class="text-on-surface-variant uppercase font-label-sm">Nomor Terakhir</span>
+      <div id="new-queue-number" class="font-queue-id text-[64px] md:text-[78px] leading-none text-primary my-6">${esc(state.lastCalled.queue_no || "REG 3-0")}</div>
+      <p class="text-on-surface-variant">Format: REG 3-12 = reguler slot 3 urutan 12. Banyak kendaraan akan membuat banyak nomor antrian.</p>
+    </div>
+  </div>`;
+}
+
+function validateSecurityForm(form) {
+  if (typeof syncVehicleMultiInput === "function") syncVehicleMultiInput();
+  const requiredOk = validateRequiredFields(form);
+  const vehicleOk =
+    typeof validateVehicleRows === "function"
+      ? validateVehicleRows()
+      : validatePlateMultiInput(
+          form.plat_number || document.getElementById("plat-number-hidden"),
+        );
+
+  if (!requiredOk) {
+    showToast("Field wajib belum lengkap.");
+    return false;
+  }
+  if (!vehicleOk) {
+    showToast(
+      "Data kendaraan wajib lengkap: fleet type, plat valid, driver, dan nomor WhatsApp. Plat tidak boleh duplicate.",
+    );
+    return false;
+  }
+  return true;
+}
+
+function buildSecurityPreviewRowsForPrint() {
+  const form = document.getElementById("security-form");
+  if (!form) return [];
+  if (typeof syncVehicleMultiInput === "function") syncVehicleMultiInput();
+  if (!validateSecurityForm(form)) return [];
+
+  const lookup = lookupPo(true);
+  if (!lookup || !lookup.all_found) {
+    showToast("PO wajib valid dan sesuai Vendor Name sebelum print.");
+    return [];
+  }
+
+  const base = Object.fromEntries(new FormData(form).entries());
+  const vehicles = getSecurityVehicleRows();
+  const poItems = lookup.items || [];
+  const registeredSet =
+    typeof getRegisteredPoSetApi === "function"
+      ? getRegisteredPoSetApi()
+      : getRegisteredPoSet();
+  const duplicatedPo = poItems
+    .map((item) => item.po_number || item.po_input)
+    .filter((po) => registeredSet.has(normalizeKey(po)));
+
+  if (duplicatedPo.length) {
+    showToast(
+      "PO sudah daftar dan tidak bisa diprint ulang: " +
+        duplicatedPo.join(", "),
+    );
+    return [];
+  }
+  if (!vehicles.length) {
+    showToast("Data kendaraan wajib diisi sebelum print.");
+    return [];
+  }
+
+  const poGroups =
+    typeof splitPoItemsByPlate === "function"
+      ? splitPoItemsByPlate(poItems, vehicles.length)
+      : [poItems];
+  const queuePool = (state.dashboard?.queue || []).concat(
+    getLocalTickets?.() || [],
+  );
+  const registerTime = base.register_time || formatDateTimeLocal(new Date());
+  const rows = [];
+
+  vehicles.forEach((vehicle, index) => {
+    const groupItems = poGroups[index] || poItems;
+    const grouped =
+      typeof sumPoItems === "function"
+        ? sumPoItems(groupItems)
+        : {
+            po_number: groupItems.map((x) => x.po_number).join(", "),
+            po_numbers: groupItems.map((x) => x.po_number),
+            vendor_name: groupItems[0]?.vendor_name || base.vendor_name || "",
+            total_po_qty: groupItems.reduce(
+              (sum, x) => sum + toNumberV2(x.total_po_qty),
+              0,
+            ),
+            count_po_sku: groupItems.reduce(
+              (sum, x) => sum + toNumberV2(x.count_po_sku),
+              0,
+            ),
+            slot: String(groupItems[0]?.slot || "3"),
+          };
+    const rowSlot =
+      String(base.ticket_type || "").toUpperCase() === "DROP"
+        ? base.slot || grouped.slot || "3"
+        : grouped.slot || base.slot || "3";
+    const row = {
+      ...base,
+      ticket_id:
+        "IBT-PREVIEW-" +
+        Date.now().toString(36).toUpperCase() +
+        "-" +
+        String(index + 1).padStart(2, "0"),
+      po_number: grouped.po_number,
+      po_numbers: grouped.po_numbers,
+      vendor_name: base.vendor_name || grouped.vendor_name || "",
+      slot: rowSlot,
+      fleet_type: vehicle.fleet_type,
+      plat_number: vehicle.plat_number,
+      driver_name: vehicle.driver_name,
+      phone_number: vehicle.phone_number,
+      ktp_6_digit: vehicle.ktp_6_digit || "",
+      status: "WAITING",
+      total_po_qty: grouped.total_po_qty,
+      count_po_sku: grouped.count_po_sku,
+      created_at: registerTime,
+      register_time: registerTime,
+      queue_no: nextLocalQueueNoFromList(
+        base.ticket_type,
+        rowSlot,
+        queuePool.concat(rows),
+      ),
+      gate: "-",
+      unload_sla: "",
+      source: "SECURITY_PRINT_PREVIEW",
+    };
+    rows.push(row);
+  });
+
+  return rows;
+}
+
+function securityFormPrintSignatureFromForm() {
+  const form = document.getElementById("security-form");
+  if (!form) return null;
+  const vehicles = getSecurityVehicleRows();
+  const fd = new FormData(form);
+  return {
+    vendor_name: normalizeKey(fd.get("vendor_name") || ""),
+    po_number: parsePoInputText(fd.get("po_number") || "")
+      .map(normalizeKey)
+      .sort()
+      .join("|"),
+    vehicle: vehicles
+      .map((v) =>
+        [
+          normalizeKey(v.fleet_type),
+          normalizeKey(v.plat_number),
+          normalizeKey(v.driver_name),
+          normalizeKey(v.phone_number),
+        ].join(":"),
+      )
+      .sort()
+      .join("|"),
+  };
+}
+
+function securityFormPrintSignatureFromRows(rows = []) {
+  return {
+    vendor_name: normalizeKey(rows[0]?.vendor_name || ""),
+    po_number: rows
+      .flatMap((row) => parsePoInputText(row.po_number || ""))
+      .map(normalizeKey)
+      .sort()
+      .join("|"),
+    vehicle: rows
+      .map((row) =>
+        [
+          normalizeKey(row.fleet_type || ""),
+          normalizeKey(row.plat_number || ""),
+          normalizeKey(row.driver_name || ""),
+          normalizeKey(row.phone_number || ""),
+        ].join(":"),
+      )
+      .sort()
+      .join("|"),
+  };
+}
+
+function securityFormMatchesRowsForPrint(rows = []) {
+  const formSig = securityFormPrintSignatureFromForm();
+  if (!formSig || !rows.length) return false;
+  const rowSig = securityFormPrintSignatureFromRows(rows);
+  return (
+    formSig.vendor_name === rowSig.vendor_name &&
+    formSig.po_number === rowSig.po_number &&
+    formSig.vehicle === rowSig.vehicle
+  );
+}
