@@ -860,10 +860,18 @@ function buildSecurityPreviewRowsForPrint() {
 
   const plateList = parseMultiPlateValues(base.plat_number);
   const driverList = parseMultiInputValues(base.driver_name);
-  const phoneList = parseMultiInputValues(base.phone_number);
+  const phoneList = parseAndNormalizePhones(base.phone_number);
+  base.phone_number = phoneList.join(", ");
 
   if (!plateList.length || !driverList.length || !phoneList.length) {
     showToast("Plat, driver, dan phone wajib lengkap sebelum print.");
+    return [];
+  }
+
+  if (phoneList.length > 1 && phoneList.length !== plateList.length) {
+    showToast(
+      "Jumlah nomor WhatsApp harus sama dengan jumlah plat, atau isi 1 nomor saja untuk semua plat.",
+    );
     return [];
   }
 
@@ -1203,7 +1211,7 @@ function pageDaftar() {
           ${plateMultiInput()}
           ${textInput("driver_name", "Driver's Name", "Nama driver", "", "", "required")}
           ${textInput("ktp_6_digit", "6 Digit No KTP", "Optional. Contoh: 123456", "", "", 'maxlength="6" inputmode="numeric" pattern="[0-9]{6}" oninput="this.value=this.value.replace(/\\D/g, \'\').slice(0,6)"')}
-          ${textareaInput("phone_number", "Phone Number", "08xxxxxxxxxx, 08xxxxxxxxxx / pisah baris juga bisa", "", 'required inputmode="tel"')}
+          ${textareaInput("phone_number", "Phone Number", "0812xxxx atau 62812xxxx. Multiple: pisahkan koma / baris", "", 'required inputmode="tel" onblur="normalizePhoneFieldOnBlur(this)"')}
           <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Register Time</span><input name="register_time" class="form-input opacity-80" value="${esc(nowText)}" readonly /></label>
           <label class="flex flex-col gap-2">
             <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Status Security</span>

@@ -1224,6 +1224,55 @@ function parseMultiInputValues(value) {
     .filter(Boolean);
 }
 
+function normalizeIndoPhone(value = "") {
+  let phone = String(value || "").trim();
+  phone = phone.replace(/[^\d]/g, "");
+
+  if (!phone) return "";
+
+  // 0812xxxx -> 62812xxxx
+  if (phone.startsWith("0")) {
+    phone = "62" + phone.slice(1);
+  }
+
+  // 812xxxx -> 62812xxxx
+  if (phone.startsWith("8")) {
+    phone = "62" + phone;
+  }
+
+  // Kalau sudah 62, biarin. Selain itu dianggap invalid.
+  if (!phone.startsWith("62")) return "";
+
+  // Validasi kasar nomor Indonesia/WA.
+  if (phone.length < 10 || phone.length > 16) return "";
+
+  return phone;
+}
+
+function parseAndNormalizePhones(value = "") {
+  const seen = new Set();
+  return String(value || "")
+    .split(/[,;\n|]+/)
+    .map(normalizeIndoPhone)
+    .filter((phone) => {
+      if (!phone || seen.has(phone)) return false;
+      seen.add(phone);
+      return true;
+    });
+}
+
+function normalizePhoneInputValue(value = "") {
+  return parseAndNormalizePhones(value).join(", ");
+}
+
+function normalizePhoneFieldOnBlur(el) {
+  if (!el) return "";
+  const normalized = normalizePhoneInputValue(el.value);
+  el.value = normalized;
+  el.classList.toggle("invalid", !normalized);
+  return normalized;
+}
+
 function parseMultiPlateValues(value) {
   return parseMultiInputValues(value).map(normalizePlateValue).filter(Boolean);
 }
@@ -1361,7 +1410,8 @@ async function submitSecurity(e) {
 
     const plateList = parseMultiPlateValues(base.plat_number);
     const driverList = parseMultiInputValues(base.driver_name);
-    const phoneList = parseMultiInputValues(base.phone_number);
+    const phoneList = parseAndNormalizePhones(base.phone_number);
+    base.phone_number = phoneList.join(", ");
 
     if (!plateList.length) {
       showToast("Plat number wajib diisi.");
@@ -1372,7 +1422,16 @@ async function submitSecurity(e) {
       return;
     }
     if (!phoneList.length) {
-      showToast("Phone number wajib diisi.");
+      showToast(
+        "Phone number wajib diisi dan harus nomor WhatsApp Indonesia. Contoh: 081287402496",
+      );
+      return;
+    }
+
+    if (phoneList.length > 1 && phoneList.length !== plateList.length) {
+      showToast(
+        "Jumlah nomor WhatsApp harus sama dengan jumlah plat, atau isi 1 nomor saja untuk semua plat.",
+      );
       return;
     }
 
@@ -1778,9 +1837,9 @@ async function sendDriverWhatsAppFromKey(encodedKey = "", btn = null) {
     return;
   }
 
-  const phone = String(row.phone_number || "").trim();
+  const phone = normalizePhoneInputValue(row.phone_number || "");
   if (!phone) {
-    showToast("Nomor WhatsApp driver kosong.");
+    showToast("Nomor WhatsApp driver kosong / format tidak valid.");
     return;
   }
 
