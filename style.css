@@ -159,7 +159,6 @@ body {
   line-height: 14px;
   color: rgb(var(--on-surface-variant));
 }
-
 .form-input,
 .form-select {
   color: rgb(var(--on-surface)) !important;
@@ -191,4 +190,195 @@ body {
   color: rgb(var(--on-secondary-container));
   border-color: rgb(var(--secondary-container));
   font-weight: 800;
+}
+
+/* ==========================================================================
+   SPV DASHBOARD + GLOBAL SEARCH + TICKET DETAIL + MANUAL ENTRY PATCH
+   ========================================================================== */
+.spv-card {
+  background: rgb(var(--surface-container-low) / 0.82);
+  border: 1px solid rgb(var(--outline-variant) / 0.62);
+  border-radius: 18px;
+}
+.spv-kpi {
+  padding: 18px;
+  min-height: 126px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.spv-kpi-value {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 800;
+}
+.spv-chart {
+  min-height: 280px;
+  overflow: auto;
+}
+.spv-bars {
+  display: grid;
+  gap: 11px;
+}
+.spv-bar-row {
+  display: grid;
+  grid-template-columns: minmax(90px, 150px) 1fr auto;
+  gap: 10px;
+  align-items: center;
+}
+.spv-bar-track {
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgb(var(--surface-container-highest) / 0.48);
+}
+.spv-bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    rgb(var(--primary-container)),
+    rgb(var(--secondary))
+  );
+}
+.spv-heatmap {
+  display: grid;
+  grid-template-columns: repeat(24, minmax(38px, 1fr));
+  gap: 7px;
+  min-width: 1050px;
+}
+.spv-heat-cell {
+  min-height: 72px;
+  border-radius: 10px;
+  border: 1px solid rgb(var(--outline-variant) / 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+}
+.spv-table-wrap {
+  overflow: auto;
+  border: 1px solid rgb(var(--outline-variant) / 0.5);
+  border-radius: 14px;
+}
+.spv-table {
+  width: 100%;
+  min-width: 840px;
+  border-collapse: collapse;
+}
+.spv-table th,
+.spv-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid rgb(var(--outline-variant) / 0.45);
+}
+.spv-table th {
+  position: sticky;
+  top: 0;
+  background: rgb(var(--surface-container));
+  z-index: 1;
+}
+.global-search-wrap {
+  position: relative;
+  min-width: 240px;
+}
+.global-search-results {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: min(520px, 92vw);
+  max-height: 420px;
+  overflow: auto;
+  border-radius: 14px;
+  border: 1px solid rgb(var(--outline-variant));
+  background: rgb(var(--surface-container-lowest));
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+  padding: 8px;
+  z-index: 80;
+}
+.global-search-item {
+  width: 100%;
+  text-align: left;
+  padding: 12px;
+  border-radius: 10px;
+}
+.global-search-item:hover {
+  background: rgb(var(--surface-container-high));
+}
+.ticket-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(0, 0, 0, 0.68);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+}
+.ticket-modal {
+  width: min(920px, 98vw);
+  max-height: 92vh;
+  overflow: auto;
+  background: rgb(var(--surface-container-lowest));
+  border: 1px solid rgb(var(--outline-variant));
+  border-radius: 20px;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.4);
+}
+.ticket-timeline {
+  position: relative;
+  display: grid;
+  gap: 14px;
+}
+.ticket-timeline::before {
+  content: "";
+  position: absolute;
+  left: 15px;
+  top: 12px;
+  bottom: 12px;
+  width: 2px;
+  background: rgb(var(--outline-variant));
+}
+.ticket-event {
+  position: relative;
+  padding-left: 44px;
+}
+.ticket-event::before {
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 5px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: rgb(var(--primary-container));
+  border: 3px solid rgb(var(--surface-container-lowest));
+  box-shadow: 0 0 0 1px rgb(var(--primary));
+}
+.manual-entry-box {
+  border: 1px dashed rgb(var(--warning) / 0.75);
+  background: rgb(var(--warning) / 0.08);
+  border-radius: 14px;
+  padding: 16px;
+}
+.manual-entry-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  background: rgb(var(--warning) / 0.14);
+  color: rgb(var(--warning));
+}
+@media (max-width: 900px) {
+  .global-search-wrap {
+    min-width: 0;
+  }
+  .spv-heatmap {
+    grid-template-columns: repeat(12, minmax(45px, 1fr));
+    min-width: 650px;
+  }
 }

@@ -2508,3 +2508,177 @@ async function submitSecurity(e) {
     if (activeText) activeText.textContent = "Buat Nomor";
   }
 }
+
+/* ==========================================================================
+ * OPERATIONAL DAY + HISTORY ANALYTICS + MANUAL SOURCE PATCH
+ * Operational Date berganti setiap jam 07:00 WIB.
+ * Contoh:
+ * 13 Jul 07:00 s/d 14 Jul 06:59 = Operational Date 13 Jul.
+ * ========================================================================== */
+(function inboundOperationalDatePatch() {
+  window.getOperationalDateKey = function getOperationalDateKey(
+    value = new Date(),
+  ) {
+    let d;
+    if (value instanceof Date) d = new Date(value);
+    else if (typeof parseDateFlexible === "function")
+      d = parseDateFlexible(value);
+    else d = new Date(value);
+    if (!d || isNaN(d.getTime())) d = new Date();
+    if (d.getHours() < 7) d.setDate(d.getDate() - 1);
+    return [
+      d.getFullYear(),
+      String(d.getMonth() + 1).padStart(2, "0"),
+      String(d.getDate()).padStart(2, "0"),
+    ].join("-");
+  };
+
+  window.getRowOperationalDateKey = function getRowOperationalDateKey(
+    row = {},
+  ) {
+    const direct = String(
+      row.operational_date || row.raw?.operational_date || "",
+    ).trim();
+    if (direct) {
+      const m = direct.match(/(\d{4})-(\d{2})-(\d{2})/);
+      if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+      const dmy = direct.match(/(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/);
+      if (dmy)
+        return `${dmy[3]}-${String(dmy[2]).padStart(2, "0")}-${String(dmy[1]).padStart(2, "0")}`;
+    }
+    return getOperationalDateKey(
+      row.register_time || row.created_at || row.Timestamp || new Date(),
+    );
+  };
+
+  const originalSubmitRows =
+    typeof submitSecurityRowsToBackend === "function"
+      ? submitSecurityRowsToBackend
+      : null;
+
+  if (originalSubmitRows) {
+    window.submitSecurityRowsToBackend = function patchedSubmitSecurityRows(
+      rows = [],
+    ) {
+      const manual =
+        typeof getManualSecurityEntry === "function"
+          ? getManualSecurityEntry()
+          : null;
+      const next = (rows || []).map((row) => ({
+        ...row,
+        operational_date:
+          row.operational_date ||
+          getOperationalDateKey(
+            row.register_time || row.created_at || new Date(),
+          ),
+        data_source: row.data_source || (manual?.valid ? "MANUAL" : "BACKEND"),
+      }));
+      return originalSubmitRows(next);
+    };
+  }
+
+  const originalBuildDashboard =
+    typeof buildDashboardFromV2 === "function" ? buildDashboardFromV2 : null;
+
+  if (originalBuildDashboard) {
+    window.buildDashboardFromV2 = function patchedBuildDashboard(response) {
+      const allOutputRows = getOutputFormRows(response);
+      const currentOp = getOperationalDateKey(new Date());
+
+      // Operasional: tampilkan data current operational date.
+      // Carry-over aktif dari hari sebelumnya tetap terlihat sampai selesai,
+      // tetapi completed/expired lama tidak ikut memenuhi monitoring.
+      const operationalRows = allOutputRows.filter((row) => {
+        const op = getRowOperationalDateKey(row);
+        const st = String(row.status || "WAITING").toUpperCase();
+        const active = !st.includes("COMPLETED") && !st.includes("EXPIRED");
+        return op === currentOp || active;
+      });
+
+      const cloned = {
+        ...(response || {}),
+        outputForm: operationalRows,
+        output_form: operationalRows,
+        data: response?.data
+          ? {
+              ...response.data,
+              outputForm: operationalRows,
+              output_form: operationalRows,
+            }
+          : response?.data,
+      };
+
+      const dashboard = originalBuildDashboard(cloned);
+
+      // History tetap disimpan untuk Dashboard SPV, search global, dan detail popup.
+      const allQueue = buildQueueFromOutputForm(allOutputRows).map((row) => ({
+        ...row,
+        operational_date: getRowOperationalDateKey(row),
+        data_source:
+          row.data_source ||
+          row.raw?.data_source ||
+          (String(row.source || "")
+            .toUpperCase()
+            .includes("MANUAL")
+            ? "MANUAL"
+            : "BACKEND"),
+      }));
+
+      dashboard.history_queue = allQueue;
+      dashboard.all_queue = allQueue;
+      dashboard.operational_date = currentOp;
+      dashboard.raw = {
+        ...(dashboard.raw || {}),
+        outputFormAll: allOutputRows,
+        outputFormOperational: operationalRows,
+      };
+
+      dashboard.queue = (dashboard.queue || []).map((row) => ({
+        ...row,
+        operational_date: getRowOperationalDateKey(row),
+        data_source:
+          row.data_source ||
+          row.raw?.data_source ||
+          (String(row.source || "")
+            .toUpperCase()
+            .includes("MANUAL")
+            ? "MANUAL"
+            : "BACKEND"),
+      }));
+      dashboard.report_preview = dashboard.queue;
+
+      return dashboard;
+    };
+  }
+
+  // Duplicate PO hanya berlaku dalam operational date yang sama.
+  window.getRegisteredPoSetApi = function getRegisteredPoSetApiOperational() {
+    const set = new Set();
+    const currentOp = getOperationalDateKey(new Date());
+    const rows =
+      state.dashboard?.history_queue ||
+      state.dashboard?.all_queue ||
+      state.dashboard?.queue ||
+      [];
+
+    rows.forEach((row) => {
+      const st = String(row.status || "").toUpperCase();
+      if (st.includes("EXPIRED")) return;
+      if (getRowOperationalDateKey(row) !== currentOp) return;
+
+      const rawValues = [];
+      if (Array.isArray(row.po_numbers)) rawValues.push(...row.po_numbers);
+      if (row.po_number) rawValues.push(row.po_number);
+      if (row.raw?.po_number) rawValues.push(row.raw.po_number);
+
+      rawValues.forEach((value) => {
+        parsePoNumbers(value).forEach((po) => {
+          const key = normalizeKey(po);
+          if (key) set.add(key);
+        });
+      });
+    });
+
+    return set;
+  };
+})();

@@ -6131,3 +6131,817 @@ function securityFormMatchesRowsForPrint(rows = []) {
     formSig.vehicle === rowSig.vehicle
   );
 }
+
+/* ==========================================================================
+ * PATCH ISOLATED:
+ * - Dashboard SPV khusus role SPV
+ * - Global Search
+ * - Ticket Detail Popup + Activity Timeline
+ * - Manual PO/Vendor Entry UI
+ * - Tidak mengubah logic Checker/WA/QR/Gate lama
+ * ========================================================================== */
+(function inboundSpvFeaturePatch() {
+  const SPV_PAGE = "spv_dashboard";
+  window.manualSecurityEntryEnabled = false;
+
+  if (typeof pageMeta === "object") {
+    pageMeta[SPV_PAGE] = {
+      title: "Dashboard SPV",
+      subtitle: "Overview, gate utilization, jam sibuk, dan performa vendor",
+    };
+  }
+  if (typeof ROLE_ACCESS === "object" && Array.isArray(ROLE_ACCESS.SPV)) {
+    if (!ROLE_ACCESS.SPV.includes(SPV_PAGE)) ROLE_ACCESS.SPV.unshift(SPV_PAGE);
+  }
+  if (typeof ROLE_DEFAULT_PAGE === "object") {
+    ROLE_DEFAULT_PAGE.SPV = SPV_PAGE;
+  }
+
+  function opDateKeyLocal(value = new Date()) {
+    const d =
+      value instanceof Date ? new Date(value) : parseDateFlexible(value);
+    if (!d || isNaN(d.getTime())) return "";
+    if (d.getHours() < 7) d.setDate(d.getDate() - 1);
+    return [
+      d.getFullYear(),
+      String(d.getMonth() + 1).padStart(2, "0"),
+      String(d.getDate()).padStart(2, "0"),
+    ].join("-");
+  }
+
+  function rowOpDate(row = {}) {
+    return String(
+      row.operational_date ||
+        row.raw?.operational_date ||
+        opDateKeyLocal(row.register_time || row.created_at || row.Timestamp),
+    ).slice(0, 10);
+  }
+
+  function historyRows() {
+    return (
+      state.dashboard?.history_queue ||
+      state.dashboard?.all_queue ||
+      state.dashboard?.queue ||
+      []
+    );
+  }
+
+  function filterSpvRows(range = "today") {
+    const rows = historyRows();
+    const now = new Date();
+    const current = opDateKeyLocal(now);
+    if (range === "all") return rows;
+    if (range === "today") return rows.filter((r) => rowOpDate(r) === current);
+
+    const days = Number(range || 7);
+    const start = new Date(now);
+    start.setHours(7, 0, 0, 0);
+    start.setDate(start.getDate() - Math.max(0, days - 1));
+    return rows.filter((r) => {
+      const d = parseDateFlexible(
+        r.register_time || r.created_at || r.Timestamp,
+      );
+      return d && d >= start && d <= now;
+    });
+  }
+
+  function average(values = []) {
+    const nums = values.map(Number).filter((x) => Number.isFinite(x) && x >= 0);
+    return nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : 0;
+  }
+
+  function statusOf(row) {
+    return String(row.status || "WAITING")
+      .trim()
+      .toUpperCase();
+  }
+
+  function durationMinutes(row, key, fallbackFn) {
+    const direct = Number(row[key] ?? row.raw?.[key]);
+    if (Number.isFinite(direct) && direct >= 0) return direct;
+    return typeof fallbackFn === "function" ? fallbackFn(row) : 0;
+  }
+
+  function getSpvStats(rows = []) {
+    const counts = {
+      total: rows.length,
+      waiting: 0,
+      called: 0,
+      unloading: 0,
+      completed: 0,
+      expired: 0,
+      slaMiss: 0,
+    };
+    const waitVals = [];
+    const unloadVals = [];
+    const activeGates = new Set();
+
+    rows.forEach((row) => {
+      const st = statusOf(row);
+      if (st.includes("EXPIRED")) counts.expired++;
+      else if (st.includes("COMPLETED")) counts.completed++;
+      else if (st.includes("UNLOADING")) counts.unloading++;
+      else if (st.includes("CALLED")) counts.called++;
+      else counts.waiting++;
+
+      if (
+        String(row.sla_status || row.unload_sla || "")
+          .toUpperCase()
+          .includes("MISS")
+      ) {
+        counts.slaMiss++;
+      }
+
+      const waitMin = durationMinutes(row, "driver_waiting_minutes", (x) =>
+        minutesBetweenValues(
+          x.register_time || x.created_at,
+          x.called_at || (st.includes("WAITING") ? new Date() : x.updated_at),
+        ),
+      );
+      if (waitMin >= 0) waitVals.push(waitMin);
+
+      const unloadMin = durationMinutes(
+        row,
+        "unloading_duration_minutes",
+        (x) =>
+          minutesBetweenValues(
+            x.start_unloading_at,
+            x.completed_at || (st.includes("UNLOADING") ? new Date() : ""),
+          ),
+      );
+      if (unloadMin > 0) unloadVals.push(unloadMin);
+
+      if (st.includes("CALLED") || st.includes("UNLOADING")) {
+        parseGateList(row.gate || "").forEach((g) => activeGates.add(g));
+      }
+    });
+
+    return {
+      ...counts,
+      avgWaiting: average(waitVals),
+      avgUnloading: average(unloadVals),
+      activeGates: activeGates.size,
+    };
+  }
+
+  function kpiHtml(label, value, note, icon, cls = "text-primary") {
+    return `<div class="spv-card spv-kpi">
+      <div class="flex items-center justify-between gap-3">
+        <span class="text-[11px] uppercase tracking-wider font-bold text-on-surface-variant">${esc(label)}</span>
+        <span class="material-symbols-outlined ${cls}">${icon}</span>
+      </div>
+      <div class="spv-kpi-value ${cls}">${esc(value)}</div>
+      <div class="text-xs text-on-surface-variant">${esc(note || "")}</div>
+    </div>`;
+  }
+
+  function gateUtilizationData(rows = []) {
+    const map = {};
+    (state.options?.gate || []).forEach((g) => {
+      map[g] = { gate: g, tickets: 0, unloadMinutes: 0 };
+    });
+
+    rows.forEach((row) => {
+      const mins = durationMinutes(row, "unloading_duration_minutes", () => 0);
+      parseGateList(row.gate || "").forEach((gate) => {
+        if (!map[gate]) map[gate] = { gate, tickets: 0, unloadMinutes: 0 };
+        map[gate].tickets += 1;
+        map[gate].unloadMinutes += Math.max(0, mins);
+      });
+    });
+
+    return Object.values(map).sort((a, b) => b.unloadMinutes - a.unloadMinutes);
+  }
+
+  function heatmapData(rows = []) {
+    const hours = Array.from({ length: 24 }, (_, hour) => ({ hour, count: 0 }));
+    rows.forEach((row) => {
+      const d = parseDateFlexible(row.register_time || row.created_at);
+      if (d) hours[d.getHours()].count += 1;
+    });
+    return hours;
+  }
+
+  function vendorPerformance(rows = []) {
+    const map = {};
+    rows.forEach((row) => {
+      const vendor =
+        String(row.vendor_name || "TANPA VENDOR").trim() || "TANPA VENDOR";
+      if (!map[vendor]) {
+        map[vendor] = {
+          vendor,
+          tickets: 0,
+          completed: 0,
+          slaMiss: 0,
+          wait: [],
+          unload: [],
+        };
+      }
+      const item = map[vendor];
+      item.tickets++;
+      const st = statusOf(row);
+      if (st.includes("COMPLETED")) item.completed++;
+      if (
+        String(row.sla_status || row.unload_sla || "")
+          .toUpperCase()
+          .includes("MISS")
+      ) {
+        item.slaMiss++;
+      }
+      const w = durationMinutes(row, "driver_waiting_minutes", () => 0);
+      const u = durationMinutes(row, "unloading_duration_minutes", () => 0);
+      if (w > 0) item.wait.push(w);
+      if (u > 0) item.unload.push(u);
+    });
+
+    return Object.values(map)
+      .map((x) => ({
+        ...x,
+        avgWait: average(x.wait),
+        avgUnload: average(x.unload),
+        slaMissPct: x.tickets ? (x.slaMiss / x.tickets) * 100 : 0,
+      }))
+      .sort((a, b) => b.tickets - a.tickets);
+  }
+
+  function recentActivity(rows = []) {
+    const events = [];
+    rows.forEach((r) => {
+      const base = {
+        queue_no: r.queue_no,
+        plate: r.plat_number,
+        vendor: r.vendor_name,
+        ticket_id: r.ticket_id,
+      };
+      [
+        ["REGISTER", r.register_time || r.created_at],
+        ["CALLED", r.called_at],
+        ["UNLOADING", r.start_unloading_at],
+        ["COMPLETED", r.completed_at],
+        ["EXPIRED", r.expired_at],
+        ["WA", r.wa_call_sent_at],
+      ].forEach(([type, time]) => {
+        if (time) events.push({ ...base, type, time });
+      });
+    });
+    return events
+      .sort((a, b) => {
+        const da = parseDateFlexible(a.time);
+        const db = parseDateFlexible(b.time);
+        return (db?.getTime() || 0) - (da?.getTime() || 0);
+      })
+      .slice(0, 20);
+  }
+
+  window.setSpvRange = function setSpvRange(value) {
+    localStorage.setItem("inbound_spv_range", String(value || "today"));
+    renderPage(SPV_PAGE, false);
+  };
+
+  window.pageSpvDashboard = function pageSpvDashboard() {
+    const range = localStorage.getItem("inbound_spv_range") || "today";
+    const rows = filterSpvRows(range);
+    const s = getSpvStats(rows);
+    const gates = gateUtilizationData(rows);
+    const heat = heatmapData(rows);
+    const vendors = vendorPerformance(rows);
+    const acts = recentActivity(rows);
+    const maxGate = Math.max(1, ...gates.map((x) => x.unloadMinutes));
+    const maxHeat = Math.max(1, ...heat.map((x) => x.count));
+
+    return `<div class="space-y-5">
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div>
+          <h2 class="font-headline-md text-3xl font-extrabold">Dashboard SPV</h2>
+          <p class="text-on-surface-variant mt-1">Ringkasan operasional dan performa inbound.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-xs font-bold text-on-surface-variant">Periode:</span>
+          ${[
+            ["today", "Hari Operasional Ini"],
+            ["7", "7 Hari"],
+            ["30", "30 Hari"],
+            ["all", "Semua"],
+          ]
+            .map(
+              ([v, t]) =>
+                `<button onclick="setSpvRange('${v}')" class="thin-tab rounded-full px-4 py-2 text-xs ${String(range) === v ? "active" : ""}">${t}</button>`,
+            )
+            .join("")}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8 gap-3">
+        ${kpiHtml("Total Input", num(s.total), "Jumlah ticket", "confirmation_number")}
+        ${kpiHtml("Waiting", num(s.waiting), "Masih menunggu", "schedule", "text-warning")}
+        ${kpiHtml("Called", num(s.called), "Sudah dipanggil", "campaign", "text-primary")}
+        ${kpiHtml("Unloading", num(s.unloading), "Sedang bongkar", "local_shipping", "text-tertiary")}
+        ${kpiHtml("Completed", num(s.completed), "Selesai bongkar", "check_circle", "text-success")}
+        ${kpiHtml("Expired", num(s.expired), "Tidak hadir", "timer_off", "text-error")}
+        ${kpiHtml("Gate Aktif", `${num(s.activeGates)} / 10`, "Gate terpakai", "door_open")}
+        ${kpiHtml("Avg Waiting", formatMinutesCompact(Math.round(s.avgWaiting)), "Rata-rata waktu tunggu", "hourglass_top")}
+      </div>
+
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div class="spv-card p-5 spv-chart">
+          <div class="flex items-center justify-between mb-4">
+            <div><h3 class="font-bold text-xl">Gate Utilization</h3><p class="text-sm text-on-surface-variant">Berdasarkan total menit unloading per gate.</p></div>
+          </div>
+          <div class="spv-bars">
+            ${gates
+              .map(
+                (g) => `<div class="spv-bar-row">
+                  <div class="font-bold text-sm">${esc(g.gate)}</div>
+                  <div class="spv-bar-track"><div class="spv-bar-fill" style="width:${Math.max(2, (g.unloadMinutes / maxGate) * 100)}%"></div></div>
+                  <div class="text-right text-xs font-queue-id">${formatMinutesCompact(Math.round(g.unloadMinutes))}<br><span class="text-on-surface-variant">${num(g.tickets)} ticket</span></div>
+                </div>`,
+              )
+              .join("")}
+          </div>
+        </div>
+
+        <div class="spv-card p-5 spv-chart">
+          <div class="mb-4"><h3 class="font-bold text-xl">Jam Sibuk</h3><p class="text-sm text-on-surface-variant">Jumlah kendaraan yang register per jam.</p></div>
+          <div class="overflow-auto">
+            <div class="spv-heatmap">
+              ${heat
+                .map((h) => {
+                  const opacity = h.count
+                    ? 0.18 + (h.count / maxHeat) * 0.72
+                    : 0.05;
+                  return `<div class="spv-heat-cell" style="background:rgb(var(--primary-container) / ${opacity})">
+                    <b>${String(h.hour).padStart(2, "0")}:00</b>
+                    <span class="font-queue-id text-lg">${num(h.count)}</span>
+                  </div>`;
+                })
+                .join("")}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="spv-card p-5">
+        <div class="mb-4"><h3 class="font-bold text-xl">Vendor Performance</h3><p class="text-sm text-on-surface-variant">Perbandingan jumlah ticket, waktu tunggu, bongkar, dan SLA.</p></div>
+        <div class="spv-table-wrap">
+          <table class="spv-table">
+            <thead><tr><th>Vendor</th><th>Ticket</th><th>Completed</th><th>Avg Waiting</th><th>Avg Unloading</th><th>SLA Miss</th></tr></thead>
+            <tbody>
+              ${
+                vendors.length
+                  ? vendors
+                      .map(
+                        (v) => `<tr>
+                        <td class="font-bold">${esc(v.vendor)}</td>
+                        <td>${num(v.tickets)}</td>
+                        <td>${num(v.completed)}</td>
+                        <td>${formatMinutesCompact(Math.round(v.avgWait))}</td>
+                        <td>${formatMinutesCompact(Math.round(v.avgUnload))}</td>
+                        <td class="${v.slaMissPct > 0 ? "text-error font-bold" : "text-success"}">${v.slaMissPct.toFixed(1)}%</td>
+                      </tr>`,
+                      )
+                      .join("")
+                  : `<tr><td colspan="6" class="text-center text-on-surface-variant">Belum ada data.</td></tr>`
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="spv-card p-5">
+        <div class="mb-4"><h3 class="font-bold text-xl">Recent Activity</h3><p class="text-sm text-on-surface-variant">Aktivitas terbaru dari timestamp setiap ticket.</p></div>
+        <div class="grid gap-2">
+          ${
+            acts.length
+              ? acts
+                  .map(
+                    (
+                      a,
+                    ) => `<button onclick="openTicketDetailByIdentity('${esc(a.ticket_id || "")}','${esc(a.queue_no || "")}','${esc(a.plate || "")}')" class="text-left rounded-xl border border-outline-variant/50 bg-surface-container/35 p-3 hover:bg-surface-container-high">
+                    <div class="flex flex-wrap items-center justify-between gap-2"><b>${esc(a.type)} · ${esc(a.queue_no || "-")}</b><span class="text-xs text-on-surface-variant">${esc(a.time)}</span></div>
+                    <div class="text-xs text-on-surface-variant mt-1">${esc(a.plate || "-")} · ${esc(a.vendor || "-")}</div>
+                  </button>`,
+                  )
+                  .join("")
+              : `<div class="text-on-surface-variant">Belum ada aktivitas.</div>`
+          }
+        </div>
+      </div>
+    </div>`;
+  };
+
+  function ensureGlobalSearch() {
+    if (!isLoggedIn() || document.getElementById("global-ticket-search"))
+      return;
+    const headerRight = document.querySelector("header > div:last-child");
+    if (!headerRight) return;
+
+    const wrap = document.createElement("div");
+    wrap.className = "global-search-wrap hidden lg:block";
+    wrap.innerHTML = `<div class="relative">
+      <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-lg">search</span>
+      <input id="global-ticket-search" class="form-input !py-2 !pl-10 text-sm" placeholder="Cari queue, plat, vendor, PO, driver..." autocomplete="off" />
+      <div id="global-ticket-search-results" class="global-search-results hidden"></div>
+    </div>`;
+    headerRight.insertBefore(wrap, headerRight.firstChild);
+
+    const input = wrap.querySelector("input");
+    input.addEventListener("input", () =>
+      renderGlobalSearchResults(input.value),
+    );
+    input.addEventListener("focus", () => {
+      if (input.value.trim()) renderGlobalSearchResults(input.value);
+    });
+  }
+
+  window.renderGlobalSearchResults = function renderGlobalSearchResults(
+    query = "",
+  ) {
+    const box = document.getElementById("global-ticket-search-results");
+    if (!box) return;
+    const q = String(query || "")
+      .trim()
+      .toLowerCase();
+    if (q.length < 2) {
+      box.classList.add("hidden");
+      box.innerHTML = "";
+      return;
+    }
+
+    const rows = historyRows()
+      .filter((r) =>
+        [
+          r.queue_no,
+          r.plat_number,
+          r.vendor_name,
+          r.po_number,
+          r.driver_name,
+          r.ticket_id,
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(q),
+      )
+      .slice(0, 25);
+
+    box.innerHTML = rows.length
+      ? rows
+          .map(
+            (
+              r,
+            ) => `<button class="global-search-item" onclick="openTicketDetailByIdentity('${esc(r.ticket_id || "")}','${esc(r.queue_no || "")}','${esc(r.plat_number || "")}');document.getElementById('global-ticket-search-results')?.classList.add('hidden')">
+              <div class="flex items-center justify-between gap-3"><b>${esc(r.queue_no || "-")}</b><span class="text-xs font-bold text-primary">${esc(statusOf(r))}</span></div>
+              <div class="text-xs text-on-surface-variant mt-1">${esc(r.plat_number || "-")} · ${esc(r.vendor_name || "-")} · ${esc(r.driver_name || "-")}</div>
+              <div class="text-[11px] text-on-surface-variant break-all">${esc(r.po_number || "-")}</div>
+            </button>`,
+          )
+          .join("")
+      : `<div class="p-3 text-sm text-on-surface-variant">Data tidak ditemukan.</div>`;
+    box.classList.remove("hidden");
+  };
+
+  function findTicket(ticketId, queueNo, plate) {
+    return historyRows().find((r) => {
+      if (ticketId && String(r.ticket_id || "") === String(ticketId))
+        return true;
+      if (
+        queueNo &&
+        String(r.queue_no || "") === String(queueNo) &&
+        (!plate ||
+          normalizePlateValue(r.plat_number || "") ===
+            normalizePlateValue(plate))
+      )
+        return true;
+      return (
+        plate &&
+        normalizePlateValue(r.plat_number || "") === normalizePlateValue(plate)
+      );
+    });
+  }
+
+  function timelineForRow(r) {
+    const events = [
+      ["REGISTER", r.register_time || r.created_at, "Security membuat ticket"],
+      [
+        "CALLED",
+        r.called_at,
+        `Driver dipanggil${r.gate ? " ke " + r.gate : ""}`,
+      ],
+      ["WA SENT", r.wa_call_sent_at, r.wa_call_status || "WhatsApp diproses"],
+      ["UNLOADING", r.start_unloading_at, "Proses bongkar dimulai"],
+      ["COMPLETED", r.completed_at, "Proses bongkar selesai"],
+      ["EXPIRED", r.expired_at, r.expired_reason || "Driver tidak hadir"],
+    ].filter((x) => x[1]);
+
+    return events.length
+      ? events
+          .map(
+            ([name, time, note]) => `<div class="ticket-event">
+              <div class="font-bold">${esc(name)}</div>
+              <div class="text-xs text-on-surface-variant">${esc(time)}</div>
+              <div class="text-sm mt-1">${esc(note)}</div>
+            </div>`,
+          )
+          .join("")
+      : `<div class="text-on-surface-variant">Belum ada activity.</div>`;
+  }
+
+  window.openTicketDetailByIdentity = function openTicketDetailByIdentity(
+    ticketId = "",
+    queueNo = "",
+    plate = "",
+  ) {
+    const r = findTicket(ticketId, queueNo, plate);
+    if (!r) {
+      showToast("Detail ticket tidak ditemukan.");
+      return;
+    }
+    document.getElementById("ticket-detail-modal")?.remove();
+    const modal = document.createElement("div");
+    modal.id = "ticket-detail-modal";
+    modal.className = "ticket-modal-backdrop";
+    modal.onclick = (e) => {
+      if (e.target === modal) modal.remove();
+    };
+    modal.innerHTML = `<div class="ticket-modal">
+      <div class="sticky top-0 z-10 flex items-center justify-between gap-3 p-5 border-b border-outline-variant bg-surface-container-lowest">
+        <div><div class="text-xs uppercase tracking-wider text-on-surface-variant">Detail Ticket</div><h2 class="font-queue-id text-3xl text-primary">${esc(r.queue_no || "-")}</h2></div>
+        <button onclick="document.getElementById('ticket-detail-modal')?.remove()" class="thin-tab h-10 w-10 rounded-full flex items-center justify-center"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div class="p-5 space-y-5">
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          ${[
+            ["Status", statusOf(r)],
+            ["Gate", r.gate || "-"],
+            ["Plat", r.plat_number || "-"],
+            ["Fleet", r.fleet_type || "-"],
+            ["Driver", r.driver_name || "-"],
+            ["Vendor", r.vendor_name || "-"],
+            ["Operational Date", rowOpDate(r) || "-"],
+            ["Data Source", r.data_source || r.raw?.data_source || "BACKEND"],
+          ]
+            .map(
+              ([a, b]) =>
+                `<div class="rounded-xl border border-outline-variant/50 bg-surface-container/40 p-3"><div class="text-[10px] uppercase font-bold text-on-surface-variant">${esc(a)}</div><div class="font-bold mt-1 break-words">${esc(b)}</div></div>`,
+            )
+            .join("")}
+        </div>
+        <div class="spv-card p-4">
+          <div class="text-xs uppercase font-bold text-on-surface-variant mb-2">PO</div>
+          <div class="font-bold break-all">${esc(r.po_number || "-")}</div>
+          <div class="grid grid-cols-2 gap-3 mt-3">
+            <div><span class="text-xs text-on-surface-variant">Total Qty</span><div class="font-queue-id text-xl">${num(r.total_po_qty || 0)}</div></div>
+            <div><span class="text-xs text-on-surface-variant">Count SKU</span><div class="font-queue-id text-xl">${num(r.count_po_sku || 0)}</div></div>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div class="spv-card p-4"><h3 class="font-bold text-lg mb-4">Activity Log</h3><div class="ticket-timeline">${timelineForRow(r)}</div></div>
+          <div class="spv-card p-4"><h3 class="font-bold text-lg mb-4">WA & SLA</h3>
+            <div class="grid gap-3 text-sm">
+              <div><span class="text-on-surface-variant">WA Status</span><div class="font-bold">${esc(r.wa_call_status || "-")}</div></div>
+              <div><span class="text-on-surface-variant">WA Sent</span><div class="font-bold">${esc(r.wa_call_sent_at || "-")}</div></div>
+              <div><span class="text-on-surface-variant">WA Error</span><div class="font-bold text-error break-words">${esc(r.wa_call_error || "-")}</div></div>
+              <div><span class="text-on-surface-variant">Call Count</span><div class="font-bold">${num(r.call_count || 0)} / 3</div></div>
+              <div><span class="text-on-surface-variant">Waiting</span><div class="font-bold">${esc(r.driver_waiting_duration || liveWaitingText(r.register_time || r.created_at, r.called_at))}</div></div>
+              <div><span class="text-on-surface-variant">Unloading</span><div class="font-bold">${esc(r.unloading_duration || "-")}</div></div>
+              <div><span class="text-on-surface-variant">SLA</span><div class="font-bold">${esc(r.sla_status || r.unload_sla || "-")}</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+  };
+
+  function injectManualEntryPanel() {
+    const form = document.getElementById("security-form");
+    if (!form || document.getElementById("manual-security-entry-box")) return;
+    const lookupSummary = document.getElementById("po-lookup-summary");
+    const anchor = lookupSummary || form.querySelector(".mt-6");
+
+    const wrap = document.createElement("div");
+    wrap.id = "manual-security-entry-box";
+    wrap.className = "manual-entry-box mt-4";
+    wrap.innerHTML = `<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div>
+        <div class="font-bold">PO / Vendor tidak ditemukan?</div>
+        <div class="text-xs text-on-surface-variant mt-1">Gunakan input manual. Tidak perlu approval.</div>
+      </div>
+      <button type="button" id="manual-entry-toggle" onclick="toggleManualSecurityEntry()" class="thin-tab rounded-lg px-4 py-2 font-bold">Input Manual</button>
+    </div>
+    <div id="manual-entry-fields" class="hidden mt-4">
+      <div class="manual-entry-badge mb-3"><span class="material-symbols-outlined text-sm">edit_note</span>MANUAL INPUT</div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Vendor Manual</span><input id="manual-vendor-name" class="form-input" placeholder="Contoh: PT MAJU JAYA" /></label>
+        <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">PO Manual</span><input id="manual-po-number" class="form-input" placeholder="Contoh: PO123456" /></label>
+        <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Slot</span><select id="manual-slot" class="form-select">${buildSlotOptions("3")}</select></label>
+        <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Total Qty</span><input id="manual-total-qty" type="number" min="0" step="1" class="form-input" placeholder="0" /></label>
+        <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Count SKU</span><input id="manual-count-sku" type="number" min="0" step="1" class="form-input" placeholder="0" /></label>
+      </div>
+      <div class="form-help mt-3">Vendor otomatis dirapikan menjadi huruf besar. PO otomatis dihapus spasinya dan dibuat huruf besar.</div>
+    </div>`;
+    anchor?.insertAdjacentElement("afterend", wrap);
+  }
+
+  window.toggleManualSecurityEntry = function toggleManualSecurityEntry() {
+    window.manualSecurityEntryEnabled = !window.manualSecurityEntryEnabled;
+    const fields = document.getElementById("manual-entry-fields");
+    const btn = document.getElementById("manual-entry-toggle");
+    fields?.classList.toggle("hidden", !window.manualSecurityEntryEnabled);
+    if (btn)
+      btn.textContent = window.manualSecurityEntryEnabled
+        ? "Kembali ke Auto Lookup"
+        : "Input Manual";
+    if (!window.manualSecurityEntryEnabled) {
+      state.poLookup = null;
+    }
+  };
+
+  window.getManualSecurityEntry = function getManualSecurityEntry() {
+    if (!window.manualSecurityEntryEnabled) return null;
+    const vendor = String(
+      document.getElementById("manual-vendor-name")?.value || "",
+    )
+      .trim()
+      .replace(/\s+/g, " ")
+      .toUpperCase();
+    const po = String(document.getElementById("manual-po-number")?.value || "")
+      .trim()
+      .replace(/\s+/g, "")
+      .toUpperCase();
+    const slot = String(document.getElementById("manual-slot")?.value || "3");
+    const qty = Math.max(
+      0,
+      Math.floor(
+        Number(document.getElementById("manual-total-qty")?.value || 0),
+      ),
+    );
+    const sku = Math.max(
+      0,
+      Math.floor(
+        Number(document.getElementById("manual-count-sku")?.value || 0),
+      ),
+    );
+    if (!vendor || !po) return { valid: false, vendor, po, slot, qty, sku };
+    return { valid: true, vendor, po, slot, qty, sku };
+  };
+
+  function syncManualFieldsToSecurityForm(data) {
+    if (!data?.valid) return false;
+    const form = document.getElementById("security-form");
+    if (!form) return false;
+
+    const vendorEl = form.querySelector('[name="vendor_name"]');
+    if (vendorEl) {
+      if (vendorEl.tagName === "SELECT") {
+        let opt = [...vendorEl.options].find((x) => x.value === data.vendor);
+        if (!opt) {
+          opt = new Option(data.vendor, data.vendor, true, true);
+          vendorEl.add(opt);
+        }
+      }
+      vendorEl.value = data.vendor;
+      vendorEl.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+
+    const poEl = form.querySelector('[name="po_number"]');
+    if (poEl) {
+      poEl.value = data.po;
+      poEl.dispatchEvent(new Event("input", { bubbles: true }));
+      poEl.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    const slotEl = form.querySelector('[name="slot"]');
+    if (slotEl) slotEl.value = data.slot;
+    return true;
+  }
+
+  // lookupPo dipanggil oleh submitSecurity lama. Override hanya saat manual mode aktif.
+  if (typeof lookupPo === "function") {
+    const originalLookupPo = lookupPo;
+    window.lookupPo = function patchedLookupPo(showErrors = false) {
+      if (!window.manualSecurityEntryEnabled)
+        return originalLookupPo(showErrors);
+      const m = getManualSecurityEntry();
+      if (!m?.valid) {
+        if (showErrors) showToast("Vendor dan PO manual wajib diisi.");
+        return {
+          all_found: false,
+          items: [],
+          missing_po: [m?.po || "PO MANUAL"],
+          vendor_mismatch: [],
+          summary: {},
+        };
+      }
+      syncManualFieldsToSecurityForm(m);
+      const result = {
+        all_found: true,
+        items: [
+          {
+            po_number: m.po,
+            po_input: m.po,
+            vendor_name: m.vendor,
+            slot: m.slot,
+            total_po_qty: m.qty,
+            count_po_sku: m.sku,
+            data_source: "MANUAL",
+          },
+        ],
+        missing_po: [],
+        vendor_mismatch: [],
+        summary: {
+          po_number: m.po,
+          vendor_name: m.vendor,
+          slot: m.slot,
+          total_po_qty: m.qty,
+          count_po_sku: m.sku,
+        },
+      };
+      state.poLookup = result;
+      const q = document.getElementById("security-total-qty");
+      const s = document.getElementById("security-count-sku");
+      if (q) q.textContent = num(m.qty);
+      if (s) s.textContent = num(m.sku);
+      return result;
+    };
+  }
+
+  // Guard submit manual sebelum fungsi submit lama dijalankan.
+  if (typeof submitSecurity === "function") {
+    const originalSubmitSecurity = submitSecurity;
+    window.submitSecurity = async function patchedSubmitSecurity(e) {
+      if (window.manualSecurityEntryEnabled) {
+        const m = getManualSecurityEntry();
+        if (!m?.valid) {
+          e?.preventDefault?.();
+          showToast("Vendor dan PO manual wajib diisi.");
+          return;
+        }
+        syncManualFieldsToSecurityForm(m);
+      }
+      return originalSubmitSecurity(e);
+    };
+  }
+
+  const originalRenderPage = window.renderPage;
+  if (typeof originalRenderPage === "function") {
+    window.renderPage = function patchedRenderPage(page, toast = true) {
+      const user = getAuthUser?.();
+      if (page === SPV_PAGE) {
+        if (!user || normalizeRole(user.role) !== "SPV") {
+          showToast("Dashboard SPV hanya untuk akun SPV.");
+          return originalRenderPage(getDefaultPageForRole(user?.role), false);
+        }
+        state.page = SPV_PAGE;
+        stopDriverTrackTimer?.();
+        stopCallMonitorRuntime?.();
+        applyTvModeStyles?.(false);
+        const root = document.getElementById("page-root");
+        if (root) root.innerHTML = pageSpvDashboard();
+        const meta = pageMeta[SPV_PAGE];
+        const title = document.getElementById("page-title");
+        const subtitle = document.getElementById("page-subtitle");
+        if (title) title.textContent = meta.title;
+        if (subtitle) subtitle.textContent = meta.subtitle;
+        document.querySelectorAll("[data-page]").forEach((btn) => {
+          btn.className =
+            btn.dataset.page === SPV_PAGE
+              ? btn.classList.contains("mobile-nav-btn")
+                ? mobActive
+                : navActive
+              : btn.classList.contains("mobile-nav-btn")
+                ? mobBase
+                : navBase;
+        });
+        location.hash = SPV_PAGE;
+        ensureGlobalSearch();
+        return;
+      }
+
+      const result = originalRenderPage(page, toast);
+      setTimeout(() => {
+        ensureGlobalSearch();
+        if (page === "daftar") injectManualEntryPanel();
+      }, 0);
+      return result;
+    };
+  }
+
+  document.addEventListener("click", (e) => {
+    const search = document.getElementById("global-ticket-search");
+    const box = document.getElementById("global-ticket-search-results");
+    if (
+      search &&
+      box &&
+      !search.closest(".global-search-wrap")?.contains(e.target)
+    ) {
+      box.classList.add("hidden");
+    }
+  });
+
+  document.addEventListener("DOMContentLoaded", () => {
+    setTimeout(() => {
+      ensureGlobalSearch();
+      if (state.page === "daftar") injectManualEntryPanel();
+      applyRoleAccessUI?.();
+    }, 250);
+  });
+})();
