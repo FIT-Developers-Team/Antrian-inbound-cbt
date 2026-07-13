@@ -2767,3 +2767,106 @@ async function submitSecurity(e) {
     return set;
   };
 })();
+
+/* ==========================================================================
+ * MOBILE CHECKER CONFIRMATION PATCH
+ * Konfirmasi hanya muncul pada perangkat touch untuk aksi:
+ * - Panggil ke Gate
+ * - Mulai Unloading
+ * - Selesai Unloading
+ * ========================================================================== */
+(function installMobileCheckerConfirmationPatch() {
+  if (window.__inboundMobileCheckerConfirmationInstalled) return;
+  window.__inboundMobileCheckerConfirmationInstalled = true;
+
+  const originalSubmitChecker =
+    typeof window.submitChecker === "function"
+      ? window.submitChecker
+      : typeof submitChecker === "function"
+        ? submitChecker
+        : null;
+
+  if (!originalSubmitChecker) return;
+
+  function isMobileTouchDevice() {
+    return (
+      (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) ||
+      Number(navigator.maxTouchPoints || 0) > 0
+    );
+  }
+
+  function checkerActionMessage(form) {
+    const status = String(form?.status?.value || "CALLED").toUpperCase();
+    const queue = String(form?.queue_no?.value || "-").trim() || "-";
+    const plate = String(form?.plat_number?.value || "-").trim() || "-";
+    const gate =
+      String(
+        document.getElementById("checker-gate-value")?.value ||
+          form?.gate?.value ||
+          "-",
+      ).trim() || "-";
+
+    if (status.includes("COMPLETED")) {
+      return [
+        "Selesaikan unloading?",
+        "",
+        "Queue: " + queue,
+        "Plat: " + plate,
+        "Gate: " + gate,
+        "",
+        "Status akan menjadi COMPLETED dan gate akan dilepas.",
+      ].join("\n");
+    }
+
+    if (status.includes("UNLOADING")) {
+      return [
+        "Mulai unloading?",
+        "",
+        "Queue: " + queue,
+        "Plat: " + plate,
+        "Gate: " + gate,
+        "",
+        "Timer bongkar dan estimasi selesai akan mulai berjalan.",
+      ].join("\n");
+    }
+
+    return [
+      "Panggil driver ke gate?",
+      "",
+      "Queue: " + queue,
+      "Plat: " + plate,
+      "Gate: " + gate,
+      "",
+      "Status akan menjadi CALLED.",
+    ].join("\n");
+  }
+
+  window.submitChecker = async function mobileSafeSubmitChecker(event) {
+    const form = event?.target;
+
+    if (
+      isMobileTouchDevice() &&
+      form?.id === "checker-form" &&
+      form.dataset.mobileConfirmed !== "1"
+    ) {
+      event?.preventDefault?.();
+
+      const requiredFieldsFilled =
+        String(form.queue_no?.value || "").trim() &&
+        String(form.plat_number?.value || "").trim();
+
+      if (requiredFieldsFilled) {
+        const approved = window.confirm(checkerActionMessage(form));
+        if (!approved) return;
+      }
+
+      form.dataset.mobileConfirmed = "1";
+    }
+
+    try {
+      return await originalSubmitChecker.call(this, event);
+    } finally {
+      if (form) delete form.dataset.mobileConfirmed;
+    }
+  };
+})();

@@ -382,3 +382,53 @@ body {
     min-width: 650px;
   }
 }
+
+/* ==========================================================================
+   MOBILE ANTI-MISTAP / TOUCH SAFETY
+   ========================================================================== */
+@media (pointer: coarse), (max-width: 900px) {
+  button,
+  a,
+  [role="button"],
+  input[type="submit"],
+  input[type="button"] {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  button,
+  [role="button"],
+  input[type="submit"],
+  input[type="button"] {
+    min-height: 44px;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  #checker-submit-btn,
+  #security-submit-btn,
+  .checker-card button {
+    min-height: 48px;
+  }
+
+  #mobile-menu-bar,
+  #mobile-nav {
+    touch-action: pan-x;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+  }
+
+  #mobile-nav > button,
+  #mobile-nav > a {
+    scroll-snap-align: start;
+    flex-shrink: 0;
+  }
+
+  .mobile-touch-busy,
+  button:disabled,
+  [aria-disabled="true"] {
+    pointer-events: none !important;
+    opacity: 0.65;
+  }
+}

@@ -6955,3 +6955,213 @@ function securityFormMatchesRowsForPrint(rows = []) {
     }, 250);
   });
 })();
+
+/* ==========================================================================
+ * MOBILE ANTI-MISTAP PATCH
+ * - Swipe/scroll tidak dianggap klik.
+ * - Tap kedua pada tombol yang sama dalam waktu singkat diblokir.
+ * - Hanya aktif untuk perangkat touch/coarse pointer.
+ * ========================================================================== */
+(function installMobileAntiMistapPatch() {
+  if (window.__inboundMobileAntiMistapInstalled) return;
+  window.__inboundMobileAntiMistapInstalled = true;
+
+  const MOVE_LIMIT_PX = 10;
+  const BLOCK_AFTER_SWIPE_MS = 550;
+  const SAME_BUTTON_DEBOUNCE_MS = 700;
+
+  let activeGesture = null;
+  let blockTrustedClickUntil = 0;
+  const lastTapByElement = new WeakMap();
+
+  function isTouchLikeDevice() {
+    return (
+      (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) ||
+      Number(navigator.maxTouchPoints || 0) > 0
+    );
+  }
+
+  function isTouchPointer(event) {
+    return (
+      !event.pointerType ||
+      event.pointerType === "touch" ||
+      event.pointerType === "pen"
+    );
+  }
+
+  function markGestureMoved(clientX, clientY) {
+    if (!activeGesture) return;
+
+    const dx = Number(clientX || 0) - activeGesture.startX;
+    const dy = Number(clientY || 0) - activeGesture.startY;
+    const scrollDx = Math.abs(window.scrollX - activeGesture.scrollX);
+    const scrollDy = Math.abs(window.scrollY - activeGesture.scrollY);
+
+    if (Math.hypot(dx, dy) > MOVE_LIMIT_PX || scrollDx > 4 || scrollDy > 4) {
+      activeGesture.moved = true;
+    }
+  }
+
+  function finishGesture() {
+    if (activeGesture?.moved) {
+      blockTrustedClickUntil = performance.now() + BLOCK_AFTER_SWIPE_MS;
+    }
+    activeGesture = null;
+  }
+
+  if ("PointerEvent" in window) {
+    document.addEventListener(
+      "pointerdown",
+      (event) => {
+        if (!isTouchLikeDevice() || !isTouchPointer(event)) return;
+        activeGesture = {
+          pointerId: event.pointerId,
+          startX: event.clientX,
+          startY: event.clientY,
+          scrollX: window.scrollX,
+          scrollY: window.scrollY,
+          moved: false,
+        };
+      },
+      true,
+    );
+
+    document.addEventListener(
+      "pointermove",
+      (event) => {
+        if (
+          !activeGesture ||
+          activeGesture.pointerId !== event.pointerId ||
+          !isTouchPointer(event)
+        ) {
+          return;
+        }
+        markGestureMoved(event.clientX, event.clientY);
+      },
+      true,
+    );
+
+    document.addEventListener(
+      "pointerup",
+      (event) => {
+        if (
+          !activeGesture ||
+          activeGesture.pointerId !== event.pointerId ||
+          !isTouchPointer(event)
+        ) {
+          return;
+        }
+        markGestureMoved(event.clientX, event.clientY);
+        finishGesture();
+      },
+      true,
+    );
+
+    document.addEventListener(
+      "pointercancel",
+      () => {
+        finishGesture();
+      },
+      true,
+    );
+  } else {
+    document.addEventListener(
+      "touchstart",
+      (event) => {
+        if (!isTouchLikeDevice() || event.touches.length !== 1) return;
+        const touch = event.touches[0];
+        activeGesture = {
+          startX: touch.clientX,
+          startY: touch.clientY,
+          scrollX: window.scrollX,
+          scrollY: window.scrollY,
+          moved: false,
+        };
+      },
+      { capture: true, passive: true },
+    );
+
+    document.addEventListener(
+      "touchmove",
+      (event) => {
+        if (!activeGesture || event.touches.length !== 1) return;
+        const touch = event.touches[0];
+        markGestureMoved(touch.clientX, touch.clientY);
+      },
+      { capture: true, passive: true },
+    );
+
+    document.addEventListener(
+      "touchend",
+      () => {
+        finishGesture();
+      },
+      { capture: true, passive: true },
+    );
+
+    document.addEventListener(
+      "touchcancel",
+      () => {
+        finishGesture();
+      },
+      { capture: true, passive: true },
+    );
+  }
+
+  document.addEventListener(
+    "click",
+    (event) => {
+      if (!event.isTrusted || !isTouchLikeDevice()) return;
+
+      const actionElement = event.target.closest(
+        'button, a, [role="button"], input[type="submit"], input[type="button"], [onclick]',
+      );
+      if (!actionElement) return;
+
+      if (
+        actionElement.matches(
+          'input:not([type="submit"]):not([type="button"]), select, textarea',
+        )
+      ) {
+        return;
+      }
+
+      if (performance.now() < blockTrustedClickUntil) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        return;
+      }
+
+      if (
+        actionElement.disabled ||
+        actionElement.getAttribute("aria-disabled") === "true"
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        return;
+      }
+
+      if (
+        actionElement.dataset.mobileAllowRepeat === "1" ||
+        actionElement.classList.contains("mobile-allow-repeat")
+      ) {
+        return;
+      }
+
+      const now = performance.now();
+      const previousTap = lastTapByElement.get(actionElement) || 0;
+
+      if (now - previousTap < SAME_BUTTON_DEBOUNCE_MS) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        return;
+      }
+
+      lastTapByElement.set(actionElement, now);
+    },
+    true,
+  );
+})();
