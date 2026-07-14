@@ -8200,3 +8200,493 @@ window.initShader = function initShaderDisabled() {
     if (!isMobileCheckerUi()) closeMobileCheckerActionSheet();
   });
 })();
+
+/* ==========================================================================
+ * WAITING MONITOR STITCH V4
+ * Layout disamakan dengan referensi Stitch:
+ * KPI ringkas → grafik tren + donat SLA → visibilitas gate → tabel detail.
+ * Semua angka memakai data aktif dari Output form.
+ * ========================================================================== */
+(function installWaitingMonitorStitchV4() {
+  if (window.__waitingMonitorStitchV4Installed) return;
+  window.__waitingMonitorStitchV4Installed = true;
+
+  function wmStatusText(status = "") {
+    const st = String(status || "")
+      .trim()
+      .toUpperCase();
+    const map = {
+      WAITING: "MENUNGGU",
+      CALLED: "DIPANGGIL",
+      UNLOADING: "BONGKAR",
+      "WAITING GR": "MENUNGGU GR",
+      "DONE GR": "GR SELESAI",
+      COMPLETED: "SELESAI",
+      EXPIRED: "KEDALUWARSA",
+    };
+    return map[st] || st || "-";
+  }
+
+  function wmStatusClass(status = "") {
+    const st = String(status || "")
+      .trim()
+      .toUpperCase();
+    if (st === "WAITING") return "is-waiting";
+    if (st === "CALLED") return "is-called";
+    if (st === "UNLOADING") return "is-unloading";
+    if (st === "WAITING GR") return "is-waiting-gr";
+    if (st === "DONE GR") return "is-done-gr";
+    if (st === "COMPLETED") return "is-completed";
+    if (st === "EXPIRED") return "is-expired";
+    return "";
+  }
+
+  function wmMetricCard(label, value, tone = "") {
+    return `<article class="wm-kpi-card ${tone}">
+      <span class="wm-kpi-label">${esc(label)}</span>
+      <strong class="wm-kpi-value">${num(value)}</strong>
+      <span class="wm-kpi-line"></span>
+    </article>`;
+  }
+
+  function wmGetEventDate(row = {}) {
+    const raw = getFirstValue(row, [
+      "register_time",
+      "created_at",
+      "Timestamp",
+      "called_at",
+      "start_unloading_at",
+      "updated_at",
+    ]);
+    return parseInboundDateSafe(raw);
+  }
+
+  function wmHourlyTrend(rows = []) {
+    const now = new Date();
+    now.setMinutes(0, 0, 0);
+
+    const bins = Array.from({ length: 8 }, (_, index) => {
+      const start = new Date(now.getTime() - (7 - index) * 60 * 60 * 1000);
+      const end = new Date(start.getTime() + 60 * 60 * 1000);
+      return { start, end, value: 0 };
+    });
+
+    rows.forEach((row) => {
+      const date = wmGetEventDate(row);
+      if (!date) return;
+      const bin = bins.find(
+        (item) =>
+          date.getTime() >= item.start.getTime() &&
+          date.getTime() < item.end.getTime(),
+      );
+      if (bin) bin.value += 1;
+    });
+
+    const values = bins.map((item) => item.value);
+    const maxValue = Math.max(1, ...values);
+    const width = 760;
+    const height = 138;
+    const left = 10;
+    const right = 10;
+    const top = 10;
+    const bottom = 12;
+    const plotWidth = width - left - right;
+    const plotHeight = height - top - bottom;
+
+    const points = values.map((value, index) => {
+      const x = left + (index / Math.max(1, values.length - 1)) * plotWidth;
+      const y = top + plotHeight - (value / maxValue) * plotHeight;
+      return { x, y, value };
+    });
+
+    let path = "";
+    if (points.length) {
+      path = `M ${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)}`;
+      for (let index = 1; index < points.length; index += 1) {
+        const previous = points[index - 1];
+        const current = points[index];
+        const middleX = (previous.x + current.x) / 2;
+        path += ` C ${middleX.toFixed(2)} ${previous.y.toFixed(2)}, ${middleX.toFixed(2)} ${current.y.toFixed(2)}, ${current.x.toFixed(2)} ${current.y.toFixed(2)}`;
+      }
+    }
+
+    const labels = bins.map(
+      (item) => `${String(item.start.getHours()).padStart(2, "0")}:00`,
+    );
+
+    return `<section class="wm-chart-card wm-trend-card">
+      <div class="wm-chart-card-head">
+        <div>
+          <span class="wm-chart-eyebrow">VOLUME ANTRIAN</span>
+          <h3>Tren Kendaraan Masuk</h3>
+        </div>
+        <div class="wm-chart-legend"><i></i> Kendaraan</div>
+      </div>
+
+      <div class="wm-line-chart">
+        <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="Tren kendaraan masuk 8 jam terakhir">
+          <line x1="${left}" y1="${top + plotHeight * 0.25}" x2="${width - right}" y2="${top + plotHeight * 0.25}" class="wm-chart-grid-line"></line>
+          <line x1="${left}" y1="${top + plotHeight * 0.5}" x2="${width - right}" y2="${top + plotHeight * 0.5}" class="wm-chart-grid-line"></line>
+          <line x1="${left}" y1="${top + plotHeight * 0.75}" x2="${width - right}" y2="${top + plotHeight * 0.75}" class="wm-chart-grid-line"></line>
+          <path d="${path}" class="wm-chart-path"></path>
+          ${points.map((point) => `<circle cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="4" class="wm-chart-dot"><title>${point.value} kendaraan</title></circle>`).join("")}
+        </svg>
+      </div>
+
+      <div class="wm-chart-labels">
+        ${labels.map((label, index) => `<span class="${index % 2 ? "wm-label-secondary" : ""}">${esc(label)}</span>`).join("")}
+      </div>
+    </section>`;
+  }
+
+  function wmSlaDonut(rows = []) {
+    let ok = 0;
+    let miss = 0;
+    let process = 0;
+
+    rows.forEach((row) => {
+      const info = getInboundSlaInfo(row);
+      const status = String(info?.status || "").toUpperCase();
+      if (status === "SLA OK") ok += 1;
+      else if (status === "SLA MISS") miss += 1;
+      else process += 1;
+    });
+
+    const total = Math.max(1, ok + miss + process);
+    const okPct = Math.round((ok / total) * 100);
+    const missPct = Math.round((miss / total) * 100);
+    const processPct = Math.max(0, 100 - okPct - missPct);
+
+    const gradient = `conic-gradient(
+      rgb(var(--success)) 0% ${okPct}%,
+      rgb(var(--error)) ${okPct}% ${okPct + missPct}%,
+      rgb(var(--warning)) ${okPct + missPct}% 100%
+    )`;
+
+    return `<section class="wm-chart-card wm-donut-card">
+      <div class="wm-chart-card-head">
+        <div>
+          <span class="wm-chart-eyebrow">DISTRIBUSI SLA</span>
+          <h3>Status SLA Bongkar</h3>
+        </div>
+      </div>
+
+      <div class="wm-donut-wrap">
+        <div class="wm-donut" style="${gradient}">
+          <div class="wm-donut-hole">
+            <strong>${num(okPct)}%</strong>
+            <span>TEPAT WAKTU</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="wm-donut-legend">
+        <span><i class="is-ok"></i>Tepat Waktu (${num(ok)})</span>
+        <span><i class="is-miss"></i>Terlambat (${num(miss)})</span>
+        <span><i class="is-process"></i>Proses (${num(process)})</span>
+      </div>
+    </section>`;
+  }
+
+  function wmGateRows(rows = []) {
+    const configured = Array.isArray(state.options?.gate)
+      ? state.options.gate
+      : Array.from(
+          { length: 10 },
+          (_, index) => `Dock ${String(index + 1).padStart(2, "0")}`,
+        );
+
+    const activeRows = rows.filter((row) =>
+      ["CALLED", "UNLOADING"].includes(String(row.status || "").toUpperCase()),
+    );
+
+    return configured.slice(0, 10).map((gate, index) => {
+      const row = activeRows.find(
+        (item) =>
+          String(item.gate || "")
+            .trim()
+            .toUpperCase() ===
+          String(gate || "")
+            .trim()
+            .toUpperCase(),
+      );
+
+      const gateNumber =
+        String(gate || "").match(/\d+/)?.[0] ||
+        String(index + 1).padStart(2, "0");
+
+      if (!row) {
+        return `<article class="wm-gate-card is-empty">
+          <span class="wm-gate-empty">KOSONG</span>
+          <small>${esc(gate)}</small>
+        </article>`;
+      }
+
+      const status = String(row.status || "").toUpperCase();
+      const estimate = getUnloadingEstimateInfo(row);
+      let note = status === "CALLED" ? "Menunggu masuk" : "Sedang bongkar";
+      if (status === "UNLOADING" && estimate.diffMinutes !== null) {
+        note =
+          estimate.diffMinutes >= 0
+            ? `Sisa ${formatMinutesCompact(estimate.diffMinutes)}`
+            : `Lewat ${formatMinutesCompact(Math.abs(estimate.diffMinutes))}`;
+      }
+
+      return `<article class="wm-gate-card ${status === "UNLOADING" ? "is-active" : "is-called"}">
+        <span class="wm-gate-badge">GATE ${esc(String(gateNumber).padStart(2, "0"))}</span>
+        <strong>${esc(row.plat_number || "-")}</strong>
+        <span class="wm-gate-driver">${esc(row.driver_name || "-")}</span>
+        <em>${esc(note)}</em>
+      </article>`;
+    });
+  }
+
+  function wmGatePanel(rows = []) {
+    return `<section class="wm-section">
+      <div class="wm-section-heading">
+        <div>
+          <h2>Visibilitas Gate Bongkar</h2>
+          <p>Status gate aktif berdasarkan tiket CALLED dan UNLOADING.</p>
+        </div>
+        <div class="wm-gate-legend">
+          <span><i class="is-active"></i>Aktif</span>
+          <span><i class="is-empty"></i>Kosong</span>
+        </div>
+      </div>
+      <div class="wm-gate-grid">${wmGateRows(rows).join("")}</div>
+    </section>`;
+  }
+
+  function wmSlaCountdown(row = {}) {
+    const st = String(row.status || "").toUpperCase();
+    const info = getUnloadingEstimateInfo(row);
+
+    if (st === "EXPIRED") {
+      return `<span class="wm-sla-value is-miss">KEDALUWARSA</span>`;
+    }
+
+    if (["WAITING GR", "DONE GR", "COMPLETED"].includes(st)) {
+      const sla = getInboundSlaInfo(row);
+      const status = String(sla?.status || "").toUpperCase();
+      return status === "SLA MISS"
+        ? `<span class="wm-sla-value is-miss">TERLAMBAT</span>`
+        : `<span class="wm-sla-value is-ok">TERCAPAI</span>`;
+    }
+
+    if (st !== "UNLOADING" || info.diffMinutes === null) {
+      return `<span class="wm-sla-value is-neutral">-</span>`;
+    }
+
+    return info.diffMinutes >= 0
+      ? `<span class="wm-sla-value is-running">Sisa ${esc(
+          formatMinutesCompact(info.diffMinutes),
+        )}</span>`
+      : `<span class="wm-sla-value is-miss">Lewat ${esc(
+          formatMinutesCompact(Math.abs(info.diffMinutes)),
+        )}</span>`;
+  }
+
+  function wmCompactTable(rows = []) {
+    const sorted = [...rows].sort((a, b) => {
+      const order = {
+        UNLOADING: 0,
+        CALLED: 1,
+        WAITING: 2,
+        "WAITING GR": 3,
+        "DONE GR": 4,
+        COMPLETED: 5,
+        EXPIRED: 6,
+      };
+      const sa = String(a.status || "").toUpperCase();
+      const sb = String(b.status || "").toUpperCase();
+      return (
+        (order[sa] ?? 99) - (order[sb] ?? 99) ||
+        queueNoOrderValue(a) - queueNoOrderValue(b)
+      );
+    });
+
+    return `<section class="wm-detail-card">
+      <div class="wm-detail-head">
+        <div>
+          <h2>Detail Waiting, Checker, dan SLA Bongkar</h2>
+          <p>Data langsung dari Output form. Gunakan pencarian untuk menyaring queue, vendor, plat, gate, atau status.</p>
+        </div>
+        <div class="wm-detail-actions">
+          <label class="wm-table-search">
+            <span class="material-symbols-outlined">search</span>
+            <input
+              type="search"
+              placeholder="Cari queue, gate, plat, vendor..."
+              oninput="filterTable('wm-stitch-detail-table', this.value)"
+            />
+          </label>
+          <button
+            type="button"
+            class="wm-export-btn"
+            onclick="exportWaitingMonitorCsvV4()"
+          >
+            <span class="material-symbols-outlined">download</span>
+            Unduh CSV
+          </button>
+        </div>
+      </div>
+
+      <div class="wm-table-scroll">
+        <table id="wm-stitch-detail-table" class="wm-detail-table">
+          <thead>
+            <tr>
+              ${[
+                "Queue",
+                "Status",
+                "Vendor",
+                "Driver",
+                "Plat",
+                "PO Number",
+                "Fleet",
+                "Gate",
+                "Register",
+                "Dipanggil",
+                "Mulai Bongkar",
+                "SLA",
+              ]
+                .map((header) => `<th>${esc(header)}</th>`)
+                .join("")}
+            </tr>
+          </thead>
+          <tbody>
+            ${
+              sorted
+                .map((row) => {
+                  const st = String(row.status || "").toUpperCase();
+                  return `<tr>
+                    <td class="wm-mono wm-queue">${esc(row.queue_no || "-")}</td>
+                    <td><span class="wm-status-pill ${wmStatusClass(st)}">${esc(wmStatusText(st))}</span></td>
+                    <td class="wm-vendor">${esc(row.vendor_name || "-")}</td>
+                    <td>${esc(row.driver_name || "-")}</td>
+                    <td class="wm-mono">${esc(row.plat_number || "-")}</td>
+                    <td class="wm-mono wm-po">${esc(row.po_number || "-")}</td>
+                    <td>${esc(row.fleet_type || "-")}</td>
+                    <td class="wm-gate-text">${esc(row.gate || "-")}</td>
+                    <td class="wm-mono">${esc(formatDateTimeShort(row.register_time || row.created_at || ""))}</td>
+                    <td class="wm-mono">${esc(formatDateTimeShort(row.called_at || ""))}</td>
+                    <td class="wm-mono">${esc(formatDateTimeShort(row.start_unloading_at || ""))}</td>
+                    <td>${wmSlaCountdown(row)}</td>
+                  </tr>`;
+                })
+                .join("") ||
+              `<tr><td colspan="12" class="wm-empty-row">Belum ada data pada Output form.</td></tr>`
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <div class="wm-table-footer">
+        Menampilkan ${num(sorted.length)} tiket
+      </div>
+    </section>`;
+  }
+
+  function formatDateTimeShort(value = "") {
+    const date = parseInboundDateSafe(value);
+    if (!date) return "-";
+    return [
+      String(date.getHours()).padStart(2, "0"),
+      String(date.getMinutes()).padStart(2, "0"),
+    ].join(":");
+  }
+
+  window.exportWaitingMonitorCsvV4 = function exportWaitingMonitorCsvV4() {
+    const rows = state.dashboard?.queue || [];
+    const headers = [
+      "Queue",
+      "Status",
+      "Vendor",
+      "Driver",
+      "Plat",
+      "PO Number",
+      "Fleet",
+      "Gate",
+      "Register",
+      "Called",
+      "Start Unloading",
+      "SLA",
+    ];
+
+    const csvRows = rows.map((row) => [
+      row.queue_no || "",
+      wmStatusText(row.status || ""),
+      row.vendor_name || "",
+      row.driver_name || "",
+      row.plat_number || "",
+      row.po_number || "",
+      row.fleet_type || "",
+      row.gate || "",
+      row.register_time || row.created_at || "",
+      row.called_at || "",
+      row.start_unloading_at || "",
+      getInboundSlaInfo(row)?.status || "",
+    ]);
+
+    const escapeCsv = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+
+    const csv =
+      "\ufeff" +
+      [headers, ...csvRows]
+        .map((line) => line.map(escapeCsv).join(","))
+        .join("\r\n");
+
+    const blob = new Blob([csv], {
+      type: "text/csv;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download =
+      "waiting-monitor-" + new Date().toISOString().slice(0, 10) + ".csv";
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  window.pageMonitor = function pageMonitorStitchV4() {
+    const rows = state.dashboard?.queue || [];
+    const summary = getMonitorSummary(rows);
+
+    return `<div class="wm-stitch-v4">
+      <section class="wm-kpi-grid">
+        ${wmMetricCard("TOTAL", summary.total, "is-total")}
+        ${wmMetricCard("MENUNGGU", summary.waiting, "is-waiting")}
+        ${wmMetricCard("DIPANGGIL", summary.called, "is-called")}
+        ${wmMetricCard("BONGKAR", summary.unloading, "is-unloading")}
+        ${wmMetricCard("MENUNGGU GR", summary.waitingGr, "is-waiting-gr")}
+        ${wmMetricCard("GR SELESAI", summary.doneGr, "is-done-gr")}
+        ${wmMetricCard("SELESAI", summary.completed, "is-completed")}
+        ${wmMetricCard("KEDALUWARSA", summary.expired, "is-expired")}
+      </section>
+
+      <section class="wm-analytics-section">
+        <div class="wm-section-heading">
+          <div>
+            <h2>Analisis Performa</h2>
+            <p>Ringkasan volume kendaraan dan distribusi SLA dari data operasional.</p>
+          </div>
+          <div class="wm-time-range">
+            <span>8 Jam Terakhir</span>
+            <button type="button" onclick="refreshDashboard()" title="Muat ulang">
+              <span class="material-symbols-outlined">refresh</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="wm-chart-grid">
+          ${wmHourlyTrend(rows)}
+          ${wmSlaDonut(rows)}
+        </div>
+      </section>
+
+      ${wmGatePanel(rows)}
+      ${wmCompactTable(rows)}
+    </div>`;
+  };
+})();
