@@ -3783,8 +3783,10 @@ function addPoChoice(value) {
 
 function selectPoChoice(encodedPo) {
   addPoChoice(poDecode(encodedPo));
+
+  // Desktop tetap fokus. HP tidak membuka keyboard otomatis setelah memilih PO.
   const input = document.getElementById("po-search-input");
-  if (input) input.focus();
+  if (input && !isMobileTouchFormDevice()) input.focus();
 }
 
 function removePoChoice(encodedPo) {
@@ -3890,13 +3892,56 @@ function getFilteredVendorOptions() {
     .slice(0, 120);
 }
 
+function isMobileTouchFormDevice() {
+  return (
+    (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) ||
+    Number(navigator.maxTouchPoints || 0) > 0
+  );
+}
+
+function handleCustomSearchContainerClick(event, inputId, type) {
+  if (isMobileTouchFormDevice()) {
+    if (
+      performance.now() < Number(window.__mobileFormBlockClickUntil || 0) ||
+      event?.target?.closest?.("button")
+    ) {
+      event?.preventDefault?.();
+      event?.stopPropagation?.();
+    }
+    return;
+  }
+
+  const input = document.getElementById(inputId);
+  input?.focus();
+
+  if (type === "vendor") openVendorDropdown();
+  if (type === "po") openPoDropdown();
+}
+
+function handleVendorOptionSafeClick(event, encodedVendor) {
+  if (
+    isMobileTouchFormDevice() &&
+    performance.now() < Number(window.__mobileFormBlockClickUntil || 0)
+  ) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    return false;
+  }
+
+  event?.preventDefault?.();
+  event?.stopPropagation?.();
+  selectVendorChoice(encodedVendor);
+  return false;
+}
+
 function vendorCustomSelectInput(value = "") {
   const selected = String(value || "").trim();
   return `<label class="flex flex-col gap-2 md:col-span-2">
     <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Vendor Name</span>
     <input type="hidden" name="vendor_name" id="vendor-name-value" value="${esc(selected)}" required />
     <div class="relative">
-      <div class="form-input min-h-[48px] flex items-center flex-wrap gap-2 py-2 cursor-text" onclick="document.getElementById('vendor-search-input')?.focus(); openVendorDropdown();">
+      <div class="form-input min-h-[48px] flex items-center flex-wrap gap-2 py-2 cursor-text"
+        onclick="handleCustomSearchContainerClick(event, 'vendor-search-input', 'vendor')">
         <div id="vendor-selected-label" class="contents">${
           selected
             ? `<span class="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/25 text-primary px-2 py-1 text-[11px] font-extrabold max-w-full">
@@ -3947,8 +3992,7 @@ function filterVendorDropdown() {
         vendorMatchesFilter(getPoVendor(po), vendor),
       ).length;
       return `<button type="button"
-        onpointerdown="preventDropdownBlurSelect(event); selectVendorChoice('${poEncode(vendor)}')"
-        onmousedown="preventDropdownBlurSelect(event)"
+        onclick="handleVendorOptionSafeClick(event, '${poEncode(vendor)}')"
         class="w-full px-3 py-3 rounded-lg hover:bg-primary/10 text-left grid grid-cols-[1fr_auto] gap-3 border-b border-outline-variant/20 last:border-b-0 touch-manipulation">
         <span class="font-bold text-[12px] sm:text-[13px] text-on-surface break-words leading-5">${esc(vendor)}</span>
         <span class="text-[10px] text-primary font-bold whitespace-nowrap">${num(poCount)} PO</span>
@@ -3961,8 +4005,10 @@ function selectVendorChoice(encoded) {
   const vendor = poDecode(encoded);
   setVendorValue(vendor, true);
   document.getElementById("vendor-dropdown")?.classList.add("hidden");
+
+  // Desktop boleh lanjut fokus ke PO. HP tidak, supaya keyboard tidak muncul sendiri.
   const poSearch = document.getElementById("po-search-input");
-  if (poSearch) poSearch.focus();
+  if (poSearch && !isMobileTouchFormDevice()) poSearch.focus();
 }
 
 function clearVendorChoice() {
@@ -4008,7 +4054,8 @@ function poMultiSelectInput(value = "") {
     <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">PO Number</span>
     <input type="hidden" name="po_number" value="${esc(selected.join(", "))}" required />
     <div class="relative">
-      <div class="form-input min-h-[48px] flex items-center flex-wrap gap-2 py-2 cursor-text" onclick="document.getElementById('po-search-input')?.focus(); openPoDropdown();">
+      <div class="form-input min-h-[48px] flex items-center flex-wrap gap-2 py-2 cursor-text"
+        onclick="handleCustomSearchContainerClick(event, 'po-search-input', 'po')">
         <div id="po-selected-chips" class="contents">${chipHtml}</div>
         <input id="po-search-input" type="text" class="min-w-[150px] sm:min-w-[220px] flex-1 bg-transparent border-0 outline-none focus:ring-0 p-1 text-on-surface placeholder:text-on-surface-variant/70 text-sm sm:text-base" placeholder="Cari PO sesuai vendor..." autocomplete="off" onfocus="openPoDropdown()" onblur="closePoDropdownSoon()" oninput="handlePoSearchInput(this)" onkeydown="handlePoSearchKeydown(event)" />
         <button type="button" class="thin-tab rounded-md px-3 py-2 text-[11px] font-extrabold shrink-0" onclick="event.stopPropagation(); addPoFromSearch()">Tambah</button>
@@ -7756,146 +7803,189 @@ window.initShader = function initShaderDisabled() {
 };
 
 /* ==========================================================================
- * MOBILE TAP-TO-FOCUS GUARD
- * Tujuan:
- * - Geser/scroll di atas input tidak membuka keyboard.
- * - Geser di area Vendor/PO tidak dianggap klik.
- * - Keyboard hanya muncul setelah tap pendek tanpa perpindahan jari.
+ * MOBILE FORM SCROLL GUARD V2
+ * - Input HP dikunci readonly sebelum disentuh.
+ * - Swipe/scroll tidak pernah membuka keyboard.
+ * - Tap pendek membuka field dan keyboard.
+ * - Vendor tidak bisa terpilih dari gerakan scroll.
  * ========================================================================== */
-(function installMobileTapToFocusGuard() {
-  if (window.__mobileTapToFocusGuardInstalled) return;
-  window.__mobileTapToFocusGuardInstalled = true;
+(function installMobileFormScrollGuardV2() {
+  if (window.__mobileFormScrollGuardV2Installed) return;
+  window.__mobileFormScrollGuardV2Installed = true;
 
-  const MOVE_LIMIT_PX = 12;
-  let active = null;
+  const MOVE_LIMIT_PX = 14;
+  const BLOCK_CLICK_MS = 850;
+  let gesture = null;
 
-  function isTouchLikeDevice() {
-    return (
-      (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) ||
-      Number(navigator.maxTouchPoints || 0) > 0
-    );
+  function isMobile() {
+    return isMobileTouchFormDevice();
   }
 
-  function isOperationalField(element) {
-    if (!element || !element.matches) return false;
-    if (!element.closest("#page-root")) return false;
+  function isTextField(element) {
+    if (!element?.matches || !element.closest("#page-root")) return false;
 
     return element.matches(
       [
-        'input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="file"])',
-        "textarea",
+        'input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="file"]):not([disabled])',
+        "textarea:not([disabled])",
       ].join(","),
     );
   }
 
-  function rememberFieldState(field) {
-    return {
-      field,
-      startX: 0,
-      startY: 0,
+  function saveOriginalFieldState(field) {
+    if (!field || field.dataset.mobileOriginalSaved === "1") return;
+
+    field.dataset.mobileOriginalSaved = "1";
+    field.dataset.mobileOriginalReadonly = field.readOnly ? "1" : "0";
+    field.dataset.mobileOriginalInputmode =
+      field.getAttribute("inputmode") === null
+        ? "__NULL__"
+        : field.getAttribute("inputmode");
+  }
+
+  function lockField(field) {
+    if (!isMobile() || !isTextField(field)) return;
+
+    saveOriginalFieldState(field);
+
+    if (field.dataset.mobileOriginalReadonly === "1") return;
+
+    delete field.dataset.mobileEditing;
+    field.readOnly = true;
+    field.setAttribute("inputmode", "none");
+    field.dataset.mobileScrollLocked = "1";
+  }
+
+  function unlockField(field) {
+    if (!isMobile() || !isTextField(field)) return;
+
+    saveOriginalFieldState(field);
+
+    if (field.dataset.mobileOriginalReadonly === "1") return;
+
+    field.readOnly = false;
+
+    const originalMode = field.dataset.mobileOriginalInputmode;
+    if (originalMode === "__NULL__") field.removeAttribute("inputmode");
+    else field.setAttribute("inputmode", originalMode || "");
+
+    delete field.dataset.mobileScrollLocked;
+    field.dataset.mobileEditing = "1";
+  }
+
+  function lockAllFields(root = document) {
+    if (!isMobile()) return;
+
+    root
+      .querySelectorAll?.(
+        '#page-root input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="file"]), #page-root textarea',
+      )
+      .forEach(lockField);
+  }
+
+  function markMoved(x, y) {
+    if (!gesture || gesture.moved) return;
+
+    const distance = Math.hypot(
+      Number(x || 0) - gesture.startX,
+      Number(y || 0) - gesture.startY,
+    );
+
+    if (distance > MOVE_LIMIT_PX) {
+      gesture.moved = true;
+      window.__mobileFormBlockClickUntil = performance.now() + BLOCK_CLICK_MS;
+
+      if (gesture.field && document.activeElement === gesture.field) {
+        gesture.field.blur();
+        lockField(gesture.field);
+      }
+    }
+  }
+
+  function beginGesture(event, x, y, pointerId = null) {
+    if (!isMobile()) return;
+
+    gesture = {
+      field: isTextField(event.target) ? event.target : null,
+      pointerId,
+      startX: Number(x || 0),
+      startY: Number(y || 0),
       moved: false,
-      originalReadOnly: !!field.readOnly,
-      originalInputMode: field.getAttribute("inputmode"),
-      wasFocused: document.activeElement === field,
     };
   }
 
-  function temporarilyBlockKeyboard(item) {
-    const field = item?.field;
-    if (!field || item.wasFocused) return;
+  function finishGesture(x, y) {
+    if (!gesture) return;
 
-    field.readOnly = true;
-    field.setAttribute("inputmode", "none");
-    field.dataset.mobileKeyboardGuard = "1";
-  }
+    markMoved(x, y);
+    const current = gesture;
+    gesture = null;
 
-  function restoreFieldState(item) {
-    const field = item?.field;
-    if (!field) return;
-
-    field.readOnly = item.originalReadOnly;
-
-    if (item.originalInputMode === null) {
-      field.removeAttribute("inputmode");
-    } else {
-      field.setAttribute("inputmode", item.originalInputMode);
+    if (current.moved) {
+      if (current.field) lockField(current.field);
+      return;
     }
 
-    delete field.dataset.mobileKeyboardGuard;
-  }
+    if (!current.field) return;
 
-  function markMoved(clientX, clientY) {
-    if (!active) return;
+    // Tap pendek: baru aktifkan input.
+    unlockField(current.field);
 
-    const dx = Number(clientX || 0) - active.startX;
-    const dy = Number(clientY || 0) - active.startY;
-
-    if (Math.hypot(dx, dy) > MOVE_LIMIT_PX) {
-      active.moved = true;
-
-      // Kalau browser sempat memberi fokus saat mulai menggeser, tutup lagi.
-      if (
-        active.field &&
-        document.activeElement === active.field &&
-        !active.wasFocused
-      ) {
-        active.field.blur();
-      }
+    try {
+      current.field.focus({ preventScroll: true });
+    } catch (err) {
+      current.field.focus();
     }
-  }
 
-  function finishGesture(clientX, clientY) {
-    if (!active) return;
-
-    markMoved(clientX, clientY);
-    const item = active;
-    active = null;
-
-    restoreFieldState(item);
-
-    if (item.moved || item.wasFocused) return;
-
-    // Tap pendek: baru izinkan fokus dan keyboard.
-    setTimeout(() => {
-      if (!document.body.contains(item.field)) return;
-
+    if (
+      current.field.value &&
+      typeof current.field.setSelectionRange === "function"
+    ) {
+      const end = String(current.field.value).length;
       try {
-        item.field.focus({ preventScroll: true });
-      } catch (err) {
-        item.field.focus();
-      }
-
-      if (
-        typeof item.field.setSelectionRange === "function" &&
-        item.field.value
-      ) {
-        const end = String(item.field.value).length;
-        try {
-          item.field.setSelectionRange(end, end);
-        } catch (err) {}
-      }
-    }, 0);
+        current.field.setSelectionRange(end, end);
+      } catch (err) {}
+    }
   }
+
+  lockAllFields();
+
+  document.addEventListener("DOMContentLoaded", () => {
+    setTimeout(() => lockAllFields(), 0);
+    setTimeout(() => lockAllFields(), 300);
+  });
+
+  const observer = new MutationObserver((mutations) => {
+    if (!isMobile()) return;
+
+    mutations.forEach((mutation) => {
+      mutation.addedNodes.forEach((node) => {
+        if (!(node instanceof Element)) return;
+        if (isTextField(node)) lockField(node);
+        lockAllFields(node);
+      });
+    });
+  });
+
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
 
   if ("PointerEvent" in window) {
     document.addEventListener(
       "pointerdown",
       (event) => {
         if (
-          !isTouchLikeDevice() ||
+          !isMobile() ||
           (event.pointerType &&
             event.pointerType !== "touch" &&
-            event.pointerType !== "pen") ||
-          !isOperationalField(event.target)
+            event.pointerType !== "pen")
         ) {
           return;
         }
 
-        active = rememberFieldState(event.target);
-        active.pointerId = event.pointerId;
-        active.startX = event.clientX;
-        active.startY = event.clientY;
-        temporarilyBlockKeyboard(active);
+        beginGesture(event, event.clientX, event.clientY, event.pointerId);
       },
       true,
     );
@@ -7903,7 +7993,7 @@ window.initShader = function initShaderDisabled() {
     document.addEventListener(
       "pointermove",
       (event) => {
-        if (!active || active.pointerId !== event.pointerId) return;
+        if (!gesture || gesture.pointerId !== event.pointerId) return;
         markMoved(event.clientX, event.clientY);
       },
       true,
@@ -7912,7 +8002,7 @@ window.initShader = function initShaderDisabled() {
     document.addEventListener(
       "pointerup",
       (event) => {
-        if (!active || active.pointerId !== event.pointerId) return;
+        if (!gesture || gesture.pointerId !== event.pointerId) return;
         finishGesture(event.clientX, event.clientY);
       },
       true,
@@ -7921,9 +8011,8 @@ window.initShader = function initShaderDisabled() {
     document.addEventListener(
       "pointercancel",
       () => {
-        if (!active) return;
-        restoreFieldState(active);
-        active = null;
+        if (gesture?.field) lockField(gesture.field);
+        gesture = null;
       },
       true,
     );
@@ -7931,19 +8020,9 @@ window.initShader = function initShaderDisabled() {
     document.addEventListener(
       "touchstart",
       (event) => {
-        if (
-          !isTouchLikeDevice() ||
-          event.touches.length !== 1 ||
-          !isOperationalField(event.target)
-        ) {
-          return;
-        }
-
+        if (!isMobile() || event.touches.length !== 1) return;
         const touch = event.touches[0];
-        active = rememberFieldState(event.target);
-        active.startX = touch.clientX;
-        active.startY = touch.clientY;
-        temporarilyBlockKeyboard(active);
+        beginGesture(event, touch.clientX, touch.clientY);
       },
       { capture: true, passive: true },
     );
@@ -7951,7 +8030,7 @@ window.initShader = function initShaderDisabled() {
     document.addEventListener(
       "touchmove",
       (event) => {
-        if (!active || event.touches.length !== 1) return;
+        if (!gesture || event.touches.length !== 1) return;
         const touch = event.touches[0];
         markMoved(touch.clientX, touch.clientY);
       },
@@ -7961,11 +8040,11 @@ window.initShader = function initShaderDisabled() {
     document.addEventListener(
       "touchend",
       (event) => {
-        if (!active) return;
+        if (!gesture) return;
         const touch = event.changedTouches?.[0];
         finishGesture(
-          touch ? touch.clientX : active.startX,
-          touch ? touch.clientY : active.startY,
+          touch ? touch.clientX : gesture.startX,
+          touch ? touch.clientY : gesture.startY,
         );
       },
       { capture: true, passive: true },
@@ -7974,22 +8053,84 @@ window.initShader = function initShaderDisabled() {
     document.addEventListener(
       "touchcancel",
       () => {
-        if (!active) return;
-        restoreFieldState(active);
-        active = null;
+        if (gesture?.field) lockField(gesture.field);
+        gesture = null;
       },
       { capture: true, passive: true },
     );
   }
 
-  // Kalau scroll benar-benar berjalan, pastikan field yang baru tersentuh tidak aktif.
   document.addEventListener(
-    "scroll",
-    () => {
-      if (!active || !active.field || active.wasFocused) return;
-      active.moved = true;
-      if (document.activeElement === active.field) active.field.blur();
+    "click",
+    (event) => {
+      if (
+        isMobile() &&
+        event.isTrusted &&
+        performance.now() < Number(window.__mobileFormBlockClickUntil || 0)
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation?.();
+      }
     },
     true,
   );
+
+  document.addEventListener(
+    "focusin",
+    (event) => {
+      const field = event.target;
+
+      if (
+        !isMobile() ||
+        !isTextField(field) ||
+        field.dataset.mobileOriginalReadonly === "1"
+      ) {
+        return;
+      }
+
+      if (
+        field.dataset.mobileScrollLocked === "1" &&
+        field.dataset.mobileEditing !== "1"
+      ) {
+        field.blur();
+      }
+    },
+    true,
+  );
+
+  document.addEventListener(
+    "focusout",
+    (event) => {
+      const field = event.target;
+      if (!isMobile() || !isTextField(field)) return;
+
+      setTimeout(() => {
+        if (document.activeElement !== field) lockField(field);
+      }, 80);
+    },
+    true,
+  );
+
+  document.addEventListener(
+    "scroll",
+    () => {
+      if (!isMobile()) return;
+
+      if (gesture) {
+        gesture.moved = true;
+        window.__mobileFormBlockClickUntil = performance.now() + BLOCK_CLICK_MS;
+
+        if (gesture.field && document.activeElement === gesture.field) {
+          gesture.field.blur();
+          lockField(gesture.field);
+        }
+      }
+    },
+    true,
+  );
+
+  window.addEventListener("resize", () => {
+    setTimeout(() => lockAllFields(), 100);
+  });
 })();

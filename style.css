@@ -457,3 +457,31 @@ body {
     -webkit-tap-highlight-color: transparent;
   }
 }
+
+/* ==========================================================================
+   PENGAMAN SENTUH FORM HP V2
+   ========================================================================== */
+@media (pointer: coarse) {
+  #vendor-dropdown,
+  #vendor-dropdown-list,
+  #vendor-dropdown-list button,
+  #po-dropdown,
+  #po-dropdown-list,
+  #po-dropdown-list label,
+  #security-form .form-input,
+  #security-form .form-select {
+    touch-action: pan-y !important;
+  }
+
+  #vendor-dropdown-list button,
+  #po-dropdown-list label {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  #page-root input[data-mobile-scroll-locked="1"],
+  #page-root textarea[data-mobile-scroll-locked="1"] {
+    opacity: 1 !important;
+    cursor: text;
+  }
+}
