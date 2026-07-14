@@ -169,12 +169,47 @@ async function fetchOutputFormData() {
   return apiGetV2("output");
 }
 
+function normalizeFieldKeyV6(value = "") {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
 function getCell(row, keys, fallback = "") {
+  if (!row || typeof row !== "object") return fallback;
+
+  // Prioritas pertama tetap exact match agar tidak mengubah perilaku lama.
   for (const key of keys) {
-    if (row && row[key] !== undefined && row[key] !== null && row[key] !== "") {
+    if (row[key] !== undefined && row[key] !== null && row[key] !== "") {
       return row[key];
     }
   }
+
+  // Fallback header fleksibel:
+  // "Start Unloading At", "start_unloading_at", dan "start-unloading-at"
+  // dianggap field yang sama.
+  const normalizedRow = {};
+  Object.keys(row).forEach((key) => {
+    const normalized = normalizeFieldKeyV6(key);
+    if (
+      normalized &&
+      normalizedRow[normalized] === undefined &&
+      row[key] !== undefined &&
+      row[key] !== null &&
+      row[key] !== ""
+    ) {
+      normalizedRow[normalized] = row[key];
+    }
+  });
+
+  for (const key of keys) {
+    const value = normalizedRow[normalizeFieldKeyV6(key)];
+    if (value !== undefined && value !== null && value !== "") {
+      return value;
+    }
+  }
+
   return fallback;
 }
 
@@ -581,68 +616,209 @@ function normalizeQueueSequenceBySlot(queue = []) {
   });
 }
 
+function outputStatusRankV6(status = "") {
+  const order = {
+    WAITING: 0,
+    CALLED: 1,
+    UNLOADING: 2,
+    "WAITING GR": 3,
+    "DONE GR": 4,
+    COMPLETED: 5,
+    EXPIRED: 6,
+  };
+  return (
+    order[
+      String(status || "")
+        .trim()
+        .toUpperCase()
+    ] ?? -1
+  );
+}
+
+function fallbackDateValueV6(...values) {
+  return (
+    values.find((value) => {
+      if (value === undefined || value === null || value === "") return false;
+      return !!parseInboundDateSafe(value);
+    }) || ""
+  );
+}
+
 function buildQueueFromOutputForm(outputRows = []) {
   return outputRows.map((row, idx) => {
-    const created = getCell(row, ["created_at", "register_time", "Timestamp"]);
-    const completed = getCell(row, ["completed_at"], "");
     const status = String(
-      getCell(row, ["status"], "WAITING") || "WAITING",
-    ).toUpperCase();
+      getCell(row, ["status", "Status"], "WAITING") || "WAITING",
+    )
+      .trim()
+      .toUpperCase();
+
+    const rank = outputStatusRankV6(status);
+
+    const timestamp = getCell(row, [
+      "Timestamp",
+      "timestamp",
+      "created timestamp",
+    ]);
+
+    const created = fallbackDateValueV6(
+      getCell(row, ["created_at", "created at"]),
+      getCell(row, ["register_time", "register time"]),
+      timestamp,
+    );
+
+    const registerTime = fallbackDateValueV6(
+      getCell(row, ["register_time", "register time"]),
+      getCell(row, ["created_at", "created at"]),
+      timestamp,
+    );
+
+    const updatedAt = fallbackDateValueV6(
+      getCell(row, ["updated_at", "updated at"]),
+      getCell(row, ["last_call_at", "last call at"]),
+      timestamp,
+    );
+
+    let calledAt = fallbackDateValueV6(
+      getCell(row, ["called_at", "called at"]),
+      getCell(row, ["last_call_at", "last call at"]),
+      getCell(row, ["last_call_attempt_at", "last call attempt at"]),
+    );
+
+    let startUnloadingAt = fallbackDateValueV6(
+      getCell(row, [
+        "start_unloading_at",
+        "start unloading at",
+        "unloading_start_at",
+      ]),
+    );
+
+    const waitingGrAt = fallbackDateValueV6(
+      getCell(row, ["waiting_gr_at", "waiting gr at"]),
+    );
+    const doneGrAt = fallbackDateValueV6(
+      getCell(row, ["done_gr_at", "done gr at"]),
+    );
+    const handoverGrnAt = fallbackDateValueV6(
+      getCell(row, ["handover_grn_at", "handover grn at"]),
+    );
+    let completedAt = fallbackDateValueV6(
+      getCell(row, ["completed_at", "completed at"]),
+      handoverGrnAt,
+    );
+
+    // Data lama kadang tidak memiliki kolom waktu transisi.
+    // Gunakan timestamp perubahan terbaik yang tersedia agar monitor tetap hidup.
+    if (!calledAt && rank >= 1 && status !== "EXPIRED") {
+      calledAt = fallbackDateValueV6(
+        startUnloadingAt,
+        waitingGrAt,
+        doneGrAt,
+        handoverGrnAt,
+        completedAt,
+        updatedAt,
+        registerTime,
+      );
+    }
+
+    if (!startUnloadingAt && rank >= 2 && status !== "EXPIRED") {
+      startUnloadingAt = fallbackDateValueV6(
+        waitingGrAt,
+        doneGrAt,
+        handoverGrnAt,
+        completedAt,
+        updatedAt,
+        calledAt,
+        registerTime,
+      );
+    }
+
+    if (!completedAt && status === "COMPLETED") {
+      completedAt = fallbackDateValueV6(
+        handoverGrnAt,
+        updatedAt,
+        doneGrAt,
+        waitingGrAt,
+        startUnloadingAt,
+      );
+    }
+
     const plate = normalizePlateValue(
-      getCell(row, ["plat_number", "Licence Plate", "license_plate"], ""),
+      getCell(
+        row,
+        ["plat_number", "Licence Plate", "license_plate", "plat number"],
+        "",
+      ),
     );
 
     return {
       source: getCell(row, ["source"], "OUTPUT_FORM"),
       row_no: idx + 2,
-      ticket_id: getCell(row, ["ticket_id"], ""),
+      ticket_id: getCell(row, ["ticket_id", "ticket id"], ""),
       queue_no: getCell(
         row,
-        ["queue_no"],
+        ["queue_no", "queue no"],
         `REG ${getCell(row, ["slot"], "3")}-${idx + 1}`,
       ),
-      ticket_type: getCell(row, ["ticket_type"], "REG"),
+      ticket_type: getCell(row, ["ticket_type", "ticket type"], "REG"),
       slot: String(getCell(row, ["slot"], "3") || "3"),
+      Timestamp: timestamp,
       created_at: created,
-      register_time: getCell(row, ["register_time"], created),
-      completed_at: completed,
-      waiting_gr_at: getCell(row, ["waiting_gr_at"], ""),
-      done_gr_at: getCell(row, ["done_gr_at"], ""),
-      handover_grn_at: getCell(row, ["handover_grn_at"], ""),
-      called_at: getCell(row, ["called_at"], ""),
-      start_unloading_at: getCell(row, ["start_unloading_at"], ""),
-      updated_at: getCell(row, ["updated_at"], ""),
-      expired_at: getCell(row, ["expired_at"], ""),
-      expired_reason: getCell(row, ["expired_reason"], ""),
-      sla_finished_at: getCell(row, ["sla_finished_at", "SLA Finished At"], ""),
+      register_time: registerTime,
+      completed_at: completedAt,
+      waiting_gr_at: waitingGrAt,
+      done_gr_at: doneGrAt,
+      handover_grn_at: handoverGrnAt,
+      called_at: calledAt,
+      start_unloading_at: startUnloadingAt,
+      updated_at: updatedAt,
+      last_call_at: getCell(row, ["last_call_at", "last call at"], ""),
+      expired_at: getCell(row, ["expired_at", "expired at"], ""),
+      expired_reason: getCell(row, ["expired_reason", "expired reason"], ""),
+      sla_finished_at: getCell(
+        row,
+        ["sla_finished_at", "SLA Finished At", "sla finished at"],
+        "",
+      ),
+      sla_target_hours: toNumberV2(
+        getCell(row, ["sla_target_hours", "sla target hours"], 0),
+      ),
+      sla_status: getCell(row, ["sla_status", "sla status"], ""),
       vendor_name: getCell(row, ["vendor_name", "Vendor Name"], ""),
       fleet_type: getCell(
         row,
-        ["fleet_type", "Vhiecle Type", "Vehicle Type"],
+        ["fleet_type", "Vhiecle Type", "Vehicle Type", "fleet type"],
         "",
       ),
       plat_number: plate,
-      driver_name: getCell(row, ["driver_name"], ""),
-      phone_number: getCell(row, ["phone_number"], ""),
-      ktp_6_digit: getCell(row, ["ktp_6_digit"], ""),
-      po_number: getCell(row, ["po_number", "po"], ""),
+      driver_name: getCell(row, ["driver_name", "driver name"], ""),
+      phone_number: getCell(row, ["phone_number", "phone number"], ""),
+      ktp_6_digit: getCell(row, ["ktp_6_digit", "ktp 6 digit"], ""),
+      po_number: getCell(
+        row,
+        ["po_number", "po", "PO Number", "po number"],
+        "",
+      ),
       gate: getCell(row, ["gate"], "-") || "-",
       status,
       po_status: getCell(row, ["po_status"], ""),
       arrival_status: getCell(row, ["arrival_status"], ""),
-      unload_sla: getCell(row, ["unload_sla"], ""),
+      unload_sla: getCell(row, ["unload_sla", "sla_status", "SLA Status"], ""),
       total_po_qty: toNumberV2(
         getCell(row, ["total_po_qty", "total_request_quantity"], 0),
       ),
       actual_quantity: toNumberV2(getCell(row, ["actual_quantity"], 0)),
       count_po_sku: toNumberV2(getCell(row, ["count_po_sku", "Count SKU"], 0)),
       call_count: toNumberV2(getCell(row, ["call_count", "wa_call_count"], 0)),
-      last_call_attempt_at: getCell(row, ["last_call_attempt_at"], ""),
+      last_call_attempt_at: getCell(
+        row,
+        ["last_call_attempt_at", "last call attempt at"],
+        "",
+      ),
       wa_call_status: getCell(row, ["wa_call_status"], ""),
       wa_call_sent_at: getCell(row, ["wa_call_sent_at"], ""),
       wa_call_error: getCell(row, ["wa_call_error"], ""),
       waiting_text: getCell(row, ["waiting_text"], ""),
-      waiting_minutes: minutesFromCreated(created),
+      waiting_minutes: minutesFromCreated(registerTime || created),
       raw: row,
     };
   });

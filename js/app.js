@@ -8457,17 +8457,145 @@ window.initShader = function initShaderDisabled() {
     </section>`;
   }
 
+  function wmRowValue(row = {}, keys = [], fallback = "") {
+    const direct = getFirstValue(row, keys);
+    if (direct !== undefined && direct !== null && direct !== "") {
+      return direct;
+    }
+
+    const raw = row.raw && typeof row.raw === "object" ? row.raw : {};
+    const normalized = {};
+    Object.keys(raw).forEach((key) => {
+      const safe = String(key || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
+      if (
+        safe &&
+        normalized[safe] === undefined &&
+        raw[key] !== undefined &&
+        raw[key] !== null &&
+        raw[key] !== ""
+      ) {
+        normalized[safe] = raw[key];
+      }
+    });
+
+    for (const key of keys) {
+      const safe = String(key || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
+      if (
+        normalized[safe] !== undefined &&
+        normalized[safe] !== null &&
+        normalized[safe] !== ""
+      ) {
+        return normalized[safe];
+      }
+    }
+
+    return fallback;
+  }
+
+  function wmResolveRegisterDate(row = {}) {
+    return parseInboundDateSafe(
+      wmRowValue(row, [
+        "register_time",
+        "register time",
+        "created_at",
+        "created at",
+        "Timestamp",
+        "timestamp",
+      ]),
+    );
+  }
+
+  function wmResolveCalledDate(row = {}) {
+    const direct = parseInboundDateSafe(
+      wmRowValue(row, [
+        "called_at",
+        "called at",
+        "last_call_at",
+        "last call at",
+        "last_call_attempt_at",
+      ]),
+    );
+    if (direct) return direct;
+
+    const status = String(row.status || "")
+      .trim()
+      .toUpperCase();
+    if (
+      ["CALLED", "UNLOADING", "WAITING GR", "DONE GR", "COMPLETED"].includes(
+        status,
+      )
+    ) {
+      return (
+        parseInboundDateSafe(
+          wmRowValue(row, [
+            "start_unloading_at",
+            "start unloading at",
+            "waiting_gr_at",
+            "done_gr_at",
+            "handover_grn_at",
+            "completed_at",
+            "updated_at",
+          ]),
+        ) || wmResolveRegisterDate(row)
+      );
+    }
+
+    return null;
+  }
+
+  function wmResolveStartDate(row = {}) {
+    const direct = parseInboundDateSafe(
+      wmRowValue(row, [
+        "start_unloading_at",
+        "start unloading at",
+        "unloading_start_at",
+      ]),
+    );
+    if (direct) return direct;
+
+    const status = String(row.status || "")
+      .trim()
+      .toUpperCase();
+    if (["UNLOADING", "WAITING GR", "DONE GR", "COMPLETED"].includes(status)) {
+      return (
+        parseInboundDateSafe(
+          wmRowValue(row, [
+            "waiting_gr_at",
+            "done_gr_at",
+            "handover_grn_at",
+            "completed_at",
+            "updated_at",
+          ]),
+        ) ||
+        wmResolveCalledDate(row) ||
+        wmResolveRegisterDate(row)
+      );
+    }
+
+    return null;
+  }
+
   function wmResolveSlaTarget(row = {}) {
-    const directTarget = getFirstValue(row, [
-      "sla_finished_at",
-      "SLA Finished At",
-    ]);
-    const directDate = parseInboundDateSafe(directTarget);
+    const directDate = parseInboundDateSafe(
+      wmRowValue(row, [
+        "sla_finished_at",
+        "SLA Finished At",
+        "sla finished at",
+      ]),
+    );
     if (directDate) return directDate;
 
-    const startText = getFirstValue(row, ["start_unloading_at"]);
-    const startDate = parseInboundDateSafe(startText);
-    const targetHours = Number(getInboundSlaHours(row) || 0);
+    const startDate = wmResolveStartDate(row);
+    const configuredHours = Number(
+      wmRowValue(row, ["sla_target_hours", "sla target hours"], 0),
+    );
+    const targetHours = configuredHours || Number(getInboundSlaHours(row) || 0);
 
     if (!startDate || !targetHours) return null;
 
@@ -8481,7 +8609,14 @@ window.initShader = function initShaderDisabled() {
     if (status !== "COMPLETED") return null;
 
     return parseInboundDateSafe(
-      getFirstValue(row, ["handover_grn_at", "completed_at", "updated_at"]),
+      wmRowValue(row, [
+        "handover_grn_at",
+        "handover grn at",
+        "completed_at",
+        "completed at",
+        "updated_at",
+        "updated at",
+      ]),
     );
   }
 
@@ -8535,7 +8670,7 @@ window.initShader = function initShaderDisabled() {
     }
 
     if (!targetDate) {
-      return `<span class="wm-sla-value is-neutral">-</span>`;
+      return `<span class="wm-sla-value is-neutral">WAKTU BELUM TERSEDIA</span>`;
     }
 
     const targetMs = targetDate.getTime();
@@ -8695,9 +8830,9 @@ window.initShader = function initShaderDisabled() {
                     <td class="wm-mono wm-po">${esc(row.po_number || "-")}</td>
                     <td>${esc(row.fleet_type || "-")}</td>
                     <td class="wm-gate-text">${esc(row.gate || "-")}</td>
-                    <td class="wm-mono">${esc(formatDateTimeShort(row.register_time || row.created_at || ""))}</td>
-                    <td class="wm-mono">${esc(formatDateTimeShort(row.called_at || ""))}</td>
-                    <td class="wm-mono">${esc(formatDateTimeShort(row.start_unloading_at || ""))}</td>
+                    <td class="wm-mono">${esc(formatDateTimeShort(wmResolveRegisterDate(row)))}</td>
+                    <td class="wm-mono">${esc(formatDateTimeShort(wmResolveCalledDate(row)))}</td>
+                    <td class="wm-mono">${esc(formatDateTimeShort(wmResolveStartDate(row)))}</td>
                     <td>${wmSlaCountdown(row)}</td>
                   </tr>`;
                 })
