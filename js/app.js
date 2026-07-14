@@ -8525,50 +8525,83 @@ window.initShader = function initShaderDisabled() {
   }
 
   function wmSlaDonut(rows = []) {
-    let ok = 0;
-    let miss = 0;
-    let process = 0;
+    let completedSla = 0;
+    let missSla = 0;
+    let expired = 0;
 
     rows.forEach((row) => {
-      const info = getInboundSlaInfo(row);
-      const status = String(info?.status || "").toUpperCase();
-      if (status === "SLA OK") ok += 1;
-      else if (status === "SLA MISS") miss += 1;
-      else process += 1;
+      const ticketStatus = String(row.status || "")
+        .trim()
+        .toUpperCase();
+
+      if (ticketStatus === "EXPIRED") {
+        expired += 1;
+        return;
+      }
+
+      // SLA final hanya dihitung saat tiket benar-benar COMPLETED.
+      if (ticketStatus !== "COMPLETED") return;
+
+      const slaResult = String(wmSlaExportValue(row) || "")
+        .trim()
+        .toUpperCase();
+
+      if (slaResult === "TERCAPAI") completedSla += 1;
+      else if (slaResult === "LATE") missSla += 1;
     });
 
-    const total = Math.max(1, ok + miss + process);
-    const okPct = Math.round((ok / total) * 100);
-    const missPct = Math.round((miss / total) * 100);
-    const processPct = Math.max(0, 100 - okPct - missPct);
+    const totalFinal = completedSla + missSla + expired;
 
-    const gradient = `conic-gradient(
-      rgb(var(--success)) 0% ${okPct}%,
-      rgb(var(--error)) ${okPct}% ${okPct + missPct}%,
-      rgb(var(--warning)) ${okPct + missPct}% 100%
-    )`;
+    const completedPct = totalFinal ? (completedSla / totalFinal) * 100 : 0;
+    const missPct = totalFinal ? (missSla / totalFinal) * 100 : 0;
+    const expiredPct = totalFinal ? (expired / totalFinal) * 100 : 0;
+
+    const completedEnd = completedPct;
+    const missEnd = completedPct + missPct;
+
+    const donutBackground = totalFinal
+      ? `conic-gradient(
+          rgb(var(--success)) 0% ${completedEnd}%,
+          rgb(var(--error)) ${completedEnd}% ${missEnd}%,
+          rgb(var(--warning)) ${missEnd}% 100%
+        )`
+      : "rgb(var(--surface-container-highest))";
 
     return `<section class="wm-chart-card wm-donut-card">
       <div class="wm-chart-card-head">
         <div>
           <span class="wm-chart-eyebrow">DISTRIBUSI SLA</span>
-          <h3>Status SLA Bongkar</h3>
+          <h3>Hasil SLA Final</h3>
         </div>
       </div>
 
       <div class="wm-donut-wrap">
-        <div class="wm-donut" style="${gradient}">
+        <div
+          class="wm-donut"
+          style="background: ${donutBackground};"
+          role="img"
+          aria-label="Completed SLA ${num(completedSla)}, Miss SLA ${num(missSla)}, Expired ${num(expired)}"
+        >
           <div class="wm-donut-hole">
-            <strong>${num(okPct)}%</strong>
-            <span>TEPAT WAKTU</span>
+            <strong>${num(totalFinal)}</strong>
+            <span>TIKET FINAL</span>
           </div>
         </div>
       </div>
 
       <div class="wm-donut-legend">
-        <span><i class="is-ok"></i>Tepat Waktu (${num(ok)})</span>
-        <span><i class="is-miss"></i>Terlambat (${num(miss)})</span>
-        <span><i class="is-process"></i>Proses (${num(process)})</span>
+        <span>
+          <i class="is-ok"></i>
+          Completed SLA (${num(completedSla)})
+        </span>
+        <span>
+          <i class="is-miss"></i>
+          Miss SLA (${num(missSla)})
+        </span>
+        <span>
+          <i class="is-process"></i>
+          Expired (${num(expired)})
+        </span>
       </div>
     </section>`;
   }
