@@ -9478,3 +9478,115 @@ window.initShader = function initShaderDisabled() {
     ensureIndicatorV11();
   });
 })();
+
+/* ==========================================================================
+ * NONAKTIFKAN DASHBOARD SPV V12
+ * - Menu Dashboard SPV disembunyikan.
+ * - SPV kembali masuk ke menu Daftar setelah login.
+ * - URL/hash lama #spv_dashboard otomatis diarahkan ke Daftar.
+ * - Dashboard SPV tidak ikut auto sync karena tidak lagi dapat dibuka.
+ * ========================================================================== */
+(function disableSpvDashboardV12() {
+  if (window.__disableSpvDashboardV12Installed) return;
+  window.__disableSpvDashboardV12Installed = true;
+
+  const DISABLED_PAGE = "spv_dashboard";
+  const FALLBACK_PAGE = "daftar";
+
+  if (typeof ROLE_ACCESS === "object" && Array.isArray(ROLE_ACCESS.SPV)) {
+    ROLE_ACCESS.SPV = ROLE_ACCESS.SPV.filter((page) => page !== DISABLED_PAGE);
+  }
+
+  if (typeof ROLE_DEFAULT_PAGE === "object") {
+    ROLE_DEFAULT_PAGE.SPV = FALLBACK_PAGE;
+  }
+
+  if (typeof pageMeta === "object") {
+    delete pageMeta[DISABLED_PAGE];
+  }
+
+  function hideSpvDashboardMenuV12() {
+    document
+      .querySelectorAll(`[data-page="${DISABLED_PAGE}"]`)
+      .forEach((element) => {
+        element.style.display = "none";
+        element.setAttribute("aria-hidden", "true");
+        element.setAttribute("tabindex", "-1");
+      });
+
+    document.querySelectorAll("button, a").forEach((element) => {
+      const text = String(element.textContent || "")
+        .trim()
+        .replace(/\s+/g, " ")
+        .toLowerCase();
+
+      if (text === "dashboard spv") {
+        element.style.display = "none";
+        element.setAttribute("aria-hidden", "true");
+        element.setAttribute("tabindex", "-1");
+      }
+    });
+  }
+
+  const originalApplyRoleAccessUiV12 =
+    typeof applyRoleAccessUI === "function" ? applyRoleAccessUI : null;
+
+  if (originalApplyRoleAccessUiV12) {
+    applyRoleAccessUI = function applyRoleAccessUIWithoutSpvDashboardV12() {
+      const result = originalApplyRoleAccessUiV12.apply(this, arguments);
+      hideSpvDashboardMenuV12();
+      return result;
+    };
+  }
+
+  const originalRenderPageV12 =
+    typeof renderPage === "function" ? renderPage : null;
+
+  if (originalRenderPageV12) {
+    renderPage = function renderPageWithoutSpvDashboardV12(page, toast = true) {
+      const requested = String(page || "").trim();
+      const safePage = requested === DISABLED_PAGE ? FALLBACK_PAGE : requested;
+
+      return originalRenderPageV12.call(this, safePage, toast);
+    };
+  }
+
+  function redirectOldSpvDashboardV12() {
+    hideSpvDashboardMenuV12();
+
+    const hashPage = String(location.hash || "")
+      .replace(/^#/, "")
+      .trim();
+
+    if (
+      hashPage === DISABLED_PAGE ||
+      String(state?.page || "") === DISABLED_PAGE
+    ) {
+      history.replaceState(null, "", `#${FALLBACK_PAGE}`);
+
+      if (
+        typeof renderPage === "function" &&
+        typeof isLoggedIn === "function" &&
+        isLoggedIn()
+      ) {
+        renderPage(FALLBACK_PAGE, false);
+      }
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    setTimeout(redirectOldSpvDashboardV12, 0);
+    setTimeout(hideSpvDashboardMenuV12, 500);
+  });
+
+  const observer = new MutationObserver(() => {
+    hideSpvDashboardMenuV12();
+  });
+
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
+
+  window.addEventListener("hashchange", redirectOldSpvDashboardV12);
+})();
