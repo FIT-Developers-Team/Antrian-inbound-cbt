@@ -606,3 +606,601 @@ body {
     }
   }
 }
+
+/* ==========================================================================
+   WAITING MONITOR — ADAPTASI TAMPILAN STITCH
+   Catatan:
+   - Hanya aktif ketika halaman memiliki table #monitor-unified-table.
+   - Menu lain tidak ikut berubah.
+   - Tetap memakai warna tema gelap/terang dari CSS aplikasi sekarang.
+   - Tidak memakai blur atau animasi berat.
+   ========================================================================== */
+
+/* Halaman utama dibuat lebih datar seperti command center Stitch. */
+#page-root:has(#monitor-unified-table) {
+  --wm-card-bg: rgb(var(--surface-container-lowest) / 0.92);
+  --wm-soft-bg: rgb(var(--surface-container-low) / 0.78);
+  --wm-section-bg: rgb(var(--surface-container-lowest) / 0.76);
+  --wm-border: rgb(var(--outline-variant) / 0.62);
+  --wm-border-soft: rgb(var(--outline-variant) / 0.36);
+  --wm-shadow: 0 10px 28px rgb(15 23 42 / 0.07);
+  --wm-blue: rgb(var(--primary-container));
+  --wm-green: rgb(var(--success));
+  --wm-orange: rgb(var(--warning));
+  --wm-red: rgb(var(--error));
+}
+
+/* Hilangkan efek satu kartu besar yang membungkus seluruh Waiting Monitor. */
+#page-root:has(#monitor-unified-table) > .grid > .glass-card {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+/* Header Waiting Monitor. */
+#page-root:has(#monitor-unified-table)
+  > .grid
+  > .glass-card
+  > .flex:first-child {
+  padding: 18px 20px;
+  margin-bottom: 16px !important;
+  background: var(--wm-section-bg);
+  border: 1px solid var(--wm-border);
+  border-radius: 12px;
+  box-shadow: var(--wm-shadow);
+}
+
+#page-root:has(#monitor-unified-table)
+  > .grid
+  > .glass-card
+  > .flex:first-child
+  h3 {
+  color: rgb(var(--on-surface));
+  font-size: 21px;
+  line-height: 28px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+#page-root:has(#monitor-unified-table)
+  > .grid
+  > .glass-card
+  > .flex:first-child
+  p {
+  margin-top: 4px;
+  max-width: 760px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+#page-root:has(#monitor-unified-table)
+  > .grid
+  > .glass-card
+  > .flex:first-child
+  button {
+  min-height: 38px;
+  padding: 8px 13px;
+  border-radius: 8px;
+  background: rgb(var(--surface-container-low));
+  border-color: var(--wm-border);
+  color: rgb(var(--on-surface));
+  box-shadow: none;
+}
+
+/* ==========================================================================
+   RINGKASAN STATUS — 8 KARTU KOMPAK
+   ========================================================================== */
+
+#page-root:has(#monitor-unified-table) > .grid > .glass-card > .grid {
+  gap: 10px !important;
+  margin-bottom: 18px !important;
+}
+
+#page-root:has(#monitor-unified-table) > .grid > .glass-card > .grid > div {
+  position: relative;
+  min-height: 88px;
+  padding: 13px !important;
+  overflow: hidden;
+  background: var(--wm-card-bg) !important;
+  border: 1px solid var(--wm-border) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 5px 16px rgb(15 23 42 / 0.05);
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+#page-root:has(#monitor-unified-table)
+  > .grid
+  > .glass-card
+  > .grid
+  > div:hover {
+  transform: translateY(-1px);
+  border-color: rgb(var(--primary) / 0.48) !important;
+  box-shadow: 0 9px 20px rgb(15 23 42 / 0.08);
+}
+
+#page-root:has(#monitor-unified-table)
+  > .grid
+  > .glass-card
+  > .grid
+  > div::after {
+  content: "";
+  position: absolute;
+  left: 13px;
+  right: 13px;
+  bottom: 9px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgb(var(--outline-variant) / 0.58);
+}
+
+#page-root:has(#monitor-unified-table)
+  > .grid
+  > .glass-card
+  > .grid
+  > div
+  > span {
+  display: block;
+  max-width: 100%;
+  font-size: 10px !important;
+  line-height: 14px;
+  letter-spacing: 0.07em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#page-root:has(#monitor-unified-table)
+  > .grid
+  > .glass-card
+  > .grid
+  > div
+  > div {
+  margin-top: 4px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 24px !important;
+  line-height: 30px;
+  letter-spacing: -0.04em;
+}
+
+/* Aksen kartu berdasarkan urutan metric saat ini:
+   1 Total, 2 Aktif, 3 Waiting, 4 Called,
+   5 Unloading, 6 Completed, 7 Expired, 8 SLA Miss. */
+#page-root:has(#monitor-unified-table)
+  > .grid
+  > .glass-card
+  > .grid
+  > div:nth-child(1) {
+  border-left: 4px solid rgb(var(--on-surface-variant)) !important;
+}
+
+#page-root:has(#monitor-unified-table)
+  > .grid
+  > .glass-card
+  > .grid
+  > div:nth-child(2),
+#page-root:has(#monitor-unified-table)
+  > .grid
+  > .glass-card
+  > .grid
+  > div:nth-child(4) {
+  border-left: 4px solid var(--wm-blue) !important;
+}
+
+#page-root:has(#monitor-unified-table)
+  > .grid
+  > .glass-card
+  > .grid
+  > div:nth-child(3),
+#page-root:has(#monitor-unified-table)
+  > .grid
+  > .glass-card
+  > .grid
+  > div:nth-child(5) {
+  border-left: 4px solid var(--wm-orange) !important;
+}
+
+#page-root:has(#monitor-unified-table)
+  > .grid
+  > .glass-card
+  > .grid
+  > div:nth-child(6) {
+  border-left: 4px solid var(--wm-green) !important;
+}
+
+#page-root:has(#monitor-unified-table)
+  > .grid
+  > .glass-card
+  > .grid
+  > div:nth-child(7),
+#page-root:has(#monitor-unified-table)
+  > .grid
+  > .glass-card
+  > .grid
+  > div:nth-child(8) {
+  border-left: 4px solid var(--wm-red) !important;
+}
+
+#page-root:has(#monitor-unified-table)
+  > .grid
+  > .glass-card
+  > .grid
+  > div:nth-child(2)::after,
+#page-root:has(#monitor-unified-table)
+  > .grid
+  > .glass-card
+  > .grid
+  > div:nth-child(4)::after {
+  background: rgb(var(--primary-container) / 0.62);
+}
+
+#page-root:has(#monitor-unified-table)
+  > .grid
+  > .glass-card
+  > .grid
+  > div:nth-child(3)::after,
+#page-root:has(#monitor-unified-table)
+  > .grid
+  > .glass-card
+  > .grid
+  > div:nth-child(5)::after {
+  background: rgb(var(--warning) / 0.62);
+}
+
+#page-root:has(#monitor-unified-table)
+  > .grid
+  > .glass-card
+  > .grid
+  > div:nth-child(6)::after {
+  background: rgb(var(--success) / 0.62);
+}
+
+#page-root:has(#monitor-unified-table)
+  > .grid
+  > .glass-card
+  > .grid
+  > div:nth-child(7)::after,
+#page-root:has(#monitor-unified-table)
+  > .grid
+  > .glass-card
+  > .grid
+  > div:nth-child(8)::after {
+  background: rgb(var(--error) / 0.62);
+}
+
+/* ==========================================================================
+   VISIBILITAS GATE BONGKAR
+   ========================================================================== */
+
+#page-root:has(#monitor-unified-table)
+  .glass-card:has(> .grid.grid-cols-2.md\:grid-cols-5.xl\:grid-cols-10) {
+  padding: 18px !important;
+  margin-bottom: 18px !important;
+  background: var(--wm-section-bg) !important;
+  border: 1px solid var(--wm-border) !important;
+  border-radius: 12px !important;
+  box-shadow: var(--wm-shadow) !important;
+}
+
+#page-root:has(#monitor-unified-table)
+  .glass-card:has(> .grid.grid-cols-2.md\:grid-cols-5.xl\:grid-cols-10)
+  > .flex {
+  margin-bottom: 14px !important;
+}
+
+#page-root:has(#monitor-unified-table)
+  .glass-card:has(> .grid.grid-cols-2.md\:grid-cols-5.xl\:grid-cols-10)
+  h3 {
+  color: rgb(var(--on-surface));
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+
+#page-root:has(#monitor-unified-table)
+  .glass-card:has(> .grid.grid-cols-2.md\:grid-cols-5.xl\:grid-cols-10)
+  p {
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 16px;
+}
+
+#page-root:has(#monitor-unified-table)
+  .glass-card:has(> .grid.grid-cols-2.md\:grid-cols-5.xl\:grid-cols-10)
+  > .grid {
+  gap: 10px !important;
+  padding: 12px;
+  background:
+    linear-gradient(rgb(var(--outline-variant) / 0.08) 1px, transparent 1px),
+    linear-gradient(
+      90deg,
+      rgb(var(--outline-variant) / 0.08) 1px,
+      transparent 1px
+    );
+  background-size: 24px 24px;
+  border: 1px solid var(--wm-border-soft);
+  border-radius: 11px;
+}
+
+#page-root:has(#monitor-unified-table)
+  .glass-card:has(> .grid.grid-cols-2.md\:grid-cols-5.xl\:grid-cols-10)
+  > .grid
+  > div {
+  position: relative;
+  min-height: 96px !important;
+  padding: 12px !important;
+  overflow: hidden;
+  background: var(--wm-card-bg) !important;
+  border: 1px solid var(--wm-border) !important;
+  border-top: 4px solid rgb(var(--outline-variant)) !important;
+  border-radius: 9px !important;
+  box-shadow: 0 4px 12px rgb(15 23 42 / 0.04);
+}
+
+#page-root:has(#monitor-unified-table)
+  .glass-card:has(> .grid.grid-cols-2.md\:grid-cols-5.xl\:grid-cols-10)
+  > .grid
+  > div[class*="bg-warning/10"] {
+  border-top-color: var(--wm-orange) !important;
+  background: rgb(var(--warning) / 0.075) !important;
+}
+
+#page-root:has(#monitor-unified-table)
+  .glass-card:has(> .grid.grid-cols-2.md\:grid-cols-5.xl\:grid-cols-10)
+  > .grid
+  > div[class*="bg-surface-container/40"] {
+  border-style: dashed !important;
+  border-top-color: rgb(var(--outline-variant)) !important;
+  opacity: 0.76;
+}
+
+/* Badge gate aktif dibuat seperti label kecil di sudut. */
+#page-root:has(#monitor-unified-table)
+  .glass-card:has(> .grid.grid-cols-2.md\:grid-cols-5.xl\:grid-cols-10)
+  > .grid
+  > div
+  .font-queue-id.text-sm {
+  font-size: 11px !important;
+  line-height: 15px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+#page-root:has(#monitor-unified-table)
+  .glass-card:has(> .grid.grid-cols-2.md\:grid-cols-5.xl\:grid-cols-10)
+  .status-pulse {
+  animation: none !important;
+}
+
+/* ==========================================================================
+   TABLE DETAIL WAITING / CHECKER / SLA
+   ========================================================================== */
+
+#page-root:has(#monitor-unified-table) .rounded-xl:has(#monitor-unified-table) {
+  margin-bottom: 18px !important;
+  overflow: hidden;
+  background: var(--wm-card-bg);
+  border: 1px solid var(--wm-border) !important;
+  border-radius: 12px !important;
+  box-shadow: var(--wm-shadow);
+}
+
+#page-root:has(#monitor-unified-table)
+  .rounded-xl:has(#monitor-unified-table)
+  > .flex {
+  padding: 15px 18px !important;
+  background: var(--wm-soft-bg) !important;
+  border-bottom: 1px solid var(--wm-border) !important;
+}
+
+#page-root:has(#monitor-unified-table)
+  .rounded-xl:has(#monitor-unified-table)
+  h4 {
+  color: rgb(var(--on-surface));
+  font-size: 17px;
+  line-height: 23px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+}
+
+#page-root:has(#monitor-unified-table)
+  .rounded-xl:has(#monitor-unified-table)
+  h4
+  + p {
+  margin-top: 4px;
+  max-width: 920px;
+  font-size: 10px;
+  line-height: 15px;
+}
+
+#page-root:has(#monitor-unified-table)
+  .rounded-xl:has(#monitor-unified-table)
+  .form-input {
+  min-height: 38px;
+  padding: 8px 12px;
+  background: rgb(var(--surface-container-lowest));
+  border-color: var(--wm-border);
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+#page-root:has(#monitor-unified-table)
+  .rounded-xl:has(#monitor-unified-table)
+  > .overflow-x-auto {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(var(--outline-variant)) transparent;
+}
+
+#page-root:has(#monitor-unified-table) #monitor-unified-table {
+  min-width: 1950px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px !important;
+}
+
+#page-root:has(#monitor-unified-table) #monitor-unified-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: rgb(var(--surface-container-low)) !important;
+}
+
+#page-root:has(#monitor-unified-table) #monitor-unified-table th {
+  padding: 11px 13px !important;
+  color: rgb(var(--on-surface-variant));
+  font-size: 10px !important;
+  line-height: 14px;
+  font-weight: 800;
+  letter-spacing: 0.055em;
+  border-bottom: 1px solid var(--wm-border);
+  background: rgb(var(--surface-container-low)) !important;
+}
+
+#page-root:has(#monitor-unified-table) #monitor-unified-table td {
+  padding: 11px 13px !important;
+  border-bottom: 1px solid var(--wm-border-soft);
+  vertical-align: middle;
+}
+
+#page-root:has(#monitor-unified-table)
+  #monitor-unified-table
+  tbody
+  tr:nth-child(even) {
+  background: rgb(var(--surface-container-low) / 0.42);
+}
+
+#page-root:has(#monitor-unified-table) #monitor-unified-table tbody tr:hover {
+  background: rgb(var(--primary) / 0.075) !important;
+}
+
+#page-root:has(#monitor-unified-table)
+  #monitor-unified-table
+  tbody
+  tr[class*="bg-error/5"] {
+  background: rgb(var(--error) / 0.065) !important;
+}
+
+#page-root:has(#monitor-unified-table)
+  #monitor-unified-table
+  tbody
+  tr[class*="bg-error/5"]:hover {
+  background: rgb(var(--error) / 0.11) !important;
+}
+
+#page-root:has(#monitor-unified-table) #monitor-unified-table .font-queue-id {
+  font-size: 12px;
+  letter-spacing: 0.015em;
+}
+
+/* Legend SLA bagian paling bawah. */
+#page-root:has(#monitor-unified-table) > .grid > .glass-card > .mb-2 > div {
+  padding: 14px 16px !important;
+  background: var(--wm-soft-bg) !important;
+  border: 1px solid var(--wm-border) !important;
+  border-radius: 10px !important;
+  box-shadow: none;
+}
+
+/* ==========================================================================
+   RESPONSIVE WAITING MONITOR
+   ========================================================================== */
+
+@media (max-width: 1024px) {
+  #page-root:has(#monitor-unified-table) > .grid > .glass-card > .grid > div {
+    min-height: 82px;
+  }
+
+  #page-root:has(#monitor-unified-table)
+    .glass-card:has(> .grid.grid-cols-2.md\:grid-cols-5.xl\:grid-cols-10)
+    > .grid {
+    grid-template-columns: repeat(5, minmax(120px, 1fr)) !important;
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 700px) {
+  #page-root:has(#monitor-unified-table) {
+    padding-bottom: 12px;
+  }
+
+  #page-root:has(#monitor-unified-table)
+    > .grid
+    > .glass-card
+    > .flex:first-child {
+    padding: 14px;
+    border-radius: 10px;
+  }
+
+  #page-root:has(#monitor-unified-table)
+    > .grid
+    > .glass-card
+    > .flex:first-child
+    h3 {
+    font-size: 18px;
+    line-height: 24px;
+  }
+
+  #page-root:has(#monitor-unified-table) > .grid > .glass-card > .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  #page-root:has(#monitor-unified-table) > .grid > .glass-card > .grid > div {
+    min-height: 78px;
+    padding: 11px !important;
+  }
+
+  #page-root:has(#monitor-unified-table)
+    > .grid
+    > .glass-card
+    > .grid
+    > div
+    > div {
+    font-size: 21px !important;
+    line-height: 27px;
+  }
+
+  #page-root:has(#monitor-unified-table)
+    .glass-card:has(> .grid.grid-cols-2.md\:grid-cols-5.xl\:grid-cols-10) {
+    padding: 14px !important;
+    border-radius: 10px !important;
+  }
+
+  #page-root:has(#monitor-unified-table)
+    .glass-card:has(> .grid.grid-cols-2.md\:grid-cols-5.xl\:grid-cols-10)
+    > .grid {
+    grid-template-columns: repeat(2, minmax(130px, 1fr)) !important;
+    gap: 8px !important;
+    padding: 9px;
+  }
+
+  #page-root:has(#monitor-unified-table)
+    .rounded-xl:has(#monitor-unified-table)
+    > .flex {
+    padding: 13px !important;
+  }
+
+  #page-root:has(#monitor-unified-table)
+    .rounded-xl:has(#monitor-unified-table)
+    .form-input {
+    max-width: none !important;
+  }
+
+  #page-root:has(#monitor-unified-table) #monitor-unified-table th,
+  #page-root:has(#monitor-unified-table) #monitor-unified-table td {
+    padding: 10px 11px !important;
+  }
+}
+
+/* Dark mode tetap mengikuti tema aplikasi sekarang. */
+.dark #page-root:has(#monitor-unified-table) {
+  --wm-card-bg: rgb(var(--surface-container-low) / 0.92);
+  --wm-soft-bg: rgb(var(--surface-container) / 0.82);
+  --wm-section-bg: rgb(var(--surface-container-lowest) / 0.7);
+  --wm-shadow: 0 12px 30px rgb(0 0 0 / 0.22);
+}
