@@ -7803,84 +7803,37 @@ window.initShader = function initShaderDisabled() {
 };
 
 /* ==========================================================================
- * MOBILE FORM SCROLL GUARD V2
- * - Input HP dikunci readonly sebelum disentuh.
- * - Swipe/scroll tidak pernah membuka keyboard.
- * - Tap pendek membuka field dan keyboard.
- * - Vendor tidak bisa terpilih dari gerakan scroll.
+ * MOBILE FORM SCROLL GUARD V3
+ * - Input tetap native: tap normal langsung membuka keyboard.
+ * - Swipe/scroll tidak diteruskan sebagai klik.
+ * - Vendor/PO tidak terpilih karena gerakan geser.
+ * - Tidak memakai readonly, jadi keyboard tetap bisa dibuka.
  * ========================================================================== */
-(function installMobileFormScrollGuardV2() {
-  if (window.__mobileFormScrollGuardV2Installed) return;
-  window.__mobileFormScrollGuardV2Installed = true;
+(function installMobileFormScrollGuardV3() {
+  if (window.__mobileFormScrollGuardV3Installed) return;
+  window.__mobileFormScrollGuardV3Installed = true;
 
-  const MOVE_LIMIT_PX = 14;
-  const BLOCK_CLICK_MS = 850;
+  const MOVE_LIMIT_PX = 12;
+  const BLOCK_CLICK_MS = 700;
   let gesture = null;
 
   function isMobile() {
-    return isMobileTouchFormDevice();
-  }
-
-  function isTextField(element) {
-    if (!element?.matches || !element.closest("#page-root")) return false;
-
-    return element.matches(
-      [
-        'input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="file"]):not([disabled])',
-        "textarea:not([disabled])",
-      ].join(","),
+    return (
+      (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) ||
+      Number(navigator.maxTouchPoints || 0) > 0
     );
   }
 
-  function saveOriginalFieldState(field) {
-    if (!field || field.dataset.mobileOriginalSaved === "1") return;
-
-    field.dataset.mobileOriginalSaved = "1";
-    field.dataset.mobileOriginalReadonly = field.readOnly ? "1" : "0";
-    field.dataset.mobileOriginalInputmode =
-      field.getAttribute("inputmode") === null
-        ? "__NULL__"
-        : field.getAttribute("inputmode");
-  }
-
-  function lockField(field) {
-    if (!isMobile() || !isTextField(field)) return;
-
-    saveOriginalFieldState(field);
-
-    if (field.dataset.mobileOriginalReadonly === "1") return;
-
-    delete field.dataset.mobileEditing;
-    field.readOnly = true;
-    field.setAttribute("inputmode", "none");
-    field.dataset.mobileScrollLocked = "1";
-  }
-
-  function unlockField(field) {
-    if (!isMobile() || !isTextField(field)) return;
-
-    saveOriginalFieldState(field);
-
-    if (field.dataset.mobileOriginalReadonly === "1") return;
-
-    field.readOnly = false;
-
-    const originalMode = field.dataset.mobileOriginalInputmode;
-    if (originalMode === "__NULL__") field.removeAttribute("inputmode");
-    else field.setAttribute("inputmode", originalMode || "");
-
-    delete field.dataset.mobileScrollLocked;
-    field.dataset.mobileEditing = "1";
-  }
-
-  function lockAllFields(root = document) {
+  function beginGesture(event, x, y, pointerId = null) {
     if (!isMobile()) return;
 
-    root
-      .querySelectorAll?.(
-        '#page-root input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="file"]), #page-root textarea',
-      )
-      .forEach(lockField);
+    gesture = {
+      target: event.target,
+      pointerId,
+      startX: Number(x || 0),
+      startY: Number(y || 0),
+      moved: false,
+    };
   }
 
   function markMoved(x, y) {
@@ -7895,82 +7848,29 @@ window.initShader = function initShaderDisabled() {
       gesture.moved = true;
       window.__mobileFormBlockClickUntil = performance.now() + BLOCK_CLICK_MS;
 
-      if (gesture.field && document.activeElement === gesture.field) {
-        gesture.field.blur();
-        lockField(gesture.field);
+      // Bila field sempat mendapatkan fokus saat mulai scroll, tutup keyboard.
+      const active = document.activeElement;
+      if (
+        active &&
+        active !== document.body &&
+        (active.matches?.("input, textarea, select") ||
+          active.closest?.("#vendor-dropdown, #po-dropdown"))
+      ) {
+        active.blur?.();
       }
     }
   }
 
-  function beginGesture(event, x, y, pointerId = null) {
-    if (!isMobile()) return;
-
-    gesture = {
-      field: isTextField(event.target) ? event.target : null,
-      pointerId,
-      startX: Number(x || 0),
-      startY: Number(y || 0),
-      moved: false,
-    };
-  }
-
   function finishGesture(x, y) {
     if (!gesture) return;
-
     markMoved(x, y);
-    const current = gesture;
+
+    if (gesture.moved) {
+      window.__mobileFormBlockClickUntil = performance.now() + BLOCK_CLICK_MS;
+    }
+
     gesture = null;
-
-    if (current.moved) {
-      if (current.field) lockField(current.field);
-      return;
-    }
-
-    if (!current.field) return;
-
-    // Tap pendek: baru aktifkan input.
-    unlockField(current.field);
-
-    try {
-      current.field.focus({ preventScroll: true });
-    } catch (err) {
-      current.field.focus();
-    }
-
-    if (
-      current.field.value &&
-      typeof current.field.setSelectionRange === "function"
-    ) {
-      const end = String(current.field.value).length;
-      try {
-        current.field.setSelectionRange(end, end);
-      } catch (err) {}
-    }
   }
-
-  lockAllFields();
-
-  document.addEventListener("DOMContentLoaded", () => {
-    setTimeout(() => lockAllFields(), 0);
-    setTimeout(() => lockAllFields(), 300);
-  });
-
-  const observer = new MutationObserver((mutations) => {
-    if (!isMobile()) return;
-
-    mutations.forEach((mutation) => {
-      mutation.addedNodes.forEach((node) => {
-        if (!(node instanceof Element)) return;
-        if (isTextField(node)) lockField(node);
-        lockAllFields(node);
-      });
-    });
-  });
-
-  observer.observe(document.documentElement, {
-    childList: true,
-    subtree: true,
-  });
 
   if ("PointerEvent" in window) {
     document.addEventListener(
@@ -8011,7 +7911,6 @@ window.initShader = function initShaderDisabled() {
     document.addEventListener(
       "pointercancel",
       () => {
-        if (gesture?.field) lockField(gesture.field);
         gesture = null;
       },
       true,
@@ -8053,84 +7952,40 @@ window.initShader = function initShaderDisabled() {
     document.addEventListener(
       "touchcancel",
       () => {
-        if (gesture?.field) lockField(gesture.field);
         gesture = null;
       },
       { capture: true, passive: true },
     );
   }
 
+  // Batalkan klik bawaan browser yang muncul setelah swipe.
   document.addEventListener(
     "click",
     (event) => {
       if (
-        isMobile() &&
-        event.isTrusted &&
-        performance.now() < Number(window.__mobileFormBlockClickUntil || 0)
-      ) {
-        event.preventDefault();
-        event.stopPropagation();
-        event.stopImmediatePropagation?.();
-      }
-    },
-    true,
-  );
-
-  document.addEventListener(
-    "focusin",
-    (event) => {
-      const field = event.target;
-
-      if (
         !isMobile() ||
-        !isTextField(field) ||
-        field.dataset.mobileOriginalReadonly === "1"
+        !event.isTrusted ||
+        performance.now() >= Number(window.__mobileFormBlockClickUntil || 0)
       ) {
         return;
       }
 
-      if (
-        field.dataset.mobileScrollLocked === "1" &&
-        field.dataset.mobileEditing !== "1"
-      ) {
-        field.blur();
-      }
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
     },
     true,
   );
 
-  document.addEventListener(
-    "focusout",
-    (event) => {
-      const field = event.target;
-      if (!isMobile() || !isTextField(field)) return;
-
-      setTimeout(() => {
-        if (document.activeElement !== field) lockField(field);
-      }, 80);
-    },
-    true,
-  );
-
+  // Scroll aktual selalu menandai gesture sebagai swipe.
   document.addEventListener(
     "scroll",
     () => {
-      if (!isMobile()) return;
+      if (!isMobile() || !gesture) return;
 
-      if (gesture) {
-        gesture.moved = true;
-        window.__mobileFormBlockClickUntil = performance.now() + BLOCK_CLICK_MS;
-
-        if (gesture.field && document.activeElement === gesture.field) {
-          gesture.field.blur();
-          lockField(gesture.field);
-        }
-      }
+      gesture.moved = true;
+      window.__mobileFormBlockClickUntil = performance.now() + BLOCK_CLICK_MS;
     },
     true,
   );
-
-  window.addEventListener("resize", () => {
-    setTimeout(() => lockAllFields(), 100);
-  });
 })();
