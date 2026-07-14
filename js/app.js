@@ -525,13 +525,206 @@ function plateMultiInput(value = "") {
 function plateRowInput(value = "", index = 0) {
   const p = splitPlateParts(value);
   return `<div class="plate-row grid grid-cols-[72px_120px_92px_auto] gap-2 items-center" data-plate-row="${index}">
-    <input data-plate-part="prefix" class="form-input text-center uppercase" maxlength="2" placeholder="B" value="${esc(p.prefix)}" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'').slice(0,2); syncPlateMultiInput();" />
-    <input data-plate-part="number" class="form-input text-center" maxlength="4" inputmode="numeric" placeholder="1234" value="${esc(p.number)}" oninput="this.value=this.value.replace(/\\D/g,'').slice(0,4); syncPlateMultiInput();" />
-    <input data-plate-part="suffix" class="form-input text-center uppercase" maxlength="3" placeholder="XYZ" value="${esc(p.suffix)}" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'').slice(0,3); syncPlateMultiInput();" />
+    <input
+      data-plate-part="prefix"
+      class="form-input text-center uppercase"
+      maxlength="2"
+      placeholder="B"
+      value="${esc(p.prefix)}"
+      autocomplete="off"
+      autocapitalize="characters"
+      oninput="handlePlatePartInputV13(this)"
+      onkeydown="handlePlatePartKeydownV13(event, this)"
+      onpaste="handlePlatePasteV13(event, this)"
+    />
+    <input
+      data-plate-part="number"
+      class="form-input text-center"
+      maxlength="4"
+      inputmode="numeric"
+      pattern="[0-9]*"
+      placeholder="1234"
+      value="${esc(p.number)}"
+      autocomplete="off"
+      oninput="handlePlatePartInputV13(this)"
+      onkeydown="handlePlatePartKeydownV13(event, this)"
+      onpaste="handlePlatePasteV13(event, this)"
+    />
+    <input
+      data-plate-part="suffix"
+      class="form-input text-center uppercase"
+      maxlength="3"
+      placeholder="XYZ"
+      value="${esc(p.suffix)}"
+      autocomplete="off"
+      autocapitalize="characters"
+      oninput="handlePlatePartInputV13(this)"
+      onkeydown="handlePlatePartKeydownV13(event, this)"
+      onpaste="handlePlatePasteV13(event, this)"
+    />
     <button type="button" onclick="removePlateRow(this)" class="thin-tab rounded-lg px-3 py-3 flex items-center justify-center" title="Hapus plat">
       <span class="material-symbols-outlined text-base">delete</span>
     </button>
   </div>`;
+}
+
+const platePrefixAutoNextTimersV13 = new WeakMap();
+
+function getPlatePartOrderV13() {
+  return ["prefix", "number", "suffix"];
+}
+
+function normalizePlatePartValueV13(input) {
+  const part = String(input?.dataset?.platePart || "");
+  const raw = String(input?.value || "");
+
+  if (part === "number") {
+    input.value = raw.replace(/\D/g, "").slice(0, 4);
+    return input.value;
+  }
+
+  const maxLength = part === "prefix" ? 2 : 3;
+  input.value = raw
+    .toUpperCase()
+    .replace(/[^A-Z]/g, "")
+    .slice(0, maxLength);
+
+  return input.value;
+}
+
+function getPlatePartSiblingV13(input, direction = 1) {
+  const row = input?.closest?.(".plate-row");
+  if (!row) return null;
+
+  const order = getPlatePartOrderV13();
+  const currentPart = String(input.dataset.platePart || "");
+  const currentIndex = order.indexOf(currentPart);
+  const targetPart = order[currentIndex + direction];
+
+  if (!targetPart) return null;
+  return row.querySelector(`[data-plate-part="${targetPart}"]`);
+}
+
+function focusPlatePartV13(input) {
+  if (!input) return;
+
+  try {
+    input.focus({ preventScroll: true });
+  } catch (error) {
+    input.focus();
+  }
+
+  if (typeof input.select === "function") {
+    setTimeout(() => input.select(), 0);
+  }
+}
+
+function schedulePrefixAutoNextV13(input) {
+  const previousTimer = platePrefixAutoNextTimersV13.get(input);
+  if (previousTimer) clearTimeout(previousTimer);
+
+  const timer = setTimeout(() => {
+    if (
+      document.activeElement === input &&
+      String(input.value || "").length >= 1
+    ) {
+      focusPlatePartV13(getPlatePartSiblingV13(input, 1));
+    }
+  }, 420);
+
+  platePrefixAutoNextTimersV13.set(input, timer);
+}
+
+function handlePlatePartInputV13(input) {
+  const value = normalizePlatePartValueV13(input);
+  const part = String(input?.dataset?.platePart || "");
+
+  syncPlateMultiInput();
+
+  if (part === "prefix") {
+    if (value.length >= 2) {
+      const timer = platePrefixAutoNextTimersV13.get(input);
+      if (timer) clearTimeout(timer);
+      focusPlatePartV13(getPlatePartSiblingV13(input, 1));
+    } else if (value.length === 1) {
+      // Mayoritas kode wilayah hanya satu huruf.
+      // Jeda singkat tetap memberi kesempatan mengetik prefix dua huruf.
+      schedulePrefixAutoNextV13(input);
+    }
+    return;
+  }
+
+  if (part === "number" && value.length >= 4) {
+    focusPlatePartV13(getPlatePartSiblingV13(input, 1));
+  }
+}
+
+function handlePlatePartKeydownV13(event, input) {
+  if (!event || !input) return;
+
+  const key = event.key;
+  const part = String(input.dataset.platePart || "");
+
+  if ((key === "Enter" || key === " " || key === "Tab") && part !== "suffix") {
+    const next = getPlatePartSiblingV13(input, 1);
+    if (next) {
+      event.preventDefault();
+      focusPlatePartV13(next);
+    }
+    return;
+  }
+
+  if (key === "Backspace" && !input.value) {
+    const previous = getPlatePartSiblingV13(input, -1);
+    if (previous) {
+      event.preventDefault();
+      focusPlatePartV13(previous);
+    }
+    return;
+  }
+
+  if (key === "ArrowLeft" && input.selectionStart === 0) {
+    const previous = getPlatePartSiblingV13(input, -1);
+    if (previous) {
+      event.preventDefault();
+      focusPlatePartV13(previous);
+    }
+    return;
+  }
+
+  if (key === "ArrowRight" && input.selectionStart === input.value.length) {
+    const next = getPlatePartSiblingV13(input, 1);
+    if (next) {
+      event.preventDefault();
+      focusPlatePartV13(next);
+    }
+  }
+}
+
+function handlePlatePasteV13(event, input) {
+  const pasted = String(event?.clipboardData?.getData("text") || "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+
+  const match = pasted.match(/^([A-Z]{1,2})(\d{1,4})([A-Z]{0,3})$/);
+  if (!match) return;
+
+  const row = input?.closest?.(".plate-row");
+  if (!row) return;
+
+  event.preventDefault();
+
+  const prefix = row.querySelector('[data-plate-part="prefix"]');
+  const number = row.querySelector('[data-plate-part="number"]');
+  const suffix = row.querySelector('[data-plate-part="suffix"]');
+
+  if (prefix) prefix.value = match[1] || "";
+  if (number) number.value = match[2] || "";
+  if (suffix) suffix.value = match[3] || "";
+
+  syncPlateMultiInput();
+
+  if (suffix) focusPlatePartV13(suffix);
 }
 
 function addPlateRow(value = "") {
