@@ -8457,33 +8457,161 @@ window.initShader = function initShaderDisabled() {
     </section>`;
   }
 
-  function wmSlaCountdown(row = {}) {
-    const st = String(row.status || "").toUpperCase();
-    const info = getUnloadingEstimateInfo(row);
+  function wmResolveSlaTarget(row = {}) {
+    const directTarget = getFirstValue(row, [
+      "sla_finished_at",
+      "SLA Finished At",
+    ]);
+    const directDate = parseInboundDateSafe(directTarget);
+    if (directDate) return directDate;
 
-    if (st === "EXPIRED") {
+    const startText = getFirstValue(row, ["start_unloading_at"]);
+    const startDate = parseInboundDateSafe(startText);
+    const targetHours = Number(getInboundSlaHours(row) || 0);
+
+    if (!startDate || !targetHours) return null;
+
+    return new Date(startDate.getTime() + targetHours * 60 * 60 * 1000);
+  }
+
+  function wmResolveCompletedDate(row = {}) {
+    const status = String(row.status || "")
+      .trim()
+      .toUpperCase();
+    if (status !== "COMPLETED") return null;
+
+    return parseInboundDateSafe(
+      getFirstValue(row, ["handover_grn_at", "completed_at", "updated_at"]),
+    );
+  }
+
+  function wmFormatEstimate(value) {
+    const date = value instanceof Date ? value : parseInboundDateSafe(value);
+    if (!date) return "-";
+
+    return (
+      [
+        String(date.getDate()).padStart(2, "0"),
+        String(date.getMonth() + 1).padStart(2, "0"),
+        String(date.getFullYear()),
+      ].join("/") +
+      " " +
+      [
+        String(date.getHours()).padStart(2, "0"),
+        String(date.getMinutes()).padStart(2, "0"),
+      ].join(":")
+    );
+  }
+
+  function wmFormatSignedCountdown(milliseconds = 0) {
+    const negative = Number(milliseconds) < 0;
+    let totalSeconds = Math.floor(Math.abs(Number(milliseconds) || 0) / 1000);
+
+    const hours = Math.floor(totalSeconds / 3600);
+    totalSeconds -= hours * 3600;
+
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds - minutes * 60;
+
+    return (
+      (negative ? "-" : "") +
+      String(hours).padStart(2, "0") +
+      ":" +
+      String(minutes).padStart(2, "0") +
+      ":" +
+      String(seconds).padStart(2, "0")
+    );
+  }
+
+  function wmLiveSlaMarkup(row = {}) {
+    const status = String(row.status || "")
+      .trim()
+      .toUpperCase();
+    const targetDate = wmResolveSlaTarget(row);
+    const completedDate = wmResolveCompletedDate(row);
+
+    if (status === "EXPIRED") {
       return `<span class="wm-sla-value is-miss">KEDALUWARSA</span>`;
     }
 
-    if (["WAITING GR", "DONE GR", "COMPLETED"].includes(st)) {
-      const sla = getInboundSlaInfo(row);
-      const status = String(sla?.status || "").toUpperCase();
-      return status === "SLA MISS"
-        ? `<span class="wm-sla-value is-miss">TERLAMBAT</span>`
-        : `<span class="wm-sla-value is-ok">TERCAPAI</span>`;
-    }
-
-    if (st !== "UNLOADING" || info.diffMinutes === null) {
+    if (!targetDate) {
       return `<span class="wm-sla-value is-neutral">-</span>`;
     }
 
-    return info.diffMinutes >= 0
-      ? `<span class="wm-sla-value is-running">Sisa ${esc(
-          formatMinutesCompact(info.diffMinutes),
-        )}</span>`
-      : `<span class="wm-sla-value is-miss">Lewat ${esc(
-          formatMinutesCompact(Math.abs(info.diffMinutes)),
-        )}</span>`;
+    const targetMs = targetDate.getTime();
+
+    // Status final hanya ditentukan ketika tiket benar-benar COMPLETED.
+    if (status === "COMPLETED") {
+      const finalDate = completedDate || new Date();
+      const late = finalDate.getTime() > targetMs;
+
+      return late
+        ? `<span class="wm-sla-value is-miss">LATE</span>`
+        : `<span class="wm-sla-value is-ok">TERCAPAI</span>`;
+    }
+
+    // Sebelum COMPLETED, waktu tetap berjalan termasuk WAITING GR dan DONE GR.
+    const showEstimate = status === "UNLOADING";
+    const nowMs = Date.now();
+    const difference = targetMs - nowMs;
+
+    return `<div
+      class="wm-live-sla"
+      data-wm-sla-target="${targetMs}"
+      data-wm-sla-status="${esc(status)}"
+    >
+      ${
+        showEstimate
+          ? `<span class="wm-sla-estimate">Estimasi ${esc(
+              wmFormatEstimate(targetDate),
+            )}</span>`
+          : ""
+      }
+      <span class="wm-sla-countdown ${
+        difference < 0 ? "is-minus" : "is-running"
+      }">${esc(wmFormatSignedCountdown(difference))}</span>
+    </div>`;
+  }
+
+  function wmRefreshLiveSlaCells() {
+    document
+      .querySelectorAll(".wm-stitch-v4 [data-wm-sla-target]")
+      .forEach((element) => {
+        const targetMs = Number(
+          element.getAttribute("data-wm-sla-target") || 0,
+        );
+        const countdown = element.querySelector(".wm-sla-countdown");
+
+        if (!targetMs || !countdown) return;
+
+        const difference = targetMs - Date.now();
+        countdown.textContent = wmFormatSignedCountdown(difference);
+        countdown.classList.toggle("is-minus", difference < 0);
+        countdown.classList.toggle("is-running", difference >= 0);
+      });
+  }
+
+  function wmSlaExportValue(row = {}) {
+    const status = String(row.status || "")
+      .trim()
+      .toUpperCase();
+    const targetDate = wmResolveSlaTarget(row);
+
+    if (status === "EXPIRED") return "KEDALUWARSA";
+    if (!targetDate) return "-";
+
+    if (status === "COMPLETED") {
+      const completedDate = wmResolveCompletedDate(row) || new Date();
+      return completedDate.getTime() > targetDate.getTime()
+        ? "LATE"
+        : "TERCAPAI";
+    }
+
+    return wmFormatSignedCountdown(targetDate.getTime() - Date.now());
+  }
+
+  function wmSlaCountdown(row = {}) {
+    return wmLiveSlaMarkup(row);
   }
 
   function wmCompactTable(rows = []) {
@@ -8624,7 +8752,7 @@ window.initShader = function initShaderDisabled() {
       row.register_time || row.created_at || "",
       row.called_at || "",
       row.start_unloading_at || "",
-      getInboundSlaInfo(row)?.status || "",
+      wmSlaExportValue(row),
     ]);
 
     const escapeCsv = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
@@ -8649,9 +8777,19 @@ window.initShader = function initShaderDisabled() {
     URL.revokeObjectURL(url);
   };
 
-  window.pageMonitor = function pageMonitorStitchV4() {
+  if (window.__wmLiveSlaTimer) {
+    clearInterval(window.__wmLiveSlaTimer);
+  }
+
+  window.__wmLiveSlaTimer = setInterval(() => {
+    wmRefreshLiveSlaCells();
+  }, 1000);
+
+  window.pageMonitor = function pageMonitorStitchV5() {
     const rows = state.dashboard?.queue || [];
     const summary = getMonitorSummary(rows);
+
+    setTimeout(() => wmRefreshLiveSlaCells(), 0);
 
     return `<div class="wm-stitch-v4">
       <section class="wm-kpi-grid">
