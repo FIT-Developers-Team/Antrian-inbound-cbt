@@ -9199,3 +9199,282 @@ window.initShader = function initShaderDisabled() {
     </div>`;
   };
 })();
+
+/* ==========================================================================
+ * GLOBAL AUTO SYNC UI V11
+ * - Dashboard, Checker, Panggil, Waiting Monitor, dan Waiting List ikut update.
+ * - Form Security tidak di-reset.
+ * - Scroll, filter pencarian, dan pilihan tiket Checker dipertahankan.
+ * ========================================================================== */
+(function installGlobalAutoSyncUiV11() {
+  if (window.__globalAutoSyncUiV11Installed) return;
+  window.__globalAutoSyncUiV11Installed = true;
+
+  function ensureIndicatorV11() {
+    let indicator = document.getElementById("global-auto-sync-indicator-v11");
+    if (indicator) return indicator;
+
+    indicator = document.createElement("div");
+    indicator.id = "global-auto-sync-indicator-v11";
+    indicator.className = "global-auto-sync-indicator-v11 is-online";
+    indicator.innerHTML = `
+      <span class="global-auto-sync-dot-v11"></span>
+      <span class="global-auto-sync-text-v11">Sinkron otomatis aktif</span>
+    `;
+    document.body.appendChild(indicator);
+    return indicator;
+  }
+
+  window.updateGlobalAutoSyncIndicatorV11 =
+    function updateGlobalAutoSyncIndicatorV11(status = "online", text = "") {
+      const indicator = ensureIndicatorV11();
+      indicator.className =
+        "global-auto-sync-indicator-v11 is-" +
+        String(status || "online").toLowerCase();
+
+      const label = indicator.querySelector(".global-auto-sync-text-v11");
+      if (label) label.textContent = text || "Sinkron otomatis aktif";
+    };
+
+  function isAutoSyncUiUnsafeV11() {
+    if (typeof securitySubmitBusy !== "undefined" && securitySubmitBusy) {
+      return true;
+    }
+
+    if (document.body.classList.contains("mobile-checker-action-sheet-open")) {
+      return true;
+    }
+
+    const active = document.activeElement;
+    if (
+      active?.closest?.("#security-form") ||
+      active?.closest?.("#checker-form")
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
+  function captureFieldsV11(root) {
+    if (!root) return [];
+
+    return [...root.querySelectorAll("input, select, textarea")]
+      .filter((element) => {
+        if (element.type === "hidden") return false;
+        if (element.closest("#security-form")) return false;
+        if (element.closest("#checker-form")) return false;
+        return !!(element.id || element.name);
+      })
+      .map((element) => ({
+        id: element.id || "",
+        name: element.name || "",
+        value: element.value,
+        checked: !!element.checked,
+        type: element.type || "",
+      }));
+  }
+
+  function restoreFieldsV11(fields = []) {
+    fields.forEach((item) => {
+      let element = item.id ? document.getElementById(item.id) : null;
+
+      if (!element && item.name) {
+        const safeName = String(item.name).replace(/"/g, '\\"');
+        element = document.querySelector(`[name="${safeName}"]`);
+      }
+
+      if (!element) return;
+
+      if (item.type === "checkbox" || item.type === "radio") {
+        element.checked = item.checked;
+      } else {
+        element.value = item.value;
+      }
+
+      element.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+
+  function captureScrollV11() {
+    const selectors = [
+      "main",
+      "#checker-card-list",
+      ".wm-table-scroll",
+      ".spv-table-wrap",
+      ".overflow-x-auto",
+      "#mobile-nav",
+    ];
+
+    const result = {
+      documentTop: document.scrollingElement?.scrollTop || window.scrollY || 0,
+      documentLeft:
+        document.scrollingElement?.scrollLeft || window.scrollX || 0,
+      elements: [],
+    };
+
+    selectors.forEach((selector) => {
+      document.querySelectorAll(selector).forEach((element, index) => {
+        result.elements.push({
+          selector,
+          index,
+          top: element.scrollTop,
+          left: element.scrollLeft,
+        });
+      });
+    });
+
+    return result;
+  }
+
+  function restoreScrollV11(snapshot) {
+    if (!snapshot) return;
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (document.scrollingElement) {
+          document.scrollingElement.scrollTop = snapshot.documentTop || 0;
+          document.scrollingElement.scrollLeft = snapshot.documentLeft || 0;
+        }
+
+        snapshot.elements.forEach((item) => {
+          const element = document.querySelectorAll(item.selector)[item.index];
+          if (!element) return;
+          element.scrollTop = item.top || 0;
+          element.scrollLeft = item.left || 0;
+        });
+      });
+    });
+  }
+
+  function captureCheckerSelectionV11() {
+    const form = document.getElementById("checker-form");
+    if (!form) return null;
+
+    const ticketId = String(form.ticket_id?.value || "").trim();
+    const queueNo = String(form.queue_no?.value || "").trim();
+    const plate = normalizePlateValue(form.plat_number?.value || "");
+
+    if (!ticketId && !queueNo && !plate) return null;
+
+    return { ticketId, queueNo, plate };
+  }
+
+  function restoreCheckerSelectionV11(selection) {
+    if (!selection) return;
+
+    const row = (state.dashboard?.queue || []).find((item) => {
+      if (
+        selection.ticketId &&
+        String(item.ticket_id || "").trim() === selection.ticketId
+      ) {
+        return true;
+      }
+
+      return (
+        selection.queueNo &&
+        selection.plate &&
+        String(item.original_queue_no || item.queue_no || "").trim() ===
+          selection.queueNo &&
+        normalizePlateValue(item.plat_number || "") === selection.plate
+      );
+    });
+
+    if (!row) return;
+
+    const status = String(row.status || "").toUpperCase();
+    if (!["WAITING", "CALLED", "UNLOADING"].includes(status)) {
+      return;
+    }
+
+    if (typeof populateCheckerFormFromRow === "function") {
+      populateCheckerFormFromRow(row);
+    }
+  }
+
+  function refreshDaftarWithoutResetV11() {
+    const latest = document.getElementById("new-queue-number");
+    if (latest) {
+      latest.textContent = state.lastCalled?.queue_no || "REG 3-0";
+    }
+
+    if (typeof filterVendorDropdown === "function") {
+      filterVendorDropdown();
+    }
+    if (typeof filterPoDropdown === "function") {
+      filterPoDropdown();
+    }
+    if (typeof renderPoSelectedChips === "function") {
+      renderPoSelectedChips(getSelectedPoNumbers());
+    }
+  }
+
+  function refreshPanggilWithoutRenderV11() {
+    if (typeof updatePanggilDom === "function") {
+      updatePanggilDom();
+      return true;
+    }
+    return false;
+  }
+
+  window.onGlobalAutoSyncDataChangedV11 =
+    function onGlobalAutoSyncDataChangedV11(snapshot = {}) {
+      const page = String(state.page || "").trim();
+
+      if (
+        !isLoggedIn?.() ||
+        page === "login" ||
+        page === "setting" ||
+        page === "debug"
+      ) {
+        return true;
+      }
+
+      if (page === "daftar") {
+        refreshDaftarWithoutResetV11();
+        return true;
+      }
+
+      if (page === "driver-track") {
+        if (typeof refreshDriverTrackDom === "function") {
+          refreshDriverTrackDom();
+        }
+        return true;
+      }
+
+      if (page === "panggil" && refreshPanggilWithoutRenderV11()) {
+        return true;
+      }
+
+      if (isAutoSyncUiUnsafeV11()) {
+        return false;
+      }
+
+      const root = document.getElementById("page-root");
+      const fields = captureFieldsV11(root);
+      const scroll = captureScrollV11();
+      const checkerSelection =
+        page === "checker" ? captureCheckerSelectionV11() : null;
+
+      renderPage(page, false);
+
+      setTimeout(() => {
+        restoreFieldsV11(fields);
+        restoreCheckerSelectionV11(checkerSelection);
+        restoreScrollV11(scroll);
+
+        if (typeof refreshLiveWaitingCells === "function") {
+          refreshLiveWaitingCells();
+        }
+        if (typeof window.wmRefreshLiveSlaCells === "function") {
+          window.wmRefreshLiveSlaCells();
+        }
+      }, 0);
+
+      return true;
+    };
+
+  document.addEventListener("DOMContentLoaded", () => {
+    ensureIndicatorV11();
+  });
+})();

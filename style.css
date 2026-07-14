@@ -2085,3 +2085,60 @@ body {
 .wm-detail-table td:nth-last-child(2) {
   min-width: 118px;
 }
+
+/* ==========================================================================
+   GLOBAL AUTO SYNC V11
+   ========================================================================== */
+.global-auto-sync-indicator-v11 {
+  position: fixed;
+  right: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: 8500;
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+  max-width: min(320px, calc(100vw - 32px));
+  padding: 7px 11px;
+  color: rgb(var(--on-surface));
+  background: rgb(var(--surface-container-lowest) / 0.96);
+  border: 1px solid rgb(var(--outline-variant) / 0.72);
+  border-radius: 999px;
+  box-shadow: 0 8px 22px rgb(15 23 42 / 0.14);
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.global-auto-sync-dot-v11 {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: rgb(var(--success));
+}
+
+.global-auto-sync-indicator-v11.is-checking .global-auto-sync-dot-v11 {
+  background: rgb(var(--primary));
+}
+
+.global-auto-sync-indicator-v11.is-pending .global-auto-sync-dot-v11 {
+  background: rgb(var(--warning));
+}
+
+.global-auto-sync-indicator-v11.is-error .global-auto-sync-dot-v11,
+.global-auto-sync-indicator-v11.is-off .global-auto-sync-dot-v11 {
+  background: rgb(var(--error));
+}
+
+@media (max-width: 700px) {
+  .global-auto-sync-indicator-v11 {
+    right: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    max-width: calc(100vw - 20px);
+    min-height: 30px;
+    padding: 6px 9px;
+    font-size: 9px;
+  }
+}

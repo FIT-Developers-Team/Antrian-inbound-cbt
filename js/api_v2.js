@@ -3347,3 +3347,198 @@ async function submitSecurity(e) {
       : "-";
   };
 })();
+
+/* ==========================================================================
+ * GLOBAL AUTO SYNC V11
+ * - Cek Output form setiap 5 detik.
+ * - Hanya rebuild data ketika signature berubah.
+ * - Semua PC mendapat perubahan status tanpa menekan Refresh.
+ * ========================================================================== */
+(function installGlobalAutoSyncApiV11() {
+  if (window.__globalAutoSyncApiV11Installed) return;
+  window.__globalAutoSyncApiV11Installed = true;
+
+  const INTERVAL_MS = 5000;
+  let timer = null;
+  let busy = false;
+  let lastSignature = "";
+  let uiPending = false;
+  let stopped = false;
+
+  function outputFieldV11(row = {}, aliases = []) {
+    if (typeof getCell === "function") return getCell(row, aliases, "");
+    for (const alias of aliases) {
+      if (row?.[alias] !== undefined && row?.[alias] !== null) {
+        return row[alias];
+      }
+    }
+    return "";
+  }
+
+  function rowSignatureV11(row = {}) {
+    return [
+      outputFieldV11(row, ["ticket_id", "ticket id"]),
+      outputFieldV11(row, ["queue_no", "queue no"]),
+      outputFieldV11(row, ["plat_number", "plate number", "Licence Plate"]),
+      outputFieldV11(row, ["vendor_name", "vendor name"]),
+      outputFieldV11(row, ["po_number", "po number"]),
+      outputFieldV11(row, ["status"]),
+      outputFieldV11(row, ["gate"]),
+      outputFieldV11(row, ["call_count", "call count"]),
+      outputFieldV11(row, ["register_time", "register time", "created_at"]),
+      outputFieldV11(row, ["called_at", "called at", "last_call_at"]),
+      outputFieldV11(row, ["start_unloading_at", "start unloading at"]),
+      outputFieldV11(row, ["waiting_gr_at", "waiting gr at"]),
+      outputFieldV11(row, ["done_gr_at", "done gr at"]),
+      outputFieldV11(row, ["handover_grn_at", "handover grn at"]),
+      outputFieldV11(row, ["completed_at", "completed at"]),
+      outputFieldV11(row, ["expired_at", "expired at"]),
+      outputFieldV11(row, ["updated_at", "updated at"]),
+    ]
+      .map((value) => String(value ?? "").trim())
+      .join("\u001f");
+  }
+
+  function hashTextV11(text = "") {
+    let hash = 2166136261;
+    for (let index = 0; index < text.length; index += 1) {
+      hash ^= text.charCodeAt(index);
+      hash = Math.imul(hash, 16777619);
+    }
+    return (hash >>> 0).toString(36);
+  }
+
+  function buildOutputSignatureV11(rows = []) {
+    const normalized = rows
+      .map(rowSignatureV11)
+      .sort((a, b) => a.localeCompare(b))
+      .join("\u001e");
+
+    return `${rows.length}:${hashTextV11(normalized)}`;
+  }
+
+  function updateSyncIndicatorV11(status, text) {
+    if (typeof window.updateGlobalAutoSyncIndicatorV11 === "function") {
+      window.updateGlobalAutoSyncIndicatorV11(status, text);
+    }
+  }
+
+  function applySnapshotV11(outputResponse, rows) {
+    v2RawResponse = {
+      ...(v2RawResponse || {}),
+      status: "success",
+      timestamp:
+        outputResponse?.timestamp ||
+        v2RawResponse?.timestamp ||
+        new Date().toISOString(),
+      outputForm: rows,
+    };
+
+    state.dashboard = buildDashboardFromV2(v2RawResponse);
+    state.options = state.dashboard.options || state.options;
+    state.lastCalled =
+      typeof getLatestCallTicket === "function"
+        ? getLatestCallTicket(state.dashboard.queue)
+        : state.dashboard.queue?.[0] || state.lastCalled;
+  }
+
+  async function runAutoSyncV11(forceUi = false) {
+    if (
+      stopped ||
+      busy ||
+      document.visibilityState === "hidden" ||
+      !navigator.onLine ||
+      !hasApiV2() ||
+      !isLoggedIn?.()
+    ) {
+      return;
+    }
+
+    busy = true;
+    updateSyncIndicatorV11("checking", "Mengecek perubahan...");
+
+    try {
+      const outputResponse = await fetchOutputFormData();
+      const rows = getOutputFormRows(outputResponse);
+      const signature = buildOutputSignatureV11(rows);
+      const changed = !!lastSignature && signature !== lastSignature;
+
+      if (!lastSignature) {
+        lastSignature = signature;
+        updateSyncIndicatorV11("online", "Sinkron otomatis aktif");
+        return;
+      }
+
+      if (changed) {
+        applySnapshotV11(outputResponse, rows);
+        lastSignature = signature;
+      }
+
+      if (
+        (changed || uiPending || forceUi) &&
+        typeof window.onGlobalAutoSyncDataChangedV11 === "function"
+      ) {
+        const applied = window.onGlobalAutoSyncDataChangedV11({
+          changed,
+          pending: uiPending,
+          signature,
+          rows,
+          syncedAt: new Date(),
+        });
+
+        uiPending = applied === false;
+      }
+
+      updateSyncIndicatorV11(
+        uiPending ? "pending" : "online",
+        uiPending
+          ? "Perubahan menunggu form selesai"
+          : `Tersinkron ${new Date().toLocaleTimeString("id-ID")}`,
+      );
+    } catch (error) {
+      console.error("Global auto sync gagal", error);
+      updateSyncIndicatorV11("error", "Sinkron otomatis gagal");
+    } finally {
+      busy = false;
+    }
+  }
+
+  window.startGlobalAutoSyncV11 = function startGlobalAutoSyncV11() {
+    stopped = false;
+    if (timer) clearInterval(timer);
+
+    updateSyncIndicatorV11("online", "Sinkron otomatis aktif");
+    setTimeout(() => runAutoSyncV11(false), 1200);
+    timer = setInterval(() => runAutoSyncV11(false), INTERVAL_MS);
+  };
+
+  window.stopGlobalAutoSyncV11 = function stopGlobalAutoSyncV11() {
+    stopped = true;
+    if (timer) clearInterval(timer);
+    timer = null;
+    updateSyncIndicatorV11("off", "Sinkron otomatis berhenti");
+  };
+
+  window.forceGlobalAutoSyncV11 = function forceGlobalAutoSyncV11() {
+    return runAutoSyncV11(true);
+  };
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      setTimeout(() => runAutoSyncV11(true), 250);
+    }
+  });
+
+  window.addEventListener("online", () => {
+    updateSyncIndicatorV11("online", "Koneksi kembali");
+    setTimeout(() => runAutoSyncV11(true), 250);
+  });
+
+  window.addEventListener("offline", () => {
+    updateSyncIndicatorV11("error", "Tidak ada koneksi");
+  });
+
+  document.addEventListener("DOMContentLoaded", () => {
+    setTimeout(() => window.startGlobalAutoSyncV11(), 2200);
+  });
+})();
