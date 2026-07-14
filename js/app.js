@@ -5452,10 +5452,11 @@ function pageChecker() {
       </div>
     </div>
 
-    <div class="xl:col-span-4 glass-card rounded-xl p-4 sm:p-6">
-      <h3 class="font-headline-md text-headline-md mb-1">Action Panel</h3>
-      <p class="text-on-surface-variant mb-5">Flow: WAITING → CALLED → UNLOADING → SELESAI UNLOADING. Gate aktif otomatis grey out.</p>
-      <form id="checker-form" onsubmit="submitChecker(event)">
+    <div id="checker-desktop-action-panel" class="xl:col-span-4 glass-card rounded-xl p-4 sm:p-6">
+      <h3 class="font-headline-md text-headline-md mb-1">Panel Tindakan</h3>
+      <p class="text-on-surface-variant mb-5">Alur: MENUNGGU → DIPANGGIL → BONGKAR → MENUNGGU GR. Gate aktif otomatis tidak dapat dipilih.</p>
+      <div id="checker-form-home">
+      <form id="checker-form" onsubmit="prepareMobileCheckerSubmit(event); submitChecker(event)">
         <input type="hidden" name="ticket_id" />
         <input type="hidden" name="queue_no" />
         <input type="hidden" name="status" value="CALLED" />
@@ -5478,10 +5479,11 @@ function pageChecker() {
           <span class="material-symbols-outlined">save</span><span id="checker-submit-text">Panggil ke Gate</span>
         </button>
       </form>
+      </div>
 
       <div class="mt-5 rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4 text-xs text-on-surface-variant">
-        <div class="font-bold text-on-surface mb-2">Gate aktif grey out</div>
-        <div>Gate terkunci jika ada ticket status <b>CALLED</b> atau <b>UNLOADING</b>. Selesai/Expired akan melepas gate.</div>
+        <div class="font-bold text-on-surface mb-2">Gate aktif tidak dapat dipilih</div>
+        <div>Gate terkunci jika ada tiket berstatus <b>CALLED</b> atau <b>UNLOADING</b>. Setelah bongkar selesai atau tiket kedaluwarsa, gate kembali tersedia.</div>
       </div>
     </div>
   </div>`;
@@ -7375,12 +7377,13 @@ function securityFormMatchesRowsForPrint(rows = []) {
           : "campaign";
     if (label)
       label.textContent = isWaitingGr
-        ? "FINISH UNLOAD → WAITING GR"
+        ? "SELESAI BONGKAR → MENUNGGU GR"
         : isUnloading
-          ? "START UNLOAD → UNLOADING"
-          : "PANGGIL DRIVER → CALLED";
-    if (isWaitingGr) setCheckerSubmitButtonState("active", "Finish Unload");
-    else if (isUnloading) setCheckerSubmitButtonState("active", "Start Unload");
+          ? "MULAI BONGKAR"
+          : "PANGGIL DRIVER KE GATE";
+    if (isWaitingGr) setCheckerSubmitButtonState("active", "Selesai Bongkar");
+    else if (isUnloading)
+      setCheckerSubmitButtonState("active", "Mulai Bongkar");
     else setCheckerSubmitButtonState("active", "Panggil ke Gate");
   };
 
@@ -7409,12 +7412,12 @@ function securityFormMatchesRowsForPrint(rows = []) {
     const key = checkerRowKey(row);
     const primaryLabel =
       st === "WAITING"
-        ? "Panggil Gate"
+        ? "Panggil ke Gate"
         : isCalled
-          ? "Start Unload"
+          ? "Mulai Bongkar"
           : isUnloading
-            ? "Finish Unload"
-            : "Read Only";
+            ? "Selesai Bongkar"
+            : "Hanya Lihat";
     const primaryIcon =
       st === "WAITING"
         ? "campaign"
@@ -7424,7 +7427,7 @@ function securityFormMatchesRowsForPrint(rows = []) {
             ? "task_alt"
             : "visibility";
     const primaryButton = checkerActive
-      ? `<button type="button" onclick="populateCheckerFromTicketKey('${key}')" class="bg-primary-container text-on-primary-container px-3 py-2 rounded-lg font-bold text-xs flex-1 inline-flex items-center justify-center gap-1"><span class="material-symbols-outlined text-base">${primaryIcon}</span>${primaryLabel}</button>`
+      ? `<button type="button" onclick="openCheckerActionFromKey('${key}')" class="bg-primary-container text-on-primary-container px-3 py-2 rounded-lg font-bold text-xs flex-1 inline-flex items-center justify-center gap-1"><span class="material-symbols-outlined text-base">${primaryIcon}</span>${primaryLabel}</button>`
       : "";
 
     let callAction = "";
@@ -7988,4 +7991,212 @@ window.initShader = function initShaderDisabled() {
     },
     true,
   );
+})();
+
+/* ==========================================================================
+ * CHECKER MOBILE — PANEL TINDAKAN DARI BAWAH
+ * - HP: Panel Tindakan desktop disembunyikan.
+ * - Klik tombol kartu membuka panel dari bawah.
+ * - Laptop/PC tetap menggunakan Panel Tindakan kanan.
+ * ========================================================================== */
+(function installCheckerMobileActionSheet() {
+  if (window.__checkerMobileActionSheetInstalled) return;
+  window.__checkerMobileActionSheetInstalled = true;
+
+  function isMobileCheckerUi() {
+    const narrow =
+      window.matchMedia && window.matchMedia("(max-width: 1024px)").matches;
+    const touch =
+      (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) ||
+      Number(navigator.maxTouchPoints || 0) > 0;
+
+    return !!(narrow && touch);
+  }
+
+  function ensureMobileCheckerSheet() {
+    let sheet = document.getElementById("mobile-checker-action-sheet");
+    if (sheet) return sheet;
+
+    sheet = document.createElement("div");
+    sheet.id = "mobile-checker-action-sheet";
+    sheet.setAttribute("aria-hidden", "true");
+    sheet.innerHTML = `
+      <button
+        type="button"
+        class="mobile-checker-sheet-backdrop"
+        aria-label="Tutup panel tindakan"
+        onclick="closeMobileCheckerActionSheet()"
+      ></button>
+
+      <section
+        class="mobile-checker-sheet-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mobile-checker-sheet-title"
+      >
+        <div class="mobile-checker-sheet-handle"></div>
+
+        <div class="mobile-checker-sheet-header">
+          <div class="min-w-0">
+            <div class="text-[10px] uppercase tracking-[0.22em] font-bold text-on-surface-variant">
+              Tindakan Checker
+            </div>
+            <h3 id="mobile-checker-sheet-title" class="font-headline-md text-xl font-extrabold text-on-surface mt-1">
+              Proses Tiket
+            </h3>
+            <div id="mobile-checker-sheet-summary" class="text-xs text-on-surface-variant mt-1 truncate"></div>
+          </div>
+
+          <button
+            type="button"
+            class="mobile-checker-sheet-close"
+            onclick="closeMobileCheckerActionSheet()"
+            aria-label="Tutup"
+          >
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div id="mobile-checker-form-host" class="mobile-checker-sheet-body"></div>
+      </section>
+    `;
+
+    document.body.appendChild(sheet);
+    return sheet;
+  }
+
+  function returnCheckerFormHome() {
+    const form = document.getElementById("checker-form");
+    if (!form) return;
+
+    const home = document.getElementById("checker-form-home");
+    if (home) {
+      home.appendChild(form);
+    } else if (form.closest("#mobile-checker-action-sheet")) {
+      // Halaman sudah berpindah atau dirender ulang.
+      form.remove();
+    }
+  }
+
+  window.closeMobileCheckerActionSheet =
+    function closeMobileCheckerActionSheet() {
+      const sheet = document.getElementById("mobile-checker-action-sheet");
+
+      returnCheckerFormHome();
+
+      if (sheet) {
+        sheet.classList.remove("is-open");
+        sheet.setAttribute("aria-hidden", "true");
+      }
+
+      document.body.classList.remove("mobile-checker-action-sheet-open");
+    };
+
+  window.prepareMobileCheckerSubmit = function prepareMobileCheckerSubmit() {
+    // Form dikembalikan sebelum submit async agar render ulang tidak
+    // meninggalkan form lama di panel bawah.
+    if (isMobileCheckerUi()) closeMobileCheckerActionSheet();
+  };
+
+  window.openCheckerActionFromKey = function openCheckerActionFromKey(
+    encodedKey = "",
+  ) {
+    const row =
+      typeof findCheckerRowByKey === "function"
+        ? findCheckerRowByKey(encodedKey)
+        : null;
+
+    if (!row) {
+      showToast(
+        "Data tiket tidak ditemukan. Muat ulang data lalu pilih kembali.",
+      );
+      return;
+    }
+
+    if (typeof populateCheckerFormFromRow === "function") {
+      populateCheckerFormFromRow(row);
+    }
+
+    if (!isMobileCheckerUi()) {
+      const panel = document.getElementById("checker-desktop-action-panel");
+      panel?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+      return;
+    }
+
+    const sheet = ensureMobileCheckerSheet();
+    const host = document.getElementById("mobile-checker-form-host");
+    const form = document.getElementById("checker-form");
+
+    if (!host || !form) {
+      showToast("Form tindakan Checker belum siap.");
+      return;
+    }
+
+    const status = String(row.status || "WAITING").toUpperCase();
+    const action =
+      status === "WAITING"
+        ? "Panggil Driver ke Gate"
+        : status === "CALLED"
+          ? "Mulai Bongkar"
+          : status === "UNLOADING"
+            ? "Selesai Bongkar"
+            : "Proses Tiket";
+
+    const title = document.getElementById("mobile-checker-sheet-title");
+    const summary = document.getElementById("mobile-checker-sheet-summary");
+
+    if (title) title.textContent = action;
+    if (summary) {
+      summary.textContent = [
+        row.queue_no || "-",
+        normalizePlateValue(row.plat_number || "") || "-",
+        row.vendor_name || "-",
+      ].join(" • ");
+    }
+
+    host.appendChild(form);
+    sheet.classList.add("is-open");
+    sheet.setAttribute("aria-hidden", "false");
+    document.body.classList.add("mobile-checker-action-sheet-open");
+
+    requestAnimationFrame(() => {
+      const panel = sheet.querySelector(".mobile-checker-sheet-panel");
+      panel?.scrollTo?.({ top: 0, behavior: "auto" });
+    });
+  };
+
+  // Tutup panel jika user pindah menu.
+  document.addEventListener(
+    "click",
+    (event) => {
+      if (
+        event.target?.closest?.("[data-page]") &&
+        document
+          .getElementById("mobile-checker-action-sheet")
+          ?.classList.contains("is-open")
+      ) {
+        closeMobileCheckerActionSheet();
+      }
+    },
+    true,
+  );
+
+  // Tombol kembali Android/browser menutup panel terlebih dahulu.
+  window.addEventListener("popstate", () => {
+    if (
+      document
+        .getElementById("mobile-checker-action-sheet")
+        ?.classList.contains("is-open")
+    ) {
+      closeMobileCheckerActionSheet();
+    }
+  });
+
+  // Saat berubah ke desktop, kembalikan form ke panel kanan.
+  window.addEventListener("resize", () => {
+    if (!isMobileCheckerUi()) closeMobileCheckerActionSheet();
+  });
 })();
