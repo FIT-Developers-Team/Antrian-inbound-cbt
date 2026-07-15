@@ -3151,7 +3151,33 @@ async function submitSecurity(e) {
       };
       const result = await updateCheckerToBackend(body);
       applyBackendActionResult(result);
-      showToast(`${label} berhasil. Status ${target}.`);
+
+      if (target === "COMPLETED") {
+        const waStatus = String(
+          result?.auto_handover_wa_status || "",
+        ).toUpperCase();
+        const waMessage = result?.auto_handover_wa_message || "";
+
+        if (waStatus === "SENT") {
+          showToast(
+            "Handover GRN berhasil. Status COMPLETED dan WA otomatis terkirim.",
+          );
+        } else if (waStatus === "FAILED") {
+          showToast(
+            "Status COMPLETED tersimpan. WA gagal: " +
+              (waMessage || "provider tidak merespons"),
+          );
+        } else if (waStatus === "DISABLED") {
+          showToast(
+            "Status COMPLETED tersimpan. WA otomatis sedang dimatikan.",
+          );
+        } else {
+          showToast("Handover GRN berhasil. Status COMPLETED.");
+        }
+      } else {
+        showToast(`${label} berhasil. Status ${target}.`);
+      }
+
       renderPage("laporan", false);
     } catch (err) {
       console.error(err);
