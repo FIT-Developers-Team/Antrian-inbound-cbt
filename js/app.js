@@ -10934,3 +10934,153 @@ window.initShader = function initShaderDisabled() {
     enforceSingleCheckerFormV153();
   });
 })();
+
+/* ==========================================================================
+ * WAITING LIST DETAIL PERSISTENCE V15.5
+ * - Detail PO yang sedang terbuka tidak tertutup saat auto sync 5 detik.
+ * - Posisi scroll halaman dan scroll horizontal tabel dipertahankan saat render.
+ * - Berlaku juga setelah Done GR / Handover / refresh manual.
+ * ========================================================================== */
+(function installWaitingDetailPersistenceV155() {
+  if (window.__waitingDetailPersistenceV155Installed) return;
+  window.__waitingDetailPersistenceV155Installed = true;
+
+  const openedDetailIdsV155 = new Set();
+
+  function isWaitingListPageV155() {
+    return String(state?.page || "").trim() === "laporan";
+  }
+
+  function captureOpenWaitingDetailsV155() {
+    document
+      .querySelectorAll("tr.waiting-detail-row-v15[id]:not(.hidden)")
+      .forEach((row) => openedDetailIdsV155.add(row.id));
+
+    return [...openedDetailIdsV155];
+  }
+
+  function captureWaitingViewportV155() {
+    if (!isWaitingListPageV155()) return null;
+
+    const scrollingElement = document.scrollingElement;
+    const pageRoot = document.getElementById("page-root");
+    const tableWrap = document.querySelector(".waiting-list-wrap-v15");
+
+    return {
+      documentTop: scrollingElement?.scrollTop || 0,
+      pageRootTop: pageRoot?.scrollTop || 0,
+      pageRootLeft: pageRoot?.scrollLeft || 0,
+      tableLeft: tableWrap?.scrollLeft || 0,
+      openedIds: captureOpenWaitingDetailsV155(),
+    };
+  }
+
+  function restoreWaitingViewportV155(snapshot = null) {
+    if (!isWaitingListPageV155()) return;
+
+    const openedIds = snapshot?.openedIds?.length
+      ? snapshot.openedIds
+      : [...openedDetailIdsV155];
+
+    openedIds.forEach((id) => {
+      const row = document.getElementById(id);
+      if (!row) return;
+      row.classList.remove("hidden");
+      openedDetailIdsV155.add(id);
+    });
+
+    const scrollingElement = document.scrollingElement;
+    const pageRoot = document.getElementById("page-root");
+    const tableWrap = document.querySelector(".waiting-list-wrap-v15");
+
+    if (snapshot) {
+      if (scrollingElement)
+        scrollingElement.scrollTop = snapshot.documentTop || 0;
+      if (pageRoot) {
+        pageRoot.scrollTop = snapshot.pageRootTop || 0;
+        pageRoot.scrollLeft = snapshot.pageRootLeft || 0;
+      }
+      if (tableWrap) tableWrap.scrollLeft = snapshot.tableLeft || 0;
+    }
+  }
+
+  window.captureWaitingOpenDetailsV155 = captureOpenWaitingDetailsV155;
+  window.captureWaitingViewportV155 = captureWaitingViewportV155;
+  window.restoreWaitingViewportV155 = restoreWaitingViewportV155;
+
+  // Inline onclick lama tetap bekerja. Listener bubble ini hanya menyimpan state-nya.
+  document.addEventListener("click", (event) => {
+    const button = event.target?.closest?.("button");
+    if (!button) return;
+
+    const label = String(button.textContent || "")
+      .trim()
+      .toUpperCase();
+    if (label !== "DETAIL PO") return;
+
+    setTimeout(() => {
+      const masterRow = button.closest("tr");
+      const detailRow = masterRow?.nextElementSibling;
+      if (!detailRow?.matches?.("tr.waiting-detail-row-v15[id]")) return;
+
+      if (detailRow.classList.contains("hidden")) {
+        openedDetailIdsV155.delete(detailRow.id);
+      } else {
+        openedDetailIdsV155.add(detailRow.id);
+      }
+    }, 0);
+  });
+
+  const renderPageBeforeV155 =
+    typeof renderPage === "function" ? renderPage : null;
+
+  if (renderPageBeforeV155) {
+    renderPage = function renderPagePreserveWaitingDetailV155(
+      page,
+      toast = true,
+    ) {
+      const requestedPage = String(page || state?.page || "").trim();
+      const shouldPreserve =
+        requestedPage === "laporan" || isWaitingListPageV155();
+      const snapshot = shouldPreserve ? captureWaitingViewportV155() : null;
+
+      const result = renderPageBeforeV155.call(this, page, toast);
+
+      if (requestedPage === "laporan") {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            restoreWaitingViewportV155(snapshot);
+          });
+        });
+      }
+
+      return result;
+    };
+
+    try {
+      window.renderPage = renderPage;
+    } catch (error) {
+      // Binding global dapat read-only pada browser tertentu; abaikan.
+    }
+  }
+
+  // Auto sync lama sudah melakukan render lewat renderPage. Hook ini menjadi
+  // pengaman tambahan bila implementasi auto sync berubah di patch berikutnya.
+  const autoSyncBeforeV155 = window.onGlobalAutoSyncDataChangedV11;
+  if (typeof autoSyncBeforeV155 === "function") {
+    window.onGlobalAutoSyncDataChangedV11 =
+      function onGlobalAutoSyncDataChangedPreserveDetailV155(snapshot = {}) {
+        const waitingSnapshot = isWaitingListPageV155()
+          ? captureWaitingViewportV155()
+          : null;
+
+        const result = autoSyncBeforeV155.apply(this, arguments);
+
+        if (waitingSnapshot) {
+          setTimeout(() => restoreWaitingViewportV155(waitingSnapshot), 0);
+        }
+
+        return result;
+      };
+  }
+})();

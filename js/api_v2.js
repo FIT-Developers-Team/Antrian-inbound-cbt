@@ -3209,10 +3209,19 @@ async function submitSecurity(e) {
       showToast(`Panggil ulang tersedia dalam ${remaining} detik.`);
       return;
     }
+    const buttonHtmlBeforeV155 = btn?.innerHTML || "";
     if (btn) {
       btn.disabled = true;
       btn.classList.add("opacity-60", "cursor-wait");
+      btn.setAttribute("aria-busy", "true");
+      btn.innerHTML =
+        '<span class="material-symbols-outlined text-base animate-spin">progress_activity</span> Menyimpan...';
     }
+    showToast(
+      action === "start"
+        ? "Menyimpan Start Checker..."
+        : "Menyimpan Done Checker...",
+    );
     try {
       const result = await updateCheckerToBackend({
         ...buildBackendActionBodyFromRow(row),
@@ -4377,6 +4386,19 @@ async function submitSecurity(e) {
     lockUiV154();
     let saved = false;
 
+    // Tutup popup segera setelah konfirmasi. Request tetap berjalan dengan
+    // referensi form/body yang sudah diambil, sehingga user tidak merasa freeze
+    // dan tidak bisa menekan aksi yang sama dua kali.
+    showToast("Menyimpan perubahan Checker...");
+    try {
+      window.closeMobileCheckerActionSheet?.();
+    } catch (closeError) {
+      document
+        .getElementById("mobile-checker-action-sheet")
+        ?.classList.remove("is-open");
+      document.body.classList.remove("mobile-checker-action-sheet-open");
+    }
+
     try {
       const result = await updateCheckerToBackend(body);
       applyBackendActionResult(result);
@@ -4486,6 +4508,8 @@ async function submitSecurity(e) {
       if (btn) {
         btn.disabled = false;
         btn.classList.remove("opacity-60", "cursor-wait");
+        btn.removeAttribute("aria-busy");
+        if (document.body.contains(btn)) btn.innerHTML = buttonHtmlBeforeV155;
       }
     }
   };
@@ -4499,12 +4523,27 @@ async function submitSecurity(e) {
       (row) => String(row.ticket_id) === String(ticketId),
     );
     if (!ticket) return showToast("Ticket tidak ditemukan.");
+
     const po = ticket.po_rows?.find(
       (row) => String(row.ticket_po_id) === String(ticketPoId),
     );
     if (!po) return showToast("PO tidak ditemukan.");
     if (!confirm(`Done GR untuk PO ${po.po_number || "-"}?`)) return;
-    if (btn) btn.disabled = true;
+
+    const waitingSnapshot = window.captureWaitingViewportV155?.() || null;
+    const buttonHtmlBeforeV155 = btn?.innerHTML || "";
+    let successV155 = false;
+
+    if (btn) {
+      btn.disabled = true;
+      btn.setAttribute("aria-busy", "true");
+      btn.classList.add("opacity-60", "cursor-wait");
+      btn.innerHTML =
+        '<span class="material-symbols-outlined text-base animate-spin">progress_activity</span> Menyimpan...';
+    }
+
+    showToast(`Menyimpan Done GR PO ${po.po_number || "-"}...`);
+
     try {
       const result = await doneGrPoToBackendV15({
         ticket_id: ticket.ticket_id,
@@ -4515,18 +4554,29 @@ async function submitSecurity(e) {
         operational_date: ticket.operational_date,
         ...actorPayloadV15(),
       });
+
       applyBackendActionResult(result);
+      successV155 = true;
       showToast(
         result?.all_done_gr
           ? "Semua PO DONE GR. Ticket siap Handover GRN."
           : `PO ${po.po_number} selesai GR.`,
       );
+
       renderPage("laporan", false);
+      setTimeout(() => {
+        window.restoreWaitingViewportV155?.(waitingSnapshot);
+      }, 0);
     } catch (error) {
       console.error(error);
       showToast(`Done GR gagal: ${error.message}`);
     } finally {
-      if (btn) btn.disabled = false;
+      if (btn && !successV155 && document.body.contains(btn)) {
+        btn.disabled = false;
+        btn.removeAttribute("aria-busy");
+        btn.classList.remove("opacity-60", "cursor-wait");
+        btn.innerHTML = buttonHtmlBeforeV155;
+      }
     }
   };
 
@@ -4538,12 +4588,27 @@ async function submitSecurity(e) {
       (row) => String(row.ticket_id) === String(ticketId),
     );
     if (!ticket) return showToast("Ticket tidak ditemukan.");
-    if (!ticket.all_done_gr)
+    if (!ticket.all_done_gr) {
       return showToast(
         `Handover belum bisa. GR selesai ${ticket.gr_done_count || 0}/${ticket.gr_total_count || ticket.po_rows?.length || 0} PO.`,
       );
+    }
     if (!confirm(`Handover GRN ${ticket.queue_no || "-"}?`)) return;
-    if (btn) btn.disabled = true;
+
+    const waitingSnapshot = window.captureWaitingViewportV155?.() || null;
+    const buttonHtmlBeforeV155 = btn?.innerHTML || "";
+    let successV155 = false;
+
+    if (btn) {
+      btn.disabled = true;
+      btn.setAttribute("aria-busy", "true");
+      btn.classList.add("opacity-60", "cursor-wait");
+      btn.innerHTML =
+        '<span class="material-symbols-outlined text-base animate-spin">progress_activity</span> Menyimpan...';
+    }
+
+    showToast("Menyimpan Handover GRN...");
+
     try {
       const result = await handoverGrnToBackendV15({
         ticket_id: ticket.ticket_id,
@@ -4552,14 +4617,24 @@ async function submitSecurity(e) {
         operational_date: ticket.operational_date,
         ...actorPayloadV15(),
       });
+
       applyBackendActionResult(result);
+      successV155 = true;
       showToast("Handover GRN selesai.");
       renderPage("laporan", false);
+      setTimeout(() => {
+        window.restoreWaitingViewportV155?.(waitingSnapshot);
+      }, 0);
     } catch (error) {
       console.error(error);
       showToast(`Handover GRN gagal: ${error.message}`);
     } finally {
-      if (btn) btn.disabled = false;
+      if (btn && !successV155 && document.body.contains(btn)) {
+        btn.disabled = false;
+        btn.removeAttribute("aria-busy");
+        btn.classList.remove("opacity-60", "cursor-wait");
+        btn.innerHTML = buttonHtmlBeforeV155;
+      }
     }
   };
 
