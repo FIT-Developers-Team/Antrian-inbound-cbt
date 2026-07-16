@@ -4256,13 +4256,19 @@ async function submitSecurity(e) {
     }
   };
 
-  window.submitChecker = async function submitCheckerV15(e) {
-    e.preventDefault();
-    const form = e.target;
-    if (form.dataset.saving === "1") return;
+  window.submitChecker = async function submitCheckerV154(e) {
+    e?.preventDefault?.();
+    const form = e?.target;
+    if (!form || form.id !== "checker-form") return;
+
+    // Guard lokal + global: satu ticket/action hanya boleh punya satu request aktif.
+    if (form.dataset.saving === "1" || form.dataset.saved === "1") {
+      showToast("Perubahan sedang diproses atau sudah tersimpan.");
+      return;
+    }
 
     if (typeof syncCheckerGateInput === "function" && !syncCheckerGateInput()) {
-      showToast("Gate belum valid atau sedang aktif.");
+      showToast("Gate belum dipilih, tidak valid, atau sedang aktif.");
       return;
     }
     if (
@@ -4282,6 +4288,7 @@ async function submitSecurity(e) {
       getAuthUser?.()?.display_name ||
       getAuthUser?.()?.username ||
       body.actor_role;
+
     const requested = String(body.status || "CALLED")
       .trim()
       .toUpperCase();
@@ -4289,35 +4296,104 @@ async function submitSecurity(e) {
     body.updated_at = formatDateTimeLocal(new Date());
     if (body.status === "CALLED") body.called_at = body.updated_at;
     if (body.status === "UNLOADING") body.start_unloading_at = body.updated_at;
-    if (body.status === "WAITING CHECKER")
+    if (body.status === "WAITING CHECKER") {
       body.finish_unloading_at = body.updated_at;
-    if (typeof getOperationalDateKey === "function")
+    }
+    if (typeof getOperationalDateKey === "function") {
       body.operational_date = getOperationalDateKey(new Date());
+    }
 
-    if (
-      (window.matchMedia?.("(pointer: coarse)")?.matches ||
-        navigator.maxTouchPoints > 0) &&
-      !form.dataset.mobileConfirmed
-    ) {
+    const isTouch =
+      window.matchMedia?.("(pointer: coarse)")?.matches ||
+      Number(navigator.maxTouchPoints || 0) > 0;
+
+    if (isTouch && form.dataset.mobileConfirmed !== "1") {
       const label =
         body.status === "CALLED"
           ? "Panggil driver ke gate?"
           : body.status === "UNLOADING"
             ? "Mulai unloading?"
             : "Selesaikan unloading dan masuk proses checker barang?";
-      if (
-        !confirm(
-          `${label}\n\nQueue: ${body.queue_no || "-"}\nPlat: ${body.plat_number || "-"}`,
-        )
-      )
-        return;
+
+      const approved = confirm(
+        `${label}\n\nQueue: ${body.queue_no || "-"}\nPlat: ${body.plat_number || "-"}\nGate: ${body.gate || "-"}`,
+      );
+      if (!approved) return;
     }
 
-    form.dataset.saving = "1";
-    setCheckerSubmitButtonState?.("saving", "Menyimpan...");
+    const lockKey = [
+      String(body.ticket_id || "").trim(),
+      String(body.queue_no || "").trim(),
+      String(body.plat_number || "").trim(),
+      String(body.status || "").trim(),
+    ].join("|");
+
+    window.__checkerSubmitLocksV154 ||= new Set();
+    if (window.__checkerSubmitLocksV154.has(lockKey)) {
+      showToast("Aksi ticket ini sedang diproses. Tunggu data berubah.");
+      return;
+    }
+
+    const submitButton = form.querySelector("#checker-submit-btn");
+    const gateControls = [
+      ...form.querySelectorAll(
+        '[data-single-gate], [data-wingbox-gate], select[name="gate"]',
+      ),
+    ];
+
+    function lockUiV154(label = "Menyimpan...") {
+      form.dataset.saving = "1";
+      window.__checkerSubmitLocksV154.add(lockKey);
+      gateControls.forEach((control) => {
+        control.dataset.disabledBeforeV154 = control.disabled ? "1" : "0";
+        control.disabled = true;
+        control.setAttribute("aria-disabled", "true");
+      });
+      if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.setAttribute("aria-disabled", "true");
+        submitButton.style.pointerEvents = "none";
+      }
+      setCheckerSubmitButtonState?.("saving", label);
+    }
+
+    function unlockUiV154() {
+      form.dataset.saving = "0";
+      delete form.dataset.saved;
+      window.__checkerSubmitLocksV154.delete(lockKey);
+      gateControls.forEach((control) => {
+        control.disabled = control.dataset.disabledBeforeV154 === "1";
+        delete control.dataset.disabledBeforeV154;
+        control.removeAttribute("aria-disabled");
+      });
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.removeAttribute("aria-disabled");
+        submitButton.style.pointerEvents = "";
+      }
+      updateCheckerStatusPreview?.(requested);
+    }
+
+    lockUiV154();
+    let saved = false;
+
     try {
       const result = await updateCheckerToBackend(body);
       applyBackendActionResult(result);
+      saved = true;
+      form.dataset.saved = "1";
+
+      // Setelah backend sukses, form lama tidak boleh bisa digunakan kembali.
+      setCheckerSubmitButtonState?.("done", "Tersimpan");
+      gateControls.forEach((control) => {
+        control.disabled = true;
+        control.setAttribute("aria-disabled", "true");
+      });
+      if (submitButton) {
+        submitButton.disabled = true;
+        submitButton.style.pointerEvents = "none";
+      }
+
       if (body.status === "CALLED") {
         showToast(`Panggilan ${result.call_count || 1}/3 tersimpan.`);
       } else if (body.status === "UNLOADING") {
@@ -4325,13 +4401,33 @@ async function submitSecurity(e) {
       } else {
         showToast("Unloading selesai. Ticket masuk Checker Barang.");
       }
-      setTimeout(() => renderPage("checker", false), 200);
+
+      // Tutup bottom sheet seketika agar gate/button stale tidak bisa diklik lagi.
+      try {
+        window.closeMobileCheckerActionSheet?.();
+      } catch (closeError) {
+        document
+          .getElementById("mobile-checker-action-sheet")
+          ?.classList.remove("is-open");
+        document.body.classList.remove("mobile-checker-action-sheet-open");
+      }
+
+      // Render dari state hasil backend, lalu cek server lagi tanpa menunggu 5 detik.
+      renderPage("checker", false);
+      setTimeout(() => {
+        window.forceGlobalAutoSyncV11?.();
+      }, 150);
     } catch (error) {
       console.error(error);
       showToast(`Checker gagal: ${error.message}`);
+      unlockUiV154();
     } finally {
-      form.dataset.saving = "0";
-      updateCheckerStatusPreview?.(body.status);
+      if (saved) {
+        // Lock singkat mencegah tap ulang dari event/DOM lama setelah popup ditutup.
+        setTimeout(() => {
+          window.__checkerSubmitLocksV154?.delete(lockKey);
+        }, 2500);
+      }
     }
   };
 
