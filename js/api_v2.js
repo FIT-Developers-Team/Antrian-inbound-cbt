@@ -156,8 +156,66 @@ async function apiPostV2(action, payload = {}) {
 }
 
 async function submitSecurityRowsToBackend(rows = []) {
-  if (!rows.length) return { rows: [] };
-  return apiPostV2("submitSecurity", { rows });
+  if (!rows.length) return { rows: [], ticket_wa_results: [] };
+
+  // V17.1: intent WA dibuat eksplisit dari web saat ticket dibuat.
+  // GAS V15/V16 tetap menjadi satu-satunya pengirim agar pesan tidak dobel.
+  return apiPostV2("submitSecurity", {
+    rows,
+    send_whatsapp: true,
+    wa_event: "TICKET_CREATED",
+  });
+}
+
+function getTicketWaFeedbackV171(result = {}) {
+  const items = Array.isArray(result?.ticket_wa_results)
+    ? result.ticket_wa_results
+    : [];
+
+  const normalizeStatus = (item) =>
+    String(item?.status || "")
+      .trim()
+      .toUpperCase();
+
+  const sent = items.filter((item) =>
+    ["SENT", "AUTO_SENT", "SUCCESS"].includes(normalizeStatus(item)),
+  );
+  const failed = items.filter((item) =>
+    ["FAILED", "AUTO_FAILED", "ERROR"].includes(normalizeStatus(item)),
+  );
+  const disabled = items.filter((item) => normalizeStatus(item) === "DISABLED");
+  const targets = [
+    ...new Set(
+      sent.map((item) => String(item?.target || "").trim()).filter(Boolean),
+    ),
+  ];
+
+  return { items, sent, failed, disabled, targets };
+}
+
+function buildTicketCreatedToastV171(result = {}, ticketCount = 1) {
+  const feedback = getTicketWaFeedbackV171(result);
+  const count = Number(ticketCount || result?.inserted_tickets || 1) || 1;
+  const ticketText = `${count} tiket berhasil dibuat`;
+
+  if (feedback.sent.length) {
+    const targetText = feedback.targets.length
+      ? feedback.targets.join(", ")
+      : "nomor driver";
+    return `${ticketText} • WhatsApp terkirim ke ${targetText} • QR siap`;
+  }
+
+  if (feedback.failed.length) {
+    const message =
+      feedback.failed[0]?.message || "Cek wa_ticket_error pada Output form";
+    return `${ticketText} • WhatsApp gagal: ${message}`;
+  }
+
+  if (feedback.disabled.length) {
+    return `${ticketText} • WhatsApp masih DISABLED di backend`;
+  }
+
+  return `${ticketText} • Status WhatsApp tidak dikembalikan backend. Cek deployment GAS V17.0`;
 }
 
 async function updateCheckerToBackend(body = {}) {
@@ -1814,6 +1872,9 @@ async function submitSecurity(e) {
     try {
       showToast("Menyimpan ticket ke Output form...");
       const result = await submitSecurityRowsToBackend(newRows);
+      const waFeedbackV171 = getTicketWaFeedbackV171(result);
+      window.__lastTicketWaResultsV171 = waFeedbackV171.items;
+      console.log("WA ticket result V17.1:", waFeedbackV171.items);
 
       // Tidak fetch full API lagi. Row hasil POST langsung dimasukkan ke state.
       const savedRows =
@@ -1838,7 +1899,7 @@ async function submitSecurity(e) {
       state.dashboard = buildDashboardFromV2(v2RawResponse);
       state.options = state.dashboard.options || state.options;
 
-      showToast(`${newRows.length} mobil/antrian masuk Output form`);
+      showToast(buildTicketCreatedToastV171(result, newRows.length));
     } catch (err) {
       console.error(err);
 
@@ -2765,6 +2826,9 @@ async function submitSecurity(e) {
     try {
       showToast("Menyimpan ticket ke Output form...");
       const result = await submitSecurityRowsToBackend(newRows);
+      const waFeedbackV171 = getTicketWaFeedbackV171(result);
+      window.__lastTicketWaResultsV171 = waFeedbackV171.items;
+      console.log("WA ticket result V17.1:", waFeedbackV171.items);
       const savedRows =
         Array.isArray(result?.rows) && result.rows.length
           ? result.rows
@@ -2786,7 +2850,7 @@ async function submitSecurity(e) {
       state.dashboard = buildDashboardFromV2(v2RawResponse);
       state.options = state.dashboard.options || state.options;
 
-      showToast(`${newRows.length} kendaraan/antrian masuk Output form`);
+      showToast(buildTicketCreatedToastV171(result, newRows.length));
     } catch (err) {
       console.error(err);
 
@@ -4213,6 +4277,9 @@ async function submitSecurity(e) {
       saveLocalTickets(localRowsV15);
       showToast("Menyimpan tiket digital...");
       const result = await submitSecurityRowsToBackend(outputRows);
+      const waFeedbackV171 = getTicketWaFeedbackV171(result);
+      window.__lastTicketWaResultsV171 = waFeedbackV171.items;
+      console.log("WA ticket result V17.1:", waFeedbackV171.items);
       const savedRows =
         Array.isArray(result?.rows) && result.rows.length
           ? result.rows
@@ -4231,9 +4298,7 @@ async function submitSecurity(e) {
       state.lastSecurityRows = buildQueueFromOutputForm(savedRows);
       state.lastCalled = state.lastSecurityRows[0] || ticketMasters[0];
 
-      showToast(
-        `${ticketMasters.length} tiket berhasil dibuat. Tampilkan QR ke driver.`,
-      );
+      showToast(buildTicketCreatedToastV171(result, ticketMasters.length));
 
       const queueEl = document.getElementById("new-queue-number");
       if (queueEl) queueEl.textContent = state.lastCalled?.queue_no || "-";
