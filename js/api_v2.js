@@ -4888,6 +4888,17 @@ async function submitSecurity(e) {
     submitChecker = window.submitChecker;
   } catch (error) {}
 
+  // V16.7: helper actor wajib berada di scope IIFE V16.
+  // Helper V15 berada di IIFE lama sehingga tidak dapat dipanggil langsung di sini.
+  function actorPayloadV16() {
+    const user = typeof getAuthUser === "function" ? getAuthUser() || {} : {};
+    return {
+      actor_role: String(user.role || "").toUpperCase(),
+      actor_name: user.display_name || user.username || user.role || "",
+      actor_username: user.username || "",
+    };
+  }
+
   // Feedback Start/Done checker: status di modal langsung diperbarui dan modal
   // dibuka ulang dari state hasil backend, bukan menunggu auto-sync 5 detik.
   window.runCheckerPoActionV15 = async function runCheckerPoActionV16(
@@ -4920,7 +4931,7 @@ async function submitSecurity(e) {
         ticket_po_ids: poIds,
         checker_id: checker.checker_id || checker.mp_id,
         checker_name: checker.checker_name,
-        ...actorPayloadV15(),
+        ...actorPayloadV16(),
       };
 
       const result =
