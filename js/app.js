@@ -12200,9 +12200,10 @@ window.initShader = function initShaderDisabled() {
 })();
 
 /* ==========================================================================
- * V16.3 — FLEET DESCRIPTION LABEL + FINAL SLA RULE
+ * V16.9 — FLEET DESCRIPTION LABEL + SLA MINUS 1 HOUR
  * - Dropdown tetap menyimpan value fleet canonical.
  * - Deskripsi tampil dalam kurung agar Security tidak salah pilih kendaraan.
+ * - Semua target SLA V16.3 dikurangi 1 jam.
  * - SLA ticket: start UNLOADING sampai seluruh PO dalam satu mobil DONE GR.
  * ========================================================================== */
 (function installInboundV163FleetSlaPatch() {
@@ -12274,20 +12275,20 @@ window.initShader = function initShaderDisabled() {
         row.ticket_total_sku || row.count_po_sku || row["Count SKU"] || 0,
       ) || 0;
 
-    if (["TRONTON/FUSO", "WING BOX"].includes(fleet)) return 5;
+    if (["TRONTON/FUSO", "WING BOX"].includes(fleet)) return 4;
 
     // CDDL mengikuti rule CDD, CDEL mengikuti rule CDE.
-    // SKU tepat 40 masuk tier 3 jam (<= 40).
+    // SKU tepat 40 masuk tier 2 jam (<= 40).
     if (["CDD", "CDDL", "CDE", "CDEL"].includes(fleet)) {
-      return sku > 40 ? 5 : 3;
+      return sku > 40 ? 4 : 2;
     }
 
     if (["VAN", "PICKUP", "MOBIL", "L300 BOX"].includes(fleet)) {
-      return 3;
+      return 2;
     }
 
-    if (fleet === "RODA 2") return 2;
-    if (fleet === "DROP-OFF") return 24;
+    if (fleet === "RODA 2") return 1;
+    if (fleet === "DROP-OFF") return 23;
 
     return 0;
   };
@@ -12297,15 +12298,15 @@ window.initShader = function initShaderDisabled() {
 
   window.getFleetSlaRuleTextV163 = function getFleetSlaRuleTextV163(type) {
     const fleet = fleetCanonicalV163(type);
-    if (["TRONTON/FUSO", "WING BOX"].includes(fleet)) return "SLA 5 jam";
+    if (["TRONTON/FUSO", "WING BOX"].includes(fleet)) return "SLA 4 jam";
     if (["CDD", "CDDL", "CDE", "CDEL"].includes(fleet)) {
-      return "SLA 3 jam untuk SKU ≤ 40, SLA 5 jam untuk SKU > 40";
+      return "SLA 2 jam untuk SKU ≤ 40, SLA 4 jam untuk SKU > 40";
     }
     if (["VAN", "PICKUP", "MOBIL", "L300 BOX"].includes(fleet)) {
-      return "SLA 3 jam";
+      return "SLA 2 jam";
     }
-    if (fleet === "RODA 2") return "SLA 2 jam";
-    if (fleet === "DROP-OFF") return "SLA 24 jam";
+    if (fleet === "RODA 2") return "SLA 1 jam";
+    if (fleet === "DROP-OFF") return "SLA 23 jam";
     return "SLA belum tersedia";
   };
 
@@ -12369,11 +12370,11 @@ window.initShader = function initShaderDisabled() {
     return `<div class="rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4 text-sm text-on-surface-variant">
       <div class="font-bold text-on-surface mb-2">Rule SLA Fleet</div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-        <div><b>TRONTON/FUSO</b> / <b>WING BOX</b>: 5 jam</div>
-        <div><b>CDD/CDDL/CDE/CDEL</b>: SKU ≤ 40 = 3 jam, SKU &gt; 40 = 5 jam</div>
-        <div><b>VAN/PICKUP/MOBIL/L300 BOX</b>: 3 jam</div>
-        <div><b>RODA 2</b>: 2 jam</div>
-        <div><b>DROP-OFF</b>: 24 jam</div>
+        <div><b>TRONTON/FUSO</b> / <b>WING BOX</b>: 4 jam</div>
+        <div><b>CDD/CDDL/CDE/CDEL</b>: SKU ≤ 40 = 2 jam, SKU &gt; 40 = 4 jam</div>
+        <div><b>VAN/PICKUP/MOBIL/L300 BOX</b>: 2 jam</div>
+        <div><b>RODA 2</b>: 1 jam</div>
+        <div><b>DROP-OFF</b>: 23 jam</div>
         <div>Durasi: Start Unloading sampai seluruh PO dalam satu mobil DONE GR.</div>
       </div>
     </div>`;
@@ -12791,3 +12792,245 @@ window.initShader = function initShaderDisabled() {
     checkerSectionState = "process";
   }
 })();
+
+/* ==========================================================================
+ * V16.8 — DROP-OFF TANPA PO + VISUAL TEKS
+ * - Memilih fleet DROP-OFF otomatis menyinkronkan Ticket Type menjadi DROP-OFF.
+ * - PO Number tidak wajib untuk DROP-OFF, baik dipilih dari Ticket Type maupun Fleet.
+ * - Area gambar kendaraan DROP-OFF diganti tulisan besar "DROP-OFF".
+ * ========================================================================== */
+(function installInboundV168DropOffPatch() {
+  if (window.__inboundV168DropOffInstalled) return;
+  window.__inboundV168DropOffInstalled = true;
+
+  function canonicalFleetV168(value = "") {
+    if (typeof window.normalizeFleetType === "function") {
+      return window.normalizeFleetType(value);
+    }
+    return String(value || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, " ")
+      .replace(/^DROP\s*OFF$/, "DROP-OFF");
+  }
+
+  function getSecurityFormV168() {
+    return document.getElementById("security-form");
+  }
+
+  function getVehicleFleetSelectsV168(form = getSecurityFormV168()) {
+    if (!form) return [];
+    return [
+      ...form.querySelectorAll(
+        '#vehicle-multi-rows select[data-vehicle-field="fleet_type"]',
+      ),
+    ];
+  }
+
+  function isDropOffTicketV168(form = getSecurityFormV168()) {
+    const type = String(
+      form?.querySelector('[name="ticket_type"]')?.value || "",
+    )
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "-");
+    return type === "DROP" || type === "DROP-OFF";
+  }
+
+  function hasDropOffFleetV168(form = getSecurityFormV168()) {
+    return getVehicleFleetSelectsV168(form).some(
+      (select) => canonicalFleetV168(select.value) === "DROP-OFF",
+    );
+  }
+
+  function setDropOffPoRequirementV168(dropOff, form = getSecurityFormV168()) {
+    if (!form) return;
+
+    const poHidden = form.querySelector('[name="po_number"]');
+    if (poHidden) {
+      poHidden.required = !dropOff;
+      poHidden.toggleAttribute("required", !dropOff);
+      poHidden.dataset.optionalDropOff = dropOff ? "1" : "0";
+      if (dropOff) poHidden.setCustomValidity("");
+    }
+
+    const poSearch = document.getElementById("po-search-input");
+    if (poSearch) {
+      poSearch.placeholder = dropOff
+        ? "PO opsional untuk DROP-OFF"
+        : "Cari atau ketik PO manual...";
+      if (dropOff) poSearch.classList.remove("invalid");
+    }
+
+    const qty = document.getElementById("security-total-qty");
+    const sku = document.getElementById("security-count-sku");
+    const hasPo = String(poHidden?.value || "").trim() !== "";
+    if (dropOff && !hasPo) {
+      if (qty) qty.textContent = "0";
+      if (sku) sku.textContent = "0";
+    }
+  }
+
+  function syncTicketTypeFromFleetV168(changedSelect = null) {
+    const form = getSecurityFormV168();
+    if (!form) return false;
+
+    const ticketType = form.querySelector('[name="ticket_type"]');
+    const changedFleet = canonicalFleetV168(changedSelect?.value || "");
+    const anyDropOffFleet = hasDropOffFleetV168(form);
+
+    // Fleet DROP-OFF adalah keputusan operasional utama. Sinkronkan tipe tiket
+    // agar lookup, queue number, print, dan backend menggunakan flow DROP-OFF.
+    if (changedFleet === "DROP-OFF" || anyDropOffFleet) {
+      if (ticketType) ticketType.value = "DROP-OFF";
+    } else if (changedSelect && ticketType && isDropOffTicketV168(form)) {
+      ticketType.value = "REG";
+    }
+
+    const dropOff = isDropOffTicketV168(form) || hasDropOffFleetV168(form);
+    setDropOffPoRequirementV168(dropOff, form);
+
+    if (typeof window.syncVehicleMultiInput === "function") {
+      window.syncVehicleMultiInput();
+    }
+
+    return dropOff;
+  }
+
+  function decorateDropOffVisualV168(selectEl) {
+    const row = selectEl?.closest?.(".vehicle-row");
+    if (!row) return;
+
+    const fleet = canonicalFleetV168(selectEl.value || "");
+    const isDropOff = fleet === "DROP-OFF";
+    const img = row.querySelector("[data-vehicle-fleet-img]");
+    const label = row.querySelector("[data-vehicle-fleet-label]");
+    const note = row.querySelector("[data-vehicle-fleet-note-v163]");
+    const visualBox = img?.parentElement || label?.parentElement;
+
+    let word = row.querySelector("[data-dropoff-word-v168]");
+    if (!word && visualBox) {
+      word = document.createElement("div");
+      word.dataset.dropoffWordV168 = "1";
+      word.textContent = "DROP-OFF";
+      word.style.display = "none";
+      word.style.width = "100%";
+      word.style.minHeight = "92px";
+      word.style.alignItems = "center";
+      word.style.justifyContent = "center";
+      word.style.textAlign = "center";
+      word.style.fontFamily = "JetBrains Mono, monospace";
+      word.style.fontWeight = "800";
+      word.style.fontSize = "clamp(22px, 3vw, 34px)";
+      word.style.letterSpacing = "0.04em";
+      word.style.color = "rgb(var(--primary))";
+      visualBox.insertBefore(word, img || visualBox.firstChild);
+    }
+
+    if (img) img.style.display = isDropOff ? "none" : "";
+    if (word) word.style.display = isDropOff ? "flex" : "none";
+
+    // Hindari tulisan DROP-OFF dobel di bawah area visual. Deskripsi lengkap
+    // tetap tersedia pada dropdown dan helper text di sebelah kanan.
+    if (label) label.style.display = isDropOff ? "none" : "";
+    if (note) note.style.display = isDropOff ? "none" : "";
+  }
+
+  const updateVehicleFleetPreviewBeforeV168 =
+    window.updateVehicleFleetPreview ||
+    (typeof updateVehicleFleetPreview === "function"
+      ? updateVehicleFleetPreview
+      : null);
+
+  window.updateVehicleFleetPreview = function updateVehicleFleetPreviewV168(
+    selectEl,
+  ) {
+    const result = updateVehicleFleetPreviewBeforeV168?.(selectEl);
+    decorateDropOffVisualV168(selectEl);
+    syncTicketTypeFromFleetV168(selectEl);
+    return result;
+  };
+  try {
+    updateVehicleFleetPreview = window.updateVehicleFleetPreview;
+  } catch (error) {}
+
+  const handleTicketTypeChangeBeforeV168 =
+    window.handleTicketTypeChange ||
+    (typeof handleTicketTypeChange === "function"
+      ? handleTicketTypeChange
+      : null);
+
+  window.handleTicketTypeChange = function handleTicketTypeChangeV168() {
+    const result = handleTicketTypeChangeBeforeV168?.();
+    const form = getSecurityFormV168();
+    const dropOff = isDropOffTicketV168(form);
+    setDropOffPoRequirementV168(dropOff, form);
+    getVehicleFleetSelectsV168(form).forEach(decorateDropOffVisualV168);
+    return result;
+  };
+  try {
+    handleTicketTypeChange = window.handleTicketTypeChange;
+  } catch (error) {}
+
+  const validateSecurityFormBeforeV168 =
+    window.validateSecurityForm ||
+    (typeof validateSecurityForm === "function" ? validateSecurityForm : null);
+
+  window.validateSecurityForm = function validateSecurityFormV168(form) {
+    const safeForm = form || getSecurityFormV168();
+    syncTicketTypeFromFleetV168();
+    setDropOffPoRequirementV168(
+      isDropOffTicketV168(safeForm) || hasDropOffFleetV168(safeForm),
+      safeForm,
+    );
+    return validateSecurityFormBeforeV168
+      ? validateSecurityFormBeforeV168(safeForm)
+      : true;
+  };
+  try {
+    validateSecurityForm = window.validateSecurityForm;
+  } catch (error) {}
+
+  function refreshDropOffUiV168(root = document) {
+    root
+      .querySelectorAll?.(
+        '#vehicle-multi-rows select[data-vehicle-field="fleet_type"]',
+      )
+      .forEach((select) => {
+        decorateDropOffVisualV168(select);
+      });
+    syncTicketTypeFromFleetV168();
+  }
+
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        if (!(node instanceof Element)) continue;
+        if (
+          node.id === "security-form" ||
+          node.querySelector?.("#security-form")
+        ) {
+          setTimeout(() => refreshDropOffUiV168(node), 0);
+        }
+      }
+    }
+  });
+
+  if (document.body) {
+    observer.observe(document.body, { childList: true, subtree: true });
+    refreshDropOffUiV168();
+  } else {
+    document.addEventListener("DOMContentLoaded", () => {
+      observer.observe(document.body, { childList: true, subtree: true });
+      refreshDropOffUiV168();
+    });
+  }
+})();
+
+/* V16.9 SLA TARGET FINAL
+ * TRONTON/FUSO & WING BOX: 4 jam
+ * CDD/CDDL/CDE/CDEL: SKU <= 40 = 2 jam, SKU > 40 = 4 jam
+ * VAN/PICKUP/MOBIL/L300 BOX: 2 jam
+ * RODA 2: 1 jam
+ * DROP-OFF: 23 jam
+ */
