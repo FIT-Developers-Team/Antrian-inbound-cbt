@@ -2740,3 +2740,29 @@ body.security-lobby-qr-open-v152 {
   border-color: rgb(var(--primary) / 0.38);
   background: rgb(var(--primary) / 0.1);
 }
+
+/* ==========================================================================
+ * V18.0 — Actual Qty Waiting List + Shared Gate visibility
+ * ========================================================================== */
+.actual-qty-input-v18 {
+  min-width: 110px;
+  max-width: 150px;
+  padding: 0.55rem 0.7rem;
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 700;
+  text-align: right;
+}
+
+.actual-qty-input-v18:invalid,
+.actual-qty-input-v18.invalid {
+  border-color: rgb(var(--error)) !important;
+  box-shadow: 0 0 0 1px rgb(var(--error)) !important;
+}
+
+.waiting-detail-panel-v15 .po-detail-table-v15 td {
+  vertical-align: middle;
+}
+
+.form-select option[value] {
+  cursor: pointer;
+}

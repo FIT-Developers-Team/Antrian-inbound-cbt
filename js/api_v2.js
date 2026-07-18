@@ -3873,10 +3873,26 @@ async function submitSecurity(e) {
       const first = poRows[0];
       const status = deriveMasterStatusV15(poRows);
       const poNumbers = poRows.map((row) => row.po_number).filter(Boolean);
-      const checkerDone = poRows.filter(
-        (row) => row.checker_status === "DONE",
-      ).length;
-      const grDone = poRows.filter((row) => row.gr_status === "DONE GR").length;
+      const ticketTypeV18 = String(first.ticket_type || "")
+        .trim()
+        .toUpperCase()
+        .replace(/\s+/g, "-");
+      const fleetTypeV18 = String(first.fleet_type || "")
+        .trim()
+        .toUpperCase()
+        .replace(/\s+/g, "-");
+      const dropOffV18 =
+        ticketTypeV18 === "DROP" ||
+        ticketTypeV18 === "DROP-OFF" ||
+        fleetTypeV18 === "DROP-OFF";
+      const checkerDone = poRows.filter((row) => {
+        const value = String(row.checker_status || "").toUpperCase();
+        return value === "DONE" || (dropOffV18 && value === "SKIPPED");
+      }).length;
+      const grDone = poRows.filter((row) => {
+        const value = String(row.gr_status || "").toUpperCase();
+        return value === "DONE GR" || (dropOffV18 && value === "SKIPPED");
+      }).length;
       const checkerNames = [
         ...new Set(poRows.map((row) => row.checker_name).filter(Boolean)),
       ];
@@ -3888,6 +3904,10 @@ async function submitSecurity(e) {
       );
       const totalSku = poRows.reduce(
         (sum, row) => sum + toNumberV2(row.count_po_sku),
+        0,
+      );
+      const actualQtyTotal = poRows.reduce(
+        (sum, row) => sum + toNumberV2(row.actual_quantity),
         0,
       );
       const doneGrAt = allDoneGr
@@ -3910,6 +3930,7 @@ async function submitSecurity(e) {
         po_numbers: poNumbers,
         po_number: poNumbers.join(", "),
         total_po_qty: Number(first.ticket_total_qty || totalQty) || totalQty,
+        actual_quantity: actualQtyTotal,
         count_po_sku: Number(first.ticket_total_sku || totalSku) || totalSku,
         ticket_total_qty:
           Number(first.ticket_total_qty || totalQty) || totalQty,
@@ -3918,10 +3939,12 @@ async function submitSecurity(e) {
         status,
         checker_done_count: checkerDone,
         checker_total_count: poRows.length,
-        checker_progress: `${checkerDone}/${poRows.length}`,
+        checker_progress: dropOffV18
+          ? "SKIP"
+          : `${checkerDone}/${poRows.length}`,
         gr_done_count: grDone,
         gr_total_count: poRows.length,
-        gr_progress: `${grDone}/${poRows.length}`,
+        gr_progress: dropOffV18 ? "SKIP" : `${grDone}/${poRows.length}`,
         checker_names: checkerNames,
         checker_name: checkerNames.join(", "),
         all_checker_done: allCheckerDone,
@@ -4575,7 +4598,45 @@ async function submitSecurity(e) {
       (row) => String(row.ticket_po_id) === String(ticketPoId),
     );
     if (!po) return showToast("PO tidak ditemukan.");
-    if (!confirm(`Done GR untuk PO ${po.po_number || "-"}?`)) return;
+
+    const ticketType = String(ticket.ticket_type || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "-");
+    const fleetType = String(ticket.fleet_type || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "-");
+    if (
+      ticketType === "DROP" ||
+      ticketType === "DROP-OFF" ||
+      fleetType === "DROP-OFF"
+    ) {
+      return showToast("DROP-OFF tidak memerlukan Done GR.");
+    }
+
+    const qtyInputId = `actual-qty-${String(
+      po.ticket_po_id || po.po_number || "",
+    ).replace(/[^A-Za-z0-9_-]/g, "_")}`;
+    const qtyInput = document.getElementById(qtyInputId);
+    const actualQuantity = Number(qtyInput?.value || po.actual_quantity || 0);
+
+    if (!Number.isFinite(actualQuantity) || actualQuantity <= 0) {
+      qtyInput?.classList.add("invalid");
+      qtyInput?.focus();
+      return showToast(
+        `Actual Qty PO ${po.po_number || "-"} wajib diisi dan harus lebih dari 0.`,
+      );
+    }
+
+    if (
+      !confirm(
+        `Done GR untuk PO ${po.po_number || "-"}?\n\nPO Qty: ${
+          po.total_po_qty || 0
+        }\nActual Qty: ${actualQuantity}`,
+      )
+    )
+      return;
 
     const waitingSnapshot = window.captureWaitingViewportV155?.() || null;
     const buttonHtmlBeforeV155 = btn?.innerHTML || "";
@@ -4589,13 +4650,18 @@ async function submitSecurity(e) {
         '<span class="material-symbols-outlined text-base animate-spin">progress_activity</span> Menyimpan...';
     }
 
-    showToast(`Menyimpan Done GR PO ${po.po_number || "-"}...`);
+    showToast(
+      `Menyimpan Actual Qty ${actualQuantity} dan Done GR PO ${
+        po.po_number || "-"
+      }...`,
+    );
 
     try {
       const result = await doneGrPoToBackendV15({
         ticket_id: ticket.ticket_id,
         ticket_po_id: po.ticket_po_id,
         po_number: po.po_number,
+        actual_quantity: actualQuantity,
         queue_no: ticket.queue_no,
         plat_number: ticket.plat_number,
         operational_date: ticket.operational_date,
@@ -4606,8 +4672,8 @@ async function submitSecurity(e) {
       successV155 = true;
       showToast(
         result?.all_done_gr
-          ? "Semua PO DONE GR. Ticket siap Handover GRN."
-          : `PO ${po.po_number} selesai GR.`,
+          ? "Actual Qty tersimpan. Semua PO DONE GR dan siap Handover GRN."
+          : `Actual Qty ${actualQuantity} tersimpan. PO ${po.po_number} selesai GR.`,
       );
 
       renderPage("laporan", false);
@@ -5053,4 +5119,121 @@ async function submitSecurity(e) {
     }, 0);
     setTimeout(() => forceGlobalAutoSyncV11?.(), 150);
   };
+})();
+
+/* ==========================================================================
+ * V18.0 — CONFIRM SHARED GATE
+ * Gate aktif tetap dapat dipilih. Web meminta konfirmasi sebelum request
+ * dikirim, sedangkan backend menyimpan warning tanpa memblokir proses.
+ * ========================================================================== */
+(function installSharedGateConfirmV180() {
+  if (window.__sharedGateConfirmV180Installed) return;
+  window.__sharedGateConfirmV180Installed = true;
+
+  const submitCheckerBeforeV180 =
+    typeof window.submitChecker === "function"
+      ? window.submitChecker
+      : typeof submitChecker === "function"
+        ? submitChecker
+        : null;
+
+  if (!submitCheckerBeforeV180) return;
+
+  function activeGateConflictsV180(form) {
+    const selected =
+      typeof parseGateList === "function"
+        ? parseGateList(
+            document.getElementById("checker-gate-value")?.value ||
+              form?.gate?.value ||
+              "",
+          )
+        : [];
+
+    if (!selected.length) return [];
+
+    const ticketId = String(form?.ticket_id?.value || "").trim();
+    const queueNo = String(form?.queue_no?.value || "").trim();
+    const plate =
+      typeof normalizePlateValue === "function"
+        ? normalizePlateValue(form?.plat_number?.value || "")
+        : String(form?.plat_number?.value || "").trim();
+
+    const conflicts = [];
+    (state.dashboard?.queue || []).forEach((row) => {
+      const status = String(row.status || "")
+        .trim()
+        .toUpperCase();
+      if (!["CALLED", "UNLOADING"].includes(status)) return;
+
+      const sameTicket =
+        (ticketId && String(row.ticket_id || "").trim() === ticketId) ||
+        (queueNo &&
+          String(row.original_queue_no || row.queue_no || "").trim() ===
+            queueNo) ||
+        (plate &&
+          typeof normalizePlateValue === "function" &&
+          normalizePlateValue(row.plat_number || "") === plate);
+      if (sameTicket) return;
+
+      const rowGates =
+        typeof parseGateList === "function"
+          ? parseGateList(row.gate || "")
+          : [];
+      const overlap = selected.filter((gate) => rowGates.includes(gate));
+      if (!overlap.length) return;
+
+      conflicts.push({
+        gates: overlap,
+        queue_no: row.queue_no || row.ticket_id || "Ticket lain",
+        plat_number: row.plat_number || "-",
+        status,
+        start_unloading_at: row.start_unloading_at || row.called_at || "-",
+      });
+    });
+
+    return conflicts;
+  }
+
+  window.submitChecker = async function submitCheckerSharedGateV180(event) {
+    const form = event?.target;
+    if (!form || form.id !== "checker-form") {
+      return submitCheckerBeforeV180(event);
+    }
+
+    const requested = String(form.status?.value || "CALLED")
+      .trim()
+      .toUpperCase();
+
+    if (["CALLED", "UNLOADING"].includes(requested)) {
+      if (typeof syncCheckerGateInput === "function") {
+        syncCheckerGateInput();
+      }
+
+      const conflicts = activeGateConflictsV180(form);
+      if (conflicts.length) {
+        const detail = conflicts
+          .map(
+            (item) =>
+              `${item.gates.join(", ")} sedang dipakai ${item.queue_no} — ${
+                item.plat_number
+              } (${item.status}, sejak ${item.start_unloading_at})`,
+          )
+          .join("\n");
+
+        const approved = confirm(
+          `Gate yang dipilih sedang aktif untuk kendaraan lain:\n\n${detail}\n\nTetap gunakan gate yang sama untuk bongkar?`,
+        );
+        if (!approved) {
+          showToast("Pemilihan gate dibatalkan.");
+          return;
+        }
+      }
+    }
+
+    return submitCheckerBeforeV180(event);
+  };
+
+  try {
+    submitChecker = window.submitChecker;
+  } catch (error) {}
 })();

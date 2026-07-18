@@ -1463,7 +1463,7 @@ function pageDaftar() {
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           ${vendorCustomSelectInput(lookup?.summary?.vendor_name || "")}
           ${poMultiSelectInput(lookup?.summary?.po_number || "")}
-          ${selectInput("ticket_type", "Tipe Tiket", ["REG", "DROP-OFF"], "REG", 'required onchange="handleTicketTypeChange()"')}
+          ${selectInput("ticket_type", "Tipe Tiket", ["REG", "VIP", "DROP-OFF"], "REG", 'required onchange="handleTicketTypeChange()"')}
           ${selectInput("slot", "Slot", buildSlotOptions(lookup?.summary?.slot), lookup?.summary?.slot || "3", "required")}
           ${selectInput("fleet_type", "Fleet Type", getFleetTypeOptions(), getFleetDefaultType(), 'required onchange="updateFleetPreview()"')}
           ${fleetPreviewCard(getFleetDefaultType())}
@@ -1498,7 +1498,7 @@ function pageDaftar() {
     <div class="glass-card rounded-xl p-6 flex flex-col justify-center items-center text-center">
       <span class="text-on-surface-variant uppercase font-label-sm">Nomor Terakhir</span>
       <div id="new-queue-number" class="font-queue-id text-[64px] md:text-[78px] leading-none text-primary my-6">${esc(state.lastCalled.queue_no || "REG 3-0")}</div>
-      <p class="text-on-surface-variant">Format: REG 3-12 = reguler slot 3 urutan 12. DROP-OFF digunakan untuk kendaraan tanpa PO.</p>
+      <p class="text-on-surface-variant">Format: REG 3-12 = reguler, VIP 3-12 = prioritas, dan DROP-OFF untuk kendaraan tanpa PO.</p>
     </div>
   </div>`;
 }
@@ -1550,7 +1550,7 @@ function gateSelectOptions(selected = "", allowBlank = false) {
         const isSelected =
           selectedSet.has(gateText) || String(gate) === String(selected);
         const isActive = activeSet.has(gateText) && !isSelected;
-        return `<option value="${esc(gate)}" ${isSelected ? "selected" : ""} ${isActive ? "disabled" : ""}>${esc(gate)}${isActive ? " — aktif" : ""}</option>`;
+        return `<option value="${esc(gate)}" ${isSelected ? "selected" : ""}>${esc(gate)}${isActive ? " — aktif (bisa dipilih)" : ""}</option>`;
       })
       .join("")
   );
@@ -5567,7 +5567,7 @@ function gateSelectOptions(selected = "", allowBlank = false) {
         const isSelected =
           selectedSet.has(gateText) || String(gate) === String(selected);
         const isActive = activeSet.has(gateText) && !isSelected;
-        return `<option value="${esc(gate)}" ${isSelected ? "selected" : ""} ${isActive ? "disabled" : ""}>${esc(gate)}${isActive ? " — aktif" : ""}</option>`;
+        return `<option value="${esc(gate)}" ${isSelected ? "selected" : ""}>${esc(gate)}${isActive ? " — aktif (bisa dipilih)" : ""}</option>`;
       })
       .join("")
   );
@@ -6376,7 +6376,7 @@ function pageDaftar() {
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           ${vendorCustomSelectInput(lookup?.summary?.vendor_name || "")}
           ${poMultiSelectInput(lookup?.summary?.po_number || "")}
-          ${selectInput("ticket_type", "Tipe Tiket", ["REG", "DROP-OFF"], "REG", 'required onchange="handleTicketTypeChange()"')}
+          ${selectInput("ticket_type", "Tipe Tiket", ["REG", "VIP", "DROP-OFF"], "REG", 'required onchange="handleTicketTypeChange()"')}
           ${selectInput("slot", "Slot", buildSlotOptions(lookup?.summary?.slot), lookup?.summary?.slot || "3", "required")}
           ${vehicleMultiInput()}
           <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Register Time</span><input name="register_time" class="form-input opacity-80" value="${esc(nowText)}" readonly /></label>
@@ -6398,7 +6398,7 @@ function pageDaftar() {
     <div class="glass-card rounded-xl p-6 flex flex-col justify-center items-center text-center">
       <span class="text-on-surface-variant uppercase font-label-sm">Nomor Terakhir</span>
       <div id="new-queue-number" class="font-queue-id text-[64px] md:text-[78px] leading-none text-primary my-6">${esc(state.lastCalled.queue_no || "REG 3-0")}</div>
-      <p class="text-on-surface-variant">Format: REG 3-12 = reguler slot 3 urutan 12. DROP-OFF digunakan untuk kendaraan tanpa PO.</p>
+      <p class="text-on-surface-variant">Format: REG 3-12 = reguler, VIP 3-12 = prioritas, dan DROP-OFF untuk kendaraan tanpa PO.</p>
     </div>
   </div>`;
 }
@@ -10184,7 +10184,7 @@ window.initShader = function initShaderDisabled() {
         <div class="rounded-xl border border-primary/25 bg-primary/10 p-4"><div class="text-xs uppercase font-bold text-on-surface-variant">Master Checker</div><div class="text-3xl font-extrabold text-primary mt-2">${num(mp.length)}</div><div class="text-xs text-on-surface-variant mt-1">Nama aktif dari sheet <b>inbound mp</b></div></div>
         <div class="mt-4 rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4 text-sm text-on-surface-variant"><b class="text-on-surface">Cara kerja</b><br/>Buka card ticket → pilih nama checker → pilih PO → Start. Setelah selesai, pilih nama yang sama dan Done Checker.</div>`;
     }
-    return `<h3 class="font-headline-md text-headline-md mb-1">Data Selesai Checker</h3><p class="text-on-surface-variant">Done GR dikerjakan Admin per PO dari menu Waiting List. Handover GRN aktif setelah seluruh PO DONE GR.</p>`;
+    return `<h3 class="font-headline-md text-headline-md mb-1">Data Selesai Checker</h3><p class="text-on-surface-variant">Admin wajib mengisi Actual Qty per PO sebelum Done GR. Handover GRN aktif setelah seluruh PO DONE GR.</p>`;
   }
 
   window.pageChecker = function pageCheckerV15() {
@@ -10232,6 +10232,21 @@ window.initShader = function initShaderDisabled() {
   window.openCheckerPoPanelV15 = function openCheckerPoPanelV15(ticketId) {
     const ticket = getTicketByIdV15(ticketId);
     if (!ticket) return showToast("Ticket tidak ditemukan. Refresh dulu.");
+    const ticketTypeV18 = String(ticket.ticket_type || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "-");
+    const fleetTypeV18 = String(ticket.fleet_type || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "-");
+    if (
+      ticketTypeV18 === "DROP" ||
+      ticketTypeV18 === "DROP-OFF" ||
+      fleetTypeV18 === "DROP-OFF"
+    ) {
+      return showToast("DROP-OFF tidak memerlukan proses Checker PO.");
+    }
     closeInboundModalV15();
     const mp = getCheckerMpV15();
     const poRows = ticket.po_rows || [];
@@ -10295,14 +10310,58 @@ window.initShader = function initShaderDisabled() {
 
   function waitingPoDetailRowsV15(ticket, role) {
     const poRows = ticket.po_rows || [];
+    const ticketType = String(ticket.ticket_type || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "-");
+    const dropOff = ticketType === "DROP" || ticketType === "DROP-OFF";
+
     return poRows
       .map((po) => {
-        const canDoneGr =
+        const actualQty = Number(po.actual_quantity || 0) || 0;
+        const qtyInputId = `actual-qty-${String(
+          po.ticket_po_id || po.po_number || "",
+        ).replace(/[^A-Za-z0-9_-]/g, "_")}`;
+        const canEditActual =
+          !dropOff &&
           ["ADMIN", "SPV", "DEVELOPER"].includes(role) &&
-          po.checker_status === "DONE" &&
-          po.gr_status !== "DONE GR";
+          String(po.checker_status || "").toUpperCase() === "DONE" &&
+          String(po.gr_status || "").toUpperCase() !== "DONE GR";
+        const canDoneGr = canEditActual;
+        const actualMarkup = canEditActual
+          ? `<input id="${qtyInputId}" data-actual-qty-input-v18="${esc(
+              po.ticket_po_id || "",
+            )}" type="number" min="1" step="1" inputmode="numeric" value="${
+              actualQty > 0 ? actualQty : ""
+            }" placeholder="Wajib isi" class="form-input actual-qty-input-v18" oninput="toggleDoneGrButtonV18(this)" />`
+          : dropOff
+            ? `<span class="text-on-surface-variant">Tidak diperlukan</span>`
+            : `<span class="font-queue-id">${num(actualQty || 0)}</span>`;
+        const actionMarkup = dropOff
+          ? `<span class="text-xs font-bold text-on-surface-variant">Tidak perlu GR</span>`
+          : canDoneGr
+            ? `<button type="button" data-actual-qty-button-v18="${esc(
+                po.ticket_po_id || "",
+              )}" onclick="doneGrPoV15('${esc(ticket.ticket_id)}','${esc(
+                po.ticket_po_id,
+              )}',this)" ${
+                actualQty > 0 ? "" : "disabled"
+              } class="bg-secondary-container text-on-secondary-container rounded-lg px-3 py-2 text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed">Done GR</button>`
+            : "-";
+
         return `<tr>
-          <td>${esc(po.po_number || "-")}</td><td>${num(po.total_po_qty || 0)}</td><td>${num(po.count_po_sku || 0)}</td><td>${esc(po.checker_name || "-")}</td><td>${checkerPoStatusBadgeV15(po.checker_status)}</td><td>${esc(po.checker_started_at || "-")}</td><td>${esc(po.checker_done_at || "-")}</td><td>${esc(po.gr_status || "PENDING")}</td><td>${esc(po.done_gr_at || "-")}</td><td>${esc(po.sla_status || po.unload_sla || "-")}</td><td>${canDoneGr ? `<button type="button" onclick="doneGrPoV15('${esc(ticket.ticket_id)}','${esc(po.ticket_po_id)}',this)" class="bg-secondary-container text-on-secondary-container rounded-lg px-3 py-2 text-xs font-bold">Done GR</button>` : "-"}</td>
+          <td>${esc(po.po_number || (dropOff ? "DROP-OFF / TANPA PO" : "-"))}</td>
+          <td>${num(po.total_po_qty || 0)}</td>
+          <td>${actualMarkup}</td>
+          <td>${num(po.count_po_sku || 0)}</td>
+          <td>${esc(po.checker_name || (dropOff ? "Tidak perlu checker" : "-"))}</td>
+          <td>${dropOff ? `<span class="inline-flex rounded-full border px-2 py-1 text-[10px] font-extrabold text-on-surface-variant border-outline-variant">SKIPPED</span>` : checkerPoStatusBadgeV15(po.checker_status)}</td>
+          <td>${esc(po.checker_started_at || "-")}</td>
+          <td>${esc(po.checker_done_at || "-")}</td>
+          <td>${esc(po.gr_status || (dropOff ? "SKIPPED" : "PENDING"))}</td>
+          <td>${esc(po.done_gr_at || "-")}</td>
+          <td>${esc(po.sla_status || po.unload_sla || "-")}</td>
+          <td>${actionMarkup}</td>
         </tr>`;
       })
       .join("");
@@ -10317,7 +10376,7 @@ window.initShader = function initShaderDisabled() {
 
   window.reportTable = function reportTableV15(rows = []) {
     const role = String(getAuthUser?.()?.role || "").toUpperCase();
-    return `<div class="overflow-x-auto waiting-list-wrap-v15"><table id="report-table" class="w-full text-left waiting-list-table-v15"><thead class="bg-surface-container text-on-surface-variant"><tr>${["Action", "Detail", "Print", "Created", "Queue", "Vendor", "Fleet", "Plat", "PO", "Gate", "Status", "Call", "Menunggu", "Qty", "SKU", "Checker", "GR", "SLA"].map((header) => `<th class="px-4 py-3 font-label-sm uppercase">${header}</th>`).join("")}</tr></thead><tbody class="divide-y divide-outline-variant/10">
+    return `<div class="overflow-x-auto waiting-list-wrap-v15"><table id="report-table" class="w-full text-left waiting-list-table-v15"><thead class="bg-surface-container text-on-surface-variant"><tr>${["Action", "Detail", "Print", "Created", "Queue", "Vendor", "Fleet", "Plat", "PO", "Gate", "Status", "Call", "Menunggu", "PO Qty", "Actual Qty", "SKU", "Checker", "GR", "SLA"].map((header) => `<th class="px-4 py-3 font-label-sm uppercase">${header}</th>`).join("")}</tr></thead><tbody class="divide-y divide-outline-variant/10">
       ${
         rows
           .map((ticket, index) => {
@@ -10341,11 +10400,11 @@ window.initShader = function initShaderDisabled() {
                 ? `<span class="text-xs font-bold text-warning">GR ${ticket.gr_progress || "0/0"}</span>`
                 : "-";
             const detailId = `waiting-detail-${String(ticket.ticket_id).replace(/[^A-Za-z0-9_-]/g, "_")}`;
-            return `<tr class="hover:bg-primary/5"><td class="px-4 py-3">${action}</td><td class="px-4 py-3"><button type="button" onclick="toggleWaitingDetailV16('${detailId}')" class="thin-tab rounded-lg px-3 py-2 text-xs font-bold">Detail PO</button></td><td class="px-4 py-3"><button onclick="printWaitingListTicket(${index})" class="thin-tab rounded-lg px-3 py-2 font-bold text-xs">Print</button></td><td class="px-4 py-3 text-sm whitespace-nowrap">${esc(ticket.created_at || "-")}</td><td class="px-4 py-3 font-queue-id text-primary">${esc(ticket.queue_no || "-")}</td><td class="px-4 py-3 min-w-[190px]">${esc(ticket.vendor_name || "-")}</td><td class="px-4 py-3">${esc(ticket.fleet_type || "-")}</td><td class="px-4 py-3 font-queue-id">${esc(ticket.plat_number || "-")}</td><td class="px-4 py-3">${ticket.po_rows?.length || 1}</td><td class="px-4 py-3">${esc(ticket.gate || "-")}</td><td class="px-4 py-3">${checkerStatusPill(status)}</td><td class="px-4 py-3 font-bold">${num(ticket.call_count || 0)}</td><td class="px-4 py-3 font-queue-id whitespace-nowrap">${esc(wait)}</td><td class="px-4 py-3">${num(ticket.total_po_qty || 0)}</td><td class="px-4 py-3">${num(ticket.count_po_sku || 0)}</td><td class="px-4 py-3 whitespace-nowrap">${esc(ticket.checker_progress || "0/0")}</td><td class="px-4 py-3 whitespace-nowrap">${esc(ticket.gr_progress || "0/0")}</td><td class="px-4 py-3 whitespace-nowrap"><span class="inline-flex rounded-full border px-2 py-1 text-xs font-bold ${sla.badgeClass}">${esc(sla.status)}</span></td></tr>
-          <tr id="${detailId}" class="hidden waiting-detail-row-v15"><td colspan="18" class="p-0"><div class="waiting-detail-panel-v15"><div class="flex flex-wrap gap-4 mb-4 text-xs"><span><b>Start Unloading:</b> ${esc(ticket.start_unloading_at || "-")}</span><span><b>Finish Unloading:</b> ${esc(ticket.finish_unloading_at || "-")}</span><span><b>Checker:</b> ${esc(ticket.checker_progress || "0/0")}</span><span><b>GR:</b> ${esc(ticket.gr_progress || "0/0")}</span><span><b>WA Ticket:</b> ${esc(ticket.wa_ticket_status || ticket.po_rows?.[0]?.wa_ticket_status || "-")}</span><span><b>WA Handover:</b> ${esc(ticket.wa_handover_status || ticket.po_rows?.[0]?.wa_handover_status || "-")}</span></div><div class="overflow-x-auto"><table class="po-detail-table-v15"><thead><tr><th>PO Number</th><th>Qty</th><th>SKU</th><th>Checker</th><th>Status Checker</th><th>Start Checker</th><th>Done Checker</th><th>GR Status</th><th>Done GR</th><th>SLA</th><th>Action</th></tr></thead><tbody>${waitingPoDetailRowsV15(ticket, role)}</tbody></table></div></div></td></tr>`;
+            return `<tr class="hover:bg-primary/5"><td class="px-4 py-3">${action}</td><td class="px-4 py-3"><button type="button" onclick="toggleWaitingDetailV16('${detailId}')" class="thin-tab rounded-lg px-3 py-2 text-xs font-bold">Detail PO</button></td><td class="px-4 py-3"><button onclick="printWaitingListTicket(${index})" class="thin-tab rounded-lg px-3 py-2 font-bold text-xs">Print</button></td><td class="px-4 py-3 text-sm whitespace-nowrap">${esc(ticket.created_at || "-")}</td><td class="px-4 py-3 font-queue-id text-primary">${esc(ticket.queue_no || "-")}</td><td class="px-4 py-3 min-w-[190px]">${esc(ticket.vendor_name || "-")}</td><td class="px-4 py-3">${esc(ticket.fleet_type || "-")}</td><td class="px-4 py-3 font-queue-id">${esc(ticket.plat_number || "-")}</td><td class="px-4 py-3">${ticket.po_rows?.length || 1}</td><td class="px-4 py-3">${esc(ticket.gate || "-")}</td><td class="px-4 py-3">${checkerStatusPill(status)}</td><td class="px-4 py-3 font-bold">${num(ticket.call_count || 0)}</td><td class="px-4 py-3 font-queue-id whitespace-nowrap">${esc(wait)}</td><td class="px-4 py-3">${num(ticket.total_po_qty || 0)}</td><td class="px-4 py-3 font-queue-id">${num(ticket.actual_quantity || 0)}</td><td class="px-4 py-3">${num(ticket.count_po_sku || 0)}</td><td class="px-4 py-3 whitespace-nowrap">${esc(ticket.checker_progress || "0/0")}</td><td class="px-4 py-3 whitespace-nowrap">${esc(ticket.gr_progress || "0/0")}</td><td class="px-4 py-3 whitespace-nowrap"><span class="inline-flex rounded-full border px-2 py-1 text-xs font-bold ${sla.badgeClass}">${esc(sla.status)}</span></td></tr>
+          <tr id="${detailId}" class="hidden waiting-detail-row-v15"><td colspan="19" class="p-0"><div class="waiting-detail-panel-v15"><div class="flex flex-wrap gap-4 mb-4 text-xs"><span><b>Start Unloading:</b> ${esc(ticket.start_unloading_at || "-")}</span><span><b>Finish Unloading:</b> ${esc(ticket.finish_unloading_at || "-")}</span><span><b>Checker:</b> ${esc(ticket.checker_progress || "0/0")}</span><span><b>GR:</b> ${esc(ticket.gr_progress || "0/0")}</span><span><b>WA Ticket:</b> ${esc(ticket.wa_ticket_status || ticket.po_rows?.[0]?.wa_ticket_status || "-")}</span><span><b>WA Handover:</b> ${esc(ticket.wa_handover_status || ticket.po_rows?.[0]?.wa_handover_status || "-")}</span></div><div class="overflow-x-auto"><table class="po-detail-table-v15"><thead><tr><th>PO Number</th><th>PO Qty</th><th>Actual Qty</th><th>SKU</th><th>Checker</th><th>Status Checker</th><th>Start Checker</th><th>Done Checker</th><th>GR Status</th><th>Done GR</th><th>SLA</th><th>Action</th></tr></thead><tbody>${waitingPoDetailRowsV15(ticket, role)}</tbody></table></div></div></td></tr>`;
           })
           .join("") ||
-        `<tr><td colspan="18" class="px-6 py-8 text-center text-on-surface-variant">Belum ada waiting list.</td></tr>`
+        `<tr><td colspan="19" class="px-6 py-8 text-center text-on-surface-variant">Belum ada waiting list.</td></tr>`
       }
     </tbody></table></div>`;
   };
@@ -10353,7 +10412,7 @@ window.initShader = function initShaderDisabled() {
 
   window.pageLaporan = function pageLaporanV15() {
     const rows = state.dashboard?.report_preview || [];
-    return `<div class="glass-card rounded-xl p-4 sm:p-6"><div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6"><div><h3 class="font-headline-md text-headline-md">Waiting List</h3><p class="text-on-surface-variant">Satu kendaraan tampil satu baris. Buka Detail PO untuk Checker dan Done GR per PO. Handover GRN dilakukan setelah seluruh PO selesai Done GR.</p></div><div class="flex gap-2"><button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">refresh</span>Refresh</button><button onclick="exportCsv()" class="bg-primary-container text-on-primary-container px-5 py-3 rounded-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined">download</span>Export CSV</button></div></div>${reportTable(rows)}</div>`;
+    return `<div class="glass-card rounded-xl p-4 sm:p-6"><div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6"><div><h3 class="font-headline-md text-headline-md">Waiting List</h3><p class="text-on-surface-variant">Satu kendaraan tampil satu baris. Admin wajib mengisi Actual Qty per PO sebelum Done GR. Handover GRN dilakukan setelah seluruh PO selesai Done GR.</p></div><div class="flex gap-2"><button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">refresh</span>Refresh</button><button onclick="exportCsv()" class="bg-primary-container text-on-primary-container px-5 py-3 rounded-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined">download</span>Export CSV</button></div></div>${reportTable(rows)}</div>`;
   };
   pageLaporan = window.pageLaporan;
 
@@ -12574,6 +12633,19 @@ window.initShader = function initShaderDisabled() {
   function checkerProcessTicketCardV165(row = {}) {
     const checker = getCheckerProgressV165(row);
     const gr = getGrProgressV165(row);
+    const ticketType = String(row.ticket_type || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "-");
+    const fleetType = String(row.fleet_type || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "-");
+    const dropOff =
+      ticketType === "DROP" ||
+      ticketType === "DROP-OFF" ||
+      fleetType === "DROP-OFF";
+
     const poCount = checker.total || row.po_rows?.length || 0;
     const names = Array.isArray(row.checker_names)
       ? row.checker_names.filter(Boolean).join(", ")
@@ -12582,10 +12654,12 @@ window.initShader = function initShaderDisabled() {
       row,
       "font-queue-id text-tertiary mt-1",
     );
-    const finishDisabled = !checker.allDone;
-    const finishLabel = checker.allDone
-      ? "Finish Unloading"
-      : `Menunggu Checker ${checker.done}/${checker.total}`;
+    const finishDisabled = dropOff ? false : !checker.allDone;
+    const finishLabel = dropOff
+      ? "Selesai Bongkar"
+      : checker.allDone
+        ? "Finish Unloading"
+        : `Menunggu Checker ${checker.done}/${checker.total}`;
 
     return `<article class="checker-card rounded-2xl border border-outline-variant/40 bg-surface-container/45 p-4 shadow-sm" data-status="${esc(row.status)}" data-vendor="${esc(String(row.vendor_name || "").toLowerCase())}" data-queue="${esc(String(row.queue_no || "").toLowerCase())}" data-po="${esc(String(row.po_number || "").toLowerCase())}" data-plate="${esc(String(row.plat_number || "").toLowerCase())}">
       <div class="flex items-start justify-between gap-3">
@@ -12595,14 +12669,22 @@ window.initShader = function initShaderDisabled() {
       <div class="grid grid-cols-2 gap-2 mt-4 text-xs">
         <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Plat</div><div class="font-queue-id text-sm mt-1">${esc(row.plat_number || "-")}</div></div>
         <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Gate</div><div class="font-bold text-sm mt-1 break-all">${esc(row.gate || "-")}</div></div>
-        <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">PO</div><div class="font-bold mt-1">${poCount} PO</div></div>
+        <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Proses</div><div class="font-bold mt-1">${dropOff ? "DROP-OFF · tanpa Checker PO" : `${poCount} PO`}</div></div>
         <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Menunggu</div><div>${waitMarkup}</div></div>
       </div>
-      ${checkerProgressBarV165(checker.done, checker.total, "Checking selesai", "bg-primary-container")}
-      ${checkerProgressBarV165(gr.done, gr.total, "GR selesai", "bg-success")}
-      <div class="mt-3 text-xs text-on-surface-variant"><b>Checker aktif:</b> ${esc(names || "Belum ada")}${checker.checking ? ` · ${checker.checking} sedang proses` : ""}</div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-4">
-        <button type="button" onclick="openCheckerPoPanelV15('${esc(row.ticket_id)}')" class="bg-primary-container text-on-primary-container px-4 py-3 rounded-xl font-bold text-xs inline-flex items-center justify-center gap-2"><span class="material-symbols-outlined text-base">fact_check</span>Kelola PO</button>
+      ${
+        dropOff
+          ? `<div class="mt-3 rounded-xl border border-primary/25 bg-primary/10 p-4 text-xs text-on-surface-variant"><b class="text-on-surface">Flow DROP-OFF:</b> Panggil → Mulai Bongkar → Selesai Bongkar. Tidak ada Start/Done Checker PO dan tidak ada Done GR.</div>`
+          : `${checkerProgressBarV165(checker.done, checker.total, "Checking selesai", "bg-primary-container")}
+             ${checkerProgressBarV165(gr.done, gr.total, "GR selesai", "bg-success")}
+             <div class="mt-3 text-xs text-on-surface-variant"><b>Checker aktif:</b> ${esc(names || "Belum ada")}${checker.checking ? ` · ${checker.checking} sedang proses` : ""}</div>`
+      }
+      <div class="grid ${dropOff ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2"} gap-2 mt-4">
+        ${
+          dropOff
+            ? ""
+            : `<button type="button" onclick="openCheckerPoPanelV15('${esc(row.ticket_id)}')" class="bg-primary-container text-on-primary-container px-4 py-3 rounded-xl font-bold text-xs inline-flex items-center justify-center gap-2"><span class="material-symbols-outlined text-base">fact_check</span>Kelola PO</button>`
+        }
         <button type="button" ${finishDisabled ? "disabled" : ""} onclick="finishUnloadingTicketV165('${esc(row.ticket_id)}', this)" class="${finishDisabled ? "bg-surface-container-high text-on-surface-variant opacity-60 cursor-not-allowed" : "bg-success/15 border border-success/30 text-success hover:brightness-110"} px-4 py-3 rounded-xl font-bold text-xs inline-flex items-center justify-center gap-2"><span class="material-symbols-outlined text-base">task_alt</span><span>${esc(finishLabel)}</span></button>
       </div>
     </article>`;
@@ -12635,8 +12717,21 @@ window.initShader = function initShaderDisabled() {
     );
     if (!ticket) return showToast("Ticket tidak ditemukan. Refresh dulu.");
 
+    const ticketTypeV18 = String(ticket.ticket_type || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "-");
+    const fleetTypeV18 = String(ticket.fleet_type || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "-");
+    const dropOffV18 =
+      ticketTypeV18 === "DROP" ||
+      ticketTypeV18 === "DROP-OFF" ||
+      fleetTypeV18 === "DROP-OFF";
+
     const checker = getCheckerProgressV165(ticket);
-    if (!checker.allDone) {
+    if (!dropOffV18 && !checker.allDone) {
       return showToast(
         `Belum bisa Finish Unloading. Done Checking baru ${checker.done}/${checker.total}.`,
       );
@@ -12667,10 +12762,11 @@ window.initShader = function initShaderDisabled() {
           (typeof getOperationalDateKey === "function"
             ? getOperationalDateKey(new Date())
             : ""),
-        status: "WAITING GR",
+        status: dropOffV18 ? "COMPLETED" : "WAITING GR",
         unload_sla: "ON PROCESS",
         waiting_gr_at: nowText,
         finish_unloading_at: nowText,
+        completed_at: dropOffV18 ? nowText : "",
         updated_at: nowText,
         actor_role: String(actor?.role || "CHECKER").toUpperCase(),
         actor_name: actor?.display_name || actor?.username || "",
@@ -12681,7 +12777,11 @@ window.initShader = function initShaderDisabled() {
       if (typeof applyBackendActionResult === "function") {
         applyBackendActionResult(result);
       }
-      showToast("Finish Unloading berhasil.");
+      showToast(
+        dropOffV18
+          ? "DROP-OFF selesai bongkar dan langsung COMPLETED."
+          : "Finish Unloading berhasil.",
+      );
       renderPage("checker", false);
       setTimeout(() => forceGlobalAutoSyncV11?.(), 150);
       return result;
@@ -13034,3 +13134,26 @@ window.initShader = function initShaderDisabled() {
  * RODA 2: 1 jam
  * DROP-OFF: 23 jam
  */
+
+/* ==========================================================================
+ * V18.0 — VIP + ACTUAL QTY + DROP-OFF SIMPLE FLOW + SHARED GATE
+ * ========================================================================== */
+(function installInboundV180UiHelpers() {
+  if (window.__inboundV180UiHelpersInstalled) return;
+  window.__inboundV180UiHelpersInstalled = true;
+
+  window.toggleDoneGrButtonV18 = function toggleDoneGrButtonV18(input) {
+    const ticketPoId = String(input?.dataset?.actualQtyInputV18 || "").trim();
+    const value = Number(input?.value || 0);
+    const button = [
+      ...document.querySelectorAll("[data-actual-qty-button-v18]"),
+    ].find(
+      (item) => String(item.dataset.actualQtyButtonV18 || "") === ticketPoId,
+    );
+
+    input?.classList.toggle("invalid", !Number.isFinite(value) || value <= 0);
+    if (button) {
+      button.disabled = !Number.isFinite(value) || value <= 0;
+    }
+  };
+})();
