@@ -2079,6 +2079,11 @@ async function submitChecker(e) {
     state.dashboard = buildDashboardFromV2(v2RawResponse);
   }
 
+  // V18.2: tampilkan perubahan langsung. Request GAS tetap berjalan di background.
+  if (state.page === "checker") {
+    renderPage("checker", false);
+  }
+
   try {
     const result = await updateCheckerToBackend(body);
     if (Array.isArray(result?.rows) && result.rows.length) {
@@ -2109,6 +2114,7 @@ async function submitChecker(e) {
         ),
       };
       state.dashboard = buildDashboardFromV2(v2RawResponse);
+      if (state.page === "checker") renderPage("checker", false);
     } catch (refreshErr) {
       console.error("Rollback refresh checker gagal", refreshErr);
     }
@@ -2120,7 +2126,8 @@ async function submitChecker(e) {
   if (typeof setCheckerSubmitButtonState === "function") {
     setCheckerSubmitButtonState("done", "Data Sudah Diubah");
   }
-  setTimeout(() => renderPage("checker", false), 500);
+  // V18.2: tidak menunggu render setelah response. Autosync hanya verifikasi server.
+  setTimeout(() => window.forceGlobalAutoSyncV11?.(), 3500);
 }
 
 async function refreshCallMonitorData(renderAfter = false) {
@@ -5117,7 +5124,7 @@ async function submitSecurity(e) {
       const select = document.getElementById("checker-mp-select-v15");
       if (select) select.value = checkerId;
     }, 0);
-    setTimeout(() => forceGlobalAutoSyncV11?.(), 150);
+    setTimeout(() => forceGlobalAutoSyncV11?.(), 3500);
   };
 })();
 
@@ -5235,5 +5242,599 @@ async function submitSecurity(e) {
 
   try {
     submitChecker = window.submitChecker;
+  } catch (error) {}
+})();
+
+/* ==========================================================================
+ * V18.2 — INSTANT ACTION UI / OPTIMISTIC UPDATE
+ * - Status di layar berubah sebelum request GAS selesai.
+ * - Response backend tetap menjadi sumber kebenaran.
+ * - Jika backend gagal, state dikembalikan otomatis.
+ * - Tidak ada forced refresh 150ms setelah action.
+ * - WA tetap nonaktif.
+ * ========================================================================== */
+(function installInboundInstantActionV182() {
+  if (window.__inboundInstantActionV182Installed) return;
+  window.__inboundInstantActionV182Installed = true;
+
+  const pendingKeys = new Set();
+  let verifyTimer = null;
+
+  function nowV182() {
+    return typeof formatDateTimeLocal === "function"
+      ? formatDateTimeLocal(new Date())
+      : new Date().toISOString();
+  }
+
+  function actorV182() {
+    const user = typeof getAuthUser === "function" ? getAuthUser() || {} : {};
+    return {
+      actor_role: String(user.role || "").toUpperCase(),
+      actor_name: user.display_name || user.username || user.role || "",
+      actor_username: user.username || "",
+    };
+  }
+
+  function cellV182(row, names, fallback = "") {
+    if (typeof getCell === "function") return getCell(row, names, fallback);
+    for (const name of names) {
+      if (
+        row?.[name] !== undefined &&
+        row?.[name] !== null &&
+        row?.[name] !== ""
+      ) {
+        return row[name];
+      }
+    }
+    return fallback;
+  }
+
+  function ticketIdV182(row) {
+    return String(cellV182(row, ["ticket_id", "ticket id"], "")).trim();
+  }
+
+  function ticketPoIdV182(row) {
+    return String(cellV182(row, ["ticket_po_id", "ticket po id"], "")).trim();
+  }
+
+  function outputRowsV182() {
+    return typeof getOutputFormRows === "function"
+      ? getOutputFormRows(v2RawResponse || {})
+      : [];
+  }
+
+  function cloneV182(value) {
+    try {
+      return JSON.parse(JSON.stringify(value));
+    } catch (error) {
+      return value && typeof value === "object" ? { ...value } : value;
+    }
+  }
+
+  function patchTicketRowsV182({ ticketId, poIds = null, patch }) {
+    const output = outputRowsV182();
+    const poSet = poIds ? new Set(poIds.map((id) => String(id))) : null;
+    const before = [];
+    const changed = [];
+
+    const next = output.map((row) => {
+      if (ticketIdV182(row) !== String(ticketId || "")) return row;
+      if (poSet && !poSet.has(ticketPoIdV182(row))) return row;
+
+      before.push(cloneV182(row));
+      const updated = {
+        ...row,
+        ...(typeof patch === "function" ? patch(row) : patch || {}),
+      };
+      changed.push(updated);
+      return updated;
+    });
+
+    if (!changed.length) return { before: [], changed: [] };
+
+    v2RawResponse = {
+      ...(v2RawResponse || {}),
+      status: "success",
+      timestamp: new Date().toISOString(),
+      outputForm: next,
+    };
+    state.dashboard = buildDashboardFromV2(v2RawResponse);
+    state.options = state.dashboard.options || state.options;
+    return { before, changed };
+  }
+
+  function restoreRowsV182(snapshot = []) {
+    if (!snapshot.length) return;
+    const restoreMap = new Map(
+      snapshot.map((row) => [
+        typeof ticketIdentity === "function"
+          ? ticketIdentity(row)
+          : `${ticketIdV182(row)}|${ticketPoIdV182(row)}`,
+        row,
+      ]),
+    );
+
+    const next = outputRowsV182().map((row) => {
+      const key =
+        typeof ticketIdentity === "function"
+          ? ticketIdentity(row)
+          : `${ticketIdV182(row)}|${ticketPoIdV182(row)}`;
+      return restoreMap.get(key) || row;
+    });
+
+    v2RawResponse = {
+      ...(v2RawResponse || {}),
+      timestamp: new Date().toISOString(),
+      outputForm: next,
+    };
+    state.dashboard = buildDashboardFromV2(v2RawResponse);
+    state.options = state.dashboard.options || state.options;
+  }
+
+  function renderInstantV182(page = state.page) {
+    const safePage = String(page || state.page || "checker");
+    const waitingSnapshot =
+      safePage === "laporan" &&
+      typeof window.captureWaitingViewportV155 === "function"
+        ? window.captureWaitingViewportV155()
+        : null;
+
+    renderPage(safePage, false);
+
+    if (waitingSnapshot) {
+      requestAnimationFrame(() => {
+        window.restoreWaitingViewportV155?.(waitingSnapshot);
+      });
+    }
+  }
+
+  function applyServerResultV182(result = {}) {
+    if (typeof applyBackendActionResult === "function") {
+      applyBackendActionResult(result);
+    }
+  }
+
+  function verifyLaterV182() {
+    clearTimeout(verifyTimer);
+    verifyTimer = setTimeout(() => {
+      if (document.visibilityState === "visible") {
+        window.forceGlobalAutoSyncV11?.();
+      }
+    }, 3500);
+  }
+
+  async function runOptimisticV182({
+    key,
+    page,
+    mutate,
+    request,
+    successMessage,
+    errorPrefix,
+  }) {
+    if (pendingKeys.has(key)) {
+      showToast("Aksi yang sama sedang diproses.");
+      return null;
+    }
+    pendingKeys.add(key);
+
+    const snapshot = mutate();
+    renderInstantV182(page);
+
+    try {
+      const result = await request();
+      applyServerResultV182(result);
+      showToast(
+        typeof successMessage === "function"
+          ? successMessage(result)
+          : successMessage,
+      );
+      verifyLaterV182();
+      return result;
+    } catch (error) {
+      console.error(error);
+      restoreRowsV182(snapshot?.before || []);
+      renderInstantV182(page);
+      showToast(`${errorPrefix}: ${error.message}`);
+      return null;
+    } finally {
+      pendingKeys.delete(key);
+    }
+  }
+
+  // Start / Done Checking per PO.
+  window.runCheckerPoActionV15 = async function runCheckerPoActionV182(
+    action,
+    ticket,
+    poIds,
+    checker,
+    btn = null,
+  ) {
+    if (!ticket || !poIds?.length || !checker) {
+      showToast("Pilih nama checker dan minimal satu PO.");
+      return null;
+    }
+
+    const now = nowV182();
+    const isStart = action === "start";
+    const payload = {
+      ticket_id: ticket.ticket_id,
+      queue_no: ticket.original_queue_no || ticket.queue_no,
+      plat_number: ticket.plat_number,
+      operational_date: ticket.operational_date,
+      ticket_po_ids: poIds,
+      checker_id: checker.checker_id || checker.mp_id,
+      checker_name: checker.checker_name,
+      ...actorV182(),
+    };
+
+    return runOptimisticV182({
+      key: `checker:${action}:${ticket.ticket_id}:${poIds.join(",")}`,
+      page: "checker",
+      mutate: () =>
+        patchTicketRowsV182({
+          ticketId: ticket.ticket_id,
+          poIds,
+          patch: (row) =>
+            isStart
+              ? {
+                  checker_id: payload.checker_id,
+                  checker_name: payload.checker_name,
+                  checker_status: "CHECKING",
+                  checker_started_at:
+                    cellV182(row, ["checker_started_at"], "") || now,
+                  checker_started_by:
+                    payload.actor_name || payload.actor_username,
+                  updated_at: now,
+                }
+              : {
+                  checker_id: payload.checker_id,
+                  checker_name: payload.checker_name,
+                  checker_status: "DONE",
+                  checker_done_at: now,
+                  checker_done_by: payload.actor_name || payload.actor_username,
+                  gr_status:
+                    String(
+                      cellV182(row, ["gr_status"], "PENDING"),
+                    ).toUpperCase() === "DONE GR"
+                      ? "DONE GR"
+                      : "WAITING GR",
+                  waiting_gr_at: cellV182(row, ["waiting_gr_at"], "") || now,
+                  updated_at: now,
+                },
+        }),
+      request: () =>
+        isStart
+          ? startCheckerPoToBackendV15(payload)
+          : doneCheckerPoToBackendV15(payload),
+      successMessage: isStart
+        ? `${poIds.length} PO mulai dikerjakan ${checker.checker_name}.`
+        : `${poIds.length} PO selesai checking dan siap GR.`,
+      errorPrefix: "Proses checker gagal",
+    });
+  };
+
+  // Actual Qty + Done GR per PO.
+  window.doneGrPoV15 = async function doneGrPoV182(
+    ticketId,
+    ticketPoId,
+    btn = null,
+  ) {
+    const ticket = (state.dashboard?.queue || []).find(
+      (row) => String(row.ticket_id) === String(ticketId),
+    );
+    if (!ticket) return showToast("Ticket tidak ditemukan.");
+
+    const po = ticket.po_rows?.find(
+      (row) => String(row.ticket_po_id) === String(ticketPoId),
+    );
+    if (!po) return showToast("PO tidak ditemukan.");
+
+    const type = String(ticket.ticket_type || ticket.fleet_type || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "-");
+    if (type.includes("DROP-OFF")) {
+      return showToast("DROP-OFF tidak memerlukan Done GR.");
+    }
+
+    const qtyInputId = `actual-qty-${String(
+      po.ticket_po_id || po.po_number || "",
+    ).replace(/[^A-Za-z0-9_-]/g, "_")}`;
+    const qtyInput = document.getElementById(qtyInputId);
+    const actualQuantity = Number(qtyInput?.value || po.actual_quantity || 0);
+    if (!Number.isFinite(actualQuantity) || actualQuantity <= 0) {
+      qtyInput?.classList.add("invalid");
+      qtyInput?.focus();
+      return showToast(
+        `Actual Qty PO ${po.po_number || "-"} wajib diisi dan harus lebih dari 0.`,
+      );
+    }
+
+    if (
+      !confirm(
+        `Done GR untuk PO ${po.po_number || "-"}?\n\nPO Qty: ${
+          po.total_po_qty || 0
+        }\nActual Qty: ${actualQuantity}`,
+      )
+    )
+      return null;
+
+    const now = nowV182();
+    const actor = actorV182();
+    const payload = {
+      ticket_id: ticket.ticket_id,
+      ticket_po_id: po.ticket_po_id,
+      po_number: po.po_number,
+      actual_quantity: actualQuantity,
+      queue_no: ticket.queue_no,
+      plat_number: ticket.plat_number,
+      operational_date: ticket.operational_date,
+      ...actor,
+    };
+
+    return runOptimisticV182({
+      key: `gr:${ticket.ticket_id}:${po.ticket_po_id}`,
+      page: "laporan",
+      mutate: () =>
+        patchTicketRowsV182({
+          ticketId: ticket.ticket_id,
+          poIds: [po.ticket_po_id],
+          patch: {
+            actual_quantity: actualQuantity,
+            gr_status: "DONE GR",
+            done_gr_at: now,
+            done_gr_by: actor.actor_name || actor.actor_username,
+            updated_at: now,
+          },
+        }),
+      request: () => doneGrPoToBackendV15(payload),
+      successMessage: (result) =>
+        result?.all_done_gr
+          ? "Actual Qty tersimpan. Semua PO DONE GR dan siap Handover GRN."
+          : `Actual Qty ${actualQuantity} tersimpan. PO ${po.po_number} selesai GR.`,
+      errorPrefix: "Done GR gagal",
+    });
+  };
+
+  // Handover GRN.
+  window.handoverGrnTicketV15 = async function handoverGrnTicketV182(
+    ticketId,
+    btn = null,
+  ) {
+    const ticket = (state.dashboard?.queue || []).find(
+      (row) => String(row.ticket_id) === String(ticketId),
+    );
+    if (!ticket) return showToast("Ticket tidak ditemukan.");
+    if (!ticket.all_done_gr) {
+      return showToast(
+        `Handover belum bisa. GR selesai ${ticket.gr_done_count || 0}/${
+          ticket.gr_total_count || ticket.po_rows?.length || 0
+        } PO.`,
+      );
+    }
+    if (!confirm(`Handover GRN ${ticket.queue_no || "-"}?`)) return null;
+
+    const now = nowV182();
+    const payload = {
+      ticket_id: ticket.ticket_id,
+      queue_no: ticket.queue_no,
+      plat_number: ticket.plat_number,
+      operational_date: ticket.operational_date,
+      ...actorV182(),
+    };
+
+    return runOptimisticV182({
+      key: `handover:${ticket.ticket_id}`,
+      page: "laporan",
+      mutate: () =>
+        patchTicketRowsV182({
+          ticketId: ticket.ticket_id,
+          patch: {
+            status: "COMPLETED",
+            handover_grn_at: now,
+            completed_at: now,
+            updated_at: now,
+          },
+        }),
+      request: () => handoverGrnToBackendV15(payload),
+      successMessage: "Handover GRN selesai.",
+      errorPrefix: "Handover GRN gagal",
+    });
+  };
+
+  // Finish unloading. DROP-OFF langsung COMPLETED.
+  window.finishUnloadingTicketV165 = async function finishUnloadingTicketV182(
+    ticketId,
+    btn = null,
+  ) {
+    const ticket = (state.dashboard?.queue || []).find(
+      (row) => String(row.ticket_id || "") === String(ticketId || ""),
+    );
+    if (!ticket) return showToast("Ticket tidak ditemukan. Refresh dulu.");
+
+    const type = String(ticket.ticket_type || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "-");
+    const fleet = String(ticket.fleet_type || "")
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "-");
+    const dropOff =
+      type === "DROP" || type === "DROP-OFF" || fleet === "DROP-OFF";
+
+    if (!dropOff && !ticket.all_checker_done) {
+      return showToast(
+        `Belum bisa Finish Unloading. Done Checking baru ${
+          ticket.checker_done_count || 0
+        }/${ticket.checker_total_count || ticket.po_rows?.length || 0}.`,
+      );
+    }
+
+    const now = nowV182();
+    const actor = actorV182();
+    const body = {
+      ticket_id: ticket.ticket_id,
+      queue_no: ticket.original_queue_no || ticket.queue_no,
+      vendor_name: ticket.vendor_name || "",
+      fleet_type: ticket.fleet_type || "",
+      plat_number: normalizePlateValue(ticket.plat_number || ""),
+      gate: ticket.gate || "",
+      operational_date:
+        ticket.operational_date ||
+        (typeof getOperationalDateKey === "function"
+          ? getOperationalDateKey(new Date())
+          : ""),
+      status: dropOff ? "COMPLETED" : "WAITING GR",
+      unload_sla: "ON PROCESS",
+      waiting_gr_at: now,
+      finish_unloading_at: now,
+      completed_at: dropOff ? now : "",
+      updated_at: now,
+      ...actor,
+    };
+
+    return runOptimisticV182({
+      key: `finish:${ticket.ticket_id}`,
+      page: "checker",
+      mutate: () =>
+        patchTicketRowsV182({
+          ticketId: ticket.ticket_id,
+          patch: (row) => {
+            if (dropOff) {
+              return {
+                status: "COMPLETED",
+                checker_status: "SKIPPED",
+                gr_status: "SKIPPED",
+                finish_unloading_at: now,
+                completed_at: now,
+                updated_at: now,
+              };
+            }
+            const grDone =
+              String(cellV182(row, ["gr_status"], "PENDING")).toUpperCase() ===
+              "DONE GR";
+            return {
+              status: grDone ? "DONE GR" : "WAITING GR",
+              finish_unloading_at: now,
+              waiting_gr_at: cellV182(row, ["waiting_gr_at"], "") || now,
+              gr_status: grDone ? "DONE GR" : "WAITING GR",
+              updated_at: now,
+            };
+          },
+        }),
+      request: () => updateCheckerToBackend(body),
+      successMessage: dropOff
+        ? "DROP-OFF selesai bongkar dan langsung COMPLETED."
+        : "Finish Unloading berhasil.",
+      errorPrefix: "Finish Unloading gagal",
+    });
+  };
+
+  // Panggil ulang: count langsung berubah di layar.
+  window.recallDriverFromKey = async function recallDriverFromKeyV182(
+    encodedKey = "",
+    btn = null,
+  ) {
+    const row =
+      typeof findCheckerRowByKey === "function"
+        ? findCheckerRowByKey(encodedKey)
+        : null;
+    if (!row) return showToast("Data ticket tidak ditemukan. Refresh dulu.");
+
+    const oldCount = Number(row.call_count || 0) || 0;
+    if (oldCount >= 3) {
+      window.showDriverNoShowSuggestionFromKey?.(encodedKey, btn);
+      return null;
+    }
+
+    const now = nowV182();
+    const body = {
+      ...buildBackendActionBodyFromRow(row),
+      status: "CALLED",
+      unload_sla: "ON PROCESS",
+      gate: row.gate || "",
+      called_at: row.called_at || now,
+      updated_at: now,
+      ...actorV182(),
+    };
+
+    return runOptimisticV182({
+      key: `recall:${row.ticket_id}`,
+      page: state.page,
+      mutate: () =>
+        patchTicketRowsV182({
+          ticketId: row.ticket_id,
+          patch: {
+            status: "CALLED",
+            call_count: oldCount + 1,
+            last_call_at: now,
+            last_call_attempt_at: now,
+            updated_at: now,
+          },
+        }),
+      request: () => updateCheckerToBackend(body),
+      successMessage: (result) =>
+        `Driver dipanggil ulang (${Math.min(
+          Number(result?.call_count || oldCount + 1),
+          3,
+        )}/3)`,
+      errorPrefix: "Panggil ulang gagal",
+    });
+  };
+
+  // Expired: status berubah langsung.
+  window.markDriverCallFailedFromKey = async function markDriverCallFailedV182(
+    encodedKey = "",
+    btn = null,
+  ) {
+    const row =
+      typeof findCheckerRowByKey === "function"
+        ? findCheckerRowByKey(encodedKey)
+        : null;
+    if (!row) return showToast("Data ticket tidak ditemukan. Refresh dulu.");
+    const callCount = Number(row.call_count || 0) || 0;
+    if (callCount < 3) {
+      return showToast(
+        "Gagal panggil baru bisa dipakai setelah driver dipanggil 3x.",
+      );
+    }
+
+    const now = nowV182();
+    const payload = {
+      ...buildBackendActionBodyFromRow(row),
+      reason:
+        "Driver tidak hadir setelah dipanggil 3x. Driver wajib buat nomor antrian baru.",
+      ...actorV182(),
+    };
+
+    return runOptimisticV182({
+      key: `expire:${row.ticket_id}`,
+      page: state.page,
+      mutate: () =>
+        patchTicketRowsV182({
+          ticketId: row.ticket_id,
+          patch: {
+            status: "EXPIRED",
+            call_count: 4,
+            expired_at: now,
+            expired_reason: payload.reason,
+            updated_at: now,
+          },
+        }),
+      request: () => failCallToBackend(payload),
+      successMessage: "Antrian EXPIRED. Driver wajib buat nomor antrian baru.",
+      errorPrefix: "Gagal expire antrian",
+    });
+  };
+
+  // Pastikan referensi global lama mengarah ke override terbaru.
+  try {
+    runCheckerPoActionV15 = window.runCheckerPoActionV15;
+    doneGrPoV15 = window.doneGrPoV15;
+    handoverGrnTicketV15 = window.handoverGrnTicketV15;
+    finishUnloadingTicketV165 = window.finishUnloadingTicketV165;
+    recallDriverFromKey = window.recallDriverFromKey;
+    markDriverCallFailedFromKey = window.markDriverCallFailedFromKey;
   } catch (error) {}
 })();
