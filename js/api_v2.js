@@ -210,6 +210,32 @@ async function motherDuckApiPost(action, payload = {}) {
   return json.data || json;
 }
 
+async function deleteTicketsByOperationalDate() {
+  const input = document.getElementById("cleanup-operational-date");
+  const button = document.getElementById("cleanup-operational-button");
+  const result = document.getElementById("cleanup-operational-result");
+  const operationalDate = String(input?.value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(operationalDate)) {
+    showToast("Pilih tanggal operasional yang valid.", "error");
+    return;
+  }
+  if (!confirm(`Hapus PERMANEN seluruh ticket, detail PO, dan event tanggal ${operationalDate}?`)) return;
+  if (button) button.disabled = true;
+  if (result) result.textContent = "Menghapus data dari MotherDuck...";
+  try {
+    const deleted = await motherDuckApiPost("delete_tickets_by_date", { operational_date: operationalDate });
+    const message = `Terhapus: ${Number(deleted.tickets_deleted || 0)} ticket, ${Number(deleted.po_rows_deleted || 0)} PO, ${Number(deleted.events_deleted || 0)} event.`;
+    if (result) result.textContent = message;
+    showToast(message, "success");
+  } catch (error) {
+    const message = error?.message || "Gagal menghapus data.";
+    if (result) result.textContent = message;
+    showToast(message, "error");
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 async function submitSecurityRowsToBackend(rows = []) {
   if (!rows.length) return { rows: [], ticket_wa_results: [] };
   const groups = new Map();

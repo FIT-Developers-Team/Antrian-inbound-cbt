@@ -125,6 +125,7 @@ function clearSessionCookie(res) {
 function canUseAction(session, action) {
   if (!session) return false;
   const role = clean(session.role).toUpperCase();
+  if (action === "delete_tickets_by_date") return ["ADMIN", "DEVELOPER"].includes(role);
   if (["state", "tickets", "export_rows", "create_ticket"].includes(action)) return ["SECURITY", "CHECKER", "SPV", "ADMIN", "DEVELOPER"].includes(role);
   if (["updatechecker", "startcheckerpo", "donecheckerpo", "donegrpo", "donegrpos", "handovergrn", "failcall", "update_ticket_status"].includes(action)) return ["CHECKER", "SPV", "ADMIN", "DEVELOPER"].includes(role);
   return false;
@@ -497,6 +498,41 @@ async function listOperationalRows(client, ticketId = null) {
   return rows;
 }
 
+async function deleteTicketsByDate(client, operationalDate) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(operationalDate)) {
+    throw new Error("operational_date harus format YYYY-MM-DD.");
+  }
+  await client.query("BEGIN");
+  try {
+    const found = await client.query(
+      `SELECT ticket_id FROM tickets
+       WHERE operational_date = $1 OR CAST(created_at AS DATE) = CAST($1 AS DATE)`,
+      [operationalDate],
+    );
+    const ticketIds = found.rows.map((row) => row.ticket_id);
+    if (!ticketIds.length) {
+      await client.query("COMMIT");
+      return { operational_date: operationalDate, tickets_deleted: 0, po_rows_deleted: 0, events_deleted: 0 };
+    }
+    const args = ticketIds;
+    const placeholders = args.map((_, index) => `$${index + 1}`).join(",");
+    const events = await client.query(`DELETE FROM ticket_events WHERE ticket_id IN (${placeholders})`, args);
+    const pos = await client.query(`DELETE FROM ticket_pos WHERE ticket_id IN (${placeholders})`, args);
+    await client.query(`UPDATE gates SET status = 'KOSONG', ticket_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE ticket_id IN (${placeholders})`, args);
+    const tickets = await client.query(`DELETE FROM tickets WHERE ticket_id IN (${placeholders})`, args);
+    await client.query("COMMIT");
+    return {
+      operational_date: operationalDate,
+      tickets_deleted: tickets.rowCount,
+      po_rows_deleted: pos.rowCount,
+      events_deleted: events.rowCount,
+    };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  }
+}
+
 async function getAppState(client) {
   const [master, outputForm, inboundMp] = await Promise.all([
     client.query(`SELECT
@@ -808,6 +844,9 @@ module.exports = async (req, res) => {
       const body = requestBody;
       if (req.method === "POST" && action === "sync_superset_pos") {
         return json(res, 200, { ok: true, data: await syncSupersetPoMaster(client) });
+      }
+      if (req.method === "POST" && action === "delete_tickets_by_date") {
+        return json(res, 200, { ok: true, data: await deleteTicketsByDate(client, clean(body.operational_date)) });
       }
       if (req.method === "POST" && action === "create_ticket") {
         return json(res, 201, { ok: true, data: await createTicket(client, body) });

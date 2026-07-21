@@ -3572,6 +3572,15 @@ function pageDebug() {
   return `<div class="glass-card rounded-xl p-6">
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4"><div><h3 class="font-headline-md text-headline-md">Debug API</h3><p class="text-on-surface-variant">Cek schema, sample row, dan hasil agregasi.</p></div><button onclick="loadDebug()" class="bg-primary-container text-on-primary-container px-5 py-3 rounded-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined">bug_report</span>Run Debug</button></div>
     <pre id="debug-output" class="bg-surface-container-high/60 border border-outline-variant rounded-lg p-4 text-xs overflow-auto max-h-[650px]">${esc(JSON.stringify(state.debug || { info: "Klik Run Debug" }, null, 2))}</pre>
+    <div class="mt-6 border border-error/30 rounded-lg p-4 bg-error-container/10">
+      <h4 class="font-bold text-error mb-1">Hapus data operasional per tanggal</h4>
+      <p class="text-sm text-on-surface-variant mb-3">Khusus Developer. Menghapus ticket, detail PO, dan event pada tanggal yang dipilih secara permanen.</p>
+      <div class="flex flex-col sm:flex-row gap-3 sm:items-end">
+        <label class="flex flex-col gap-1"><span class="text-xs font-bold uppercase">Tanggal operasional</span><input id="cleanup-operational-date" type="date" value="2026-07-21" class="form-input" /></label>
+        <button id="cleanup-operational-button" onclick="deleteTicketsByOperationalDate()" class="bg-error text-on-error px-5 py-3 rounded-lg font-bold">Hapus data tanggal ini</button>
+      </div>
+      <p id="cleanup-operational-result" class="text-sm mt-3"></p>
+    </div>
   </div>`;
 }
 
