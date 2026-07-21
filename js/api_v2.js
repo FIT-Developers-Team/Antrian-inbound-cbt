@@ -1362,6 +1362,13 @@ async function initApi() {
     renderPage(nextPage, false);
   } catch (err) {
     console.error(err);
+    if (/unauthorized/i.test(String(err?.message || ""))) {
+      clearAuthUser?.();
+      updateApiPill("off", "Sesi login berakhir");
+      showToast("Sesi lama berakhir. Silakan login ulang.");
+      renderPage("login", false);
+      return;
+    }
     updateApiPill("error", "API error");
     showToast("API V2 error: " + err.message);
   }
@@ -1533,7 +1540,10 @@ function updatePoLookupUi(lookup) {
       form.vendor_name.value = lookup.summary.vendor_name || "";
   }
 
-  if (form.slot && lookup?.summary?.slot)
+  // Slot dari master PO hanya merupakan suggestion. Jika Security sudah memilih
+  // slot secara manual, pilihan tersebut tidak boleh ditimpa oleh lookup ulang
+  // (lookup juga dipanggil lagi saat Buat Tiket).
+  if (form.slot && lookup?.summary?.slot && form.slot.dataset.manualSelection !== "true")
     form.slot.value = String(lookup.summary.slot || form.slot.value || "3");
 
   const total = document.getElementById("security-total-qty");
@@ -5918,4 +5928,11 @@ async function submitSecurity(e) {
     recallDriverFromKey = window.recallDriverFromKey;
     markDriverCallFailedFromKey = window.markDriverCallFailedFromKey;
   } catch (error) {}
+
+  // Tandai pilihan slot yang dibuat operator agar lookup PO berikutnya tidak
+  // mengembalikannya ke Slot Adjusted dari master data.
+  document.addEventListener("change", (event) => {
+    const slot = event.target?.closest?.('#security-form [name="slot"]');
+    if (slot) slot.dataset.manualSelection = "true";
+  });
 })();
