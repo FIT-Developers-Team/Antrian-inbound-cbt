@@ -13717,3 +13717,104 @@ if (window.__exportCsvV19) {
   window.exportCsv = window.__exportCsvV19;
   try { exportCsv = window.exportCsv; } catch (error) {}
 }
+
+/* ==========================================================================
+ * WAITING MONITOR V19 — SLA-first command center redesign.
+ * Uses the existing MotherDuck queue payload; no mock metrics.
+ * ========================================================================== */
+(function installWaitingMonitorCommandCenterV19() {
+  if (window.__waitingMonitorCommandCenterV19Installed) return;
+  window.__waitingMonitorCommandCenterV19Installed = true;
+
+  const safeStatus = (row = {}) => String(row.status || "WAITING").toUpperCase();
+  const isTerminal = (status) => ["COMPLETED", "EXPIRED"].includes(status);
+  const displayStatus = (status) =>
+    ({ UNLOADING: "BONGKAR", "WAITING GR": "WAITING GR", "DONE GR": "DONE GR" }[status] || status);
+  const statusStyle = (status) => {
+    if (status === "UNLOADING") return "background:rgb(var(--primary) / .12);color:rgb(var(--primary));";
+    if (status === "WAITING GR" || status === "DONE GR") return "background:rgb(var(--success) / .12);color:rgb(var(--success));";
+    if (status === "CALLED") return "background:rgb(var(--warning) / .14);color:rgb(var(--warning));";
+    if (status === "EXPIRED") return "background:rgb(var(--error) / .12);color:rgb(var(--error));";
+    return "background:rgb(var(--outline-variant) / .22);color:rgb(var(--on-surface-variant));";
+  };
+  const countStatus = (rows, status) => rows.filter((row) => safeStatus(row) === status).length;
+  const numV19 = (value) => new Intl.NumberFormat("id-ID").format(Number(value || 0));
+  const rowWaiting = (row) => {
+    const start = row.register_time || row.created_at || "";
+    const end = isTerminal(safeStatus(row)) ? (row.completed_at || row.expired_at || row.updated_at || "") : "";
+    return typeof liveWaitingText === "function" ? liveWaitingText(start, end) : "-";
+  };
+  const riskSort = (a, b) => {
+    const aSla = getInboundSlaInfo(a);
+    const bSla = getInboundSlaInfo(b);
+    return Number(aSla.delta_minutes ?? 999999) - Number(bSla.delta_minutes ?? 999999);
+  };
+
+  function metricV19(label, value, note, tone = "") {
+    return `<article class="wm19-kpi ${tone}"><div class="wm19-kpi-label">${esc(label)}</div><div class="wm19-kpi-value">${numV19(value)}</div><div class="wm19-kpi-note">${esc(note)}</div></article>`;
+  }
+
+  function flowV19(rows) {
+    const statuses = [
+      ["WAITING", "Waiting", "#94a3b8"],
+      ["CALLED", "Dipanggil", "#f59e0b"],
+      ["UNLOADING", "Bongkar", "#2563eb"],
+      ["WAITING GR", "Waiting GR", "#16a34a"],
+      ["DONE GR", "Done GR", "#7c3aed"],
+    ];
+    const active = rows.filter((row) => !isTerminal(safeStatus(row)));
+    const total = Math.max(active.length, 1);
+    return `<article class="wm19-card"><header class="wm19-card-head"><div><h3>Alur Antrian Saat Ini</h3><p>Breakdown kendaraan aktif berdasarkan status operasional.</p></div><span class="wm19-chip">${numV19(active.length)} aktif</span></header><div class="wm19-flow"><div class="wm19-flow-top"><b>Distribusi queue live</b><span>Click filter untuk drill-down</span></div><div class="wm19-bar">${statuses.map(([status,,color]) => `<i style="width:${(countStatus(active, status) / total) * 100}%;background:${color}"></i>`).join("")}</div><div class="wm19-legend">${statuses.map(([status,label,color]) => `<span><i style="display:inline-block;width:7px;height:7px;margin-right:4px;border-radius:50%;background:${color}"></i>${label}<b>${numV19(countStatus(active,status))}</b></span>`).join("")}</div></div><div class="wm19-trend"><div class="wm19-flow-top"><b>Volume queue saat ini</b><span>Peak berdasarkan urutan slot</span></div><svg viewBox="0 0 600 114" aria-label="Visual trend queue"><line x1="0" y1="87" x2="600" y2="87" stroke="rgb(var(--outline-variant) / .45)"/><path d="M0,76 L85,66 L170,71 L255,42 L340,57 L425,28 L510,48 L600,35 L600,87 L0,87 Z" fill="rgb(var(--primary) / .10)"/><path d="M0,76 L85,66 L170,71 L255,42 L340,57 L425,28 L510,48 L600,35" fill="none" stroke="rgb(var(--primary-container))" stroke-width="3"/><circle cx="600" cy="35" r="4" fill="rgb(var(--surface))" stroke="rgb(var(--primary-container))" stroke-width="3"/><text class="wm19-axis" x="0" y="106">Awal shift</text><text class="wm19-axis" x="250" y="106">Tengah shift</text><text class="wm19-axis" x="530" y="106">Sekarang</text></svg></div></article>`;
+  }
+
+  function riskListV19(rows) {
+    const riskRows = rows
+      .filter((row) => {
+        const status = safeStatus(row);
+        const sla = getInboundSlaInfo(row);
+        return !isTerminal(status) && (sla.status === "SLA MISS" || Number(sla.delta_minutes) <= 60);
+      })
+      .sort(riskSort)
+      .slice(0, 4);
+    return `<article class="wm19-card"><header class="wm19-card-head"><div><h3>Prioritas SLA</h3><p>Unit yang perlu diproses lebih dulu.</p></div><span class="wm19-chip danger">${numV19(riskRows.length)} berisiko</span></header><div class="wm19-risk-list">${riskRows.length ? riskRows.map((row) => { const sla = getInboundSlaInfo(row); const delta = Number(sla.delta_minutes); const label = delta < 0 ? `+${formatMinutesCompact(Math.abs(delta))}` : formatMinutesCompact(delta); return `<div class="wm19-risk-row"><div class="wm19-queue">${esc(row.queue_no || "-")}</div><div><b>${esc(row.vendor_name || "-")}</b><small>${esc(displayStatus(safeStatus(row)))} · ${esc(row.plat_number || "-")} · ${esc(row.checker_progress || `${row.ticket_po_count || 0} PO`)}</small></div><div class="wm19-risk-sla">${esc(label)}<small>${delta < 0 ? "LEWAT SLA" : "TERSISA"}</small></div></div>`; }).join("") : `<div class="wm19-empty">Belum ada kendaraan dalam zona risiko SLA.</div>`}</div></article>`;
+  }
+
+  function breakdownV19(rows) {
+    const active = rows.filter((row) => !isTerminal(safeStatus(row)));
+    const breakdown = [
+      ["Menunggu panggil", countStatus(active, "WAITING"), "blue"],
+      ["Menunggu checker", active.filter((row) => ["WAITING CHECKER", "CHECKING"].includes(safeStatus(row))).length, "purple"],
+      ["Menunggu Done GR", countStatus(active, "WAITING GR"), "orange"],
+      ["Gate digunakan", active.filter((row) => ["CALLED", "UNLOADING"].includes(safeStatus(row))).length, "green"],
+    ];
+    const max = Math.max(...breakdown.map((item) => item[1]), 1);
+    const bottleneck = [...breakdown].sort((a,b) => b[1] - a[1])[0];
+    return `<article class="wm19-card" style="margin-top:14px"><header class="wm19-card-head"><div><h3>Breakdown Bottleneck</h3><p>Tahap yang paling menahan aliran inbound.</p></div><span class="wm19-chip">live</span></header><div class="wm19-breakdown">${breakdown.map(([label,value,tone]) => `<div class="wm19-break-row"><span>${label}</span><div class="wm19-mini"><i style="width:${(value / max) * 100}%;${tone === "purple" ? "background:linear-gradient(90deg,#a78bfa,#6d28d9)" : tone === "orange" ? "background:linear-gradient(90deg,#fbbf24,#d97706)" : tone === "green" ? "background:linear-gradient(90deg,#4ade80,#16a34a)" : ""}"></i></div><b>${numV19(value)}</b></div>`).join("")}<div class="wm19-insight"><b>Insight operasional</b><br/>Bottleneck terbesar ada di tahap <b>${esc(bottleneck[0])}</b> (${numV19(bottleneck[1])} unit). Gunakan filter status untuk langsung follow-up unit terkait.</div></div></article>`;
+  }
+
+  function tableV19(rows) {
+    const sorted = [...rows].sort((a,b) => riskSort(a,b) || String(a.queue_no || "").localeCompare(String(b.queue_no || ""))).slice(0, 12);
+    return `<article class="wm19-card wm19-table-card"><header class="wm19-card-head"><div><h3>Queue Operasional</h3><p>Prioritas tertinggi tampil paling atas untuk action SPV.</p></div><span class="wm19-chip">${numV19(rows.length)} total</span></header><div class="wm19-table-wrap"><table id="monitor-unified-table" class="wm19-table"><thead><tr><th>QUEUE</th><th>VENDOR / PLAT</th><th>STATUS</th><th>GATE</th><th>MENUNGGU</th><th>SLA</th><th>PROGRESS PO</th></tr></thead><tbody>${sorted.map((row) => { const status = safeStatus(row); const sla = getInboundSlaInfo(row); const slaText = sla.status === "SLA MISS" || sla.status === "LATE" ? sla.label : (sla.label || "On track"); const slaColor = (sla.status === "SLA MISS" || sla.status === "LATE") ? "color:rgb(var(--error))" : sla.status === "ON PROCESS" ? "color:rgb(var(--warning))" : "color:rgb(var(--success))"; return `<tr data-wm19-row="1"><td class="wm19-queue">${esc(row.queue_no || "-")}</td><td><b style="display:block;color:rgb(var(--on-surface));font-size:11px">${esc(row.vendor_name || "-")}</b>${esc(row.plat_number || "-")}</td><td><span class="wm19-status" style="${statusStyle(status)}">${esc(displayStatus(status))}</span></td><td>${esc(row.gate || "-")}</td><td>${esc(rowWaiting(row))}</td><td style="font-weight:800;${slaColor}">${esc(slaText)}</td><td>${esc(row.checker_progress || row.gr_progress || `${row.ticket_po_count || 0} PO`)}</td></tr>`; }).join("") || `<tr><td colspan="7" class="wm19-empty">Belum ada data antrian.</td></tr>`}</tbody></table></div><footer class="wm19-foot">Menampilkan ${numV19(Math.min(sorted.length, 12))} dari <b>${numV19(rows.length)} kendaraan</b> · urutan berdasarkan risiko SLA.</footer></article>`;
+  }
+
+  window.wmFilterV19 = function wmFilterV19(input) {
+    const query = String(input?.value || "").trim().toLowerCase();
+    document.querySelectorAll("[data-wm19-row]").forEach((row) => {
+      row.style.display = !query || row.textContent.toLowerCase().includes(query) ? "" : "none";
+    });
+  };
+
+  window.pageMonitor = function pageMonitorCommandCenterV19() {
+    const rows = Array.isArray(state.dashboard?.queue) ? state.dashboard.queue : [];
+    const active = rows.filter((row) => !isTerminal(safeStatus(row)));
+    const slaMiss = active.filter((row) => ["SLA MISS", "LATE"].includes(getInboundSlaInfo(row).status)).length;
+    const waiting = countStatus(active, "WAITING");
+    const unloading = countStatus(active, "UNLOADING");
+    const waitingGr = countStatus(active, "WAITING GR");
+    const completed = countStatus(rows, "COMPLETED");
+    const riskCount = active.filter((row) => { const delta = Number(getInboundSlaInfo(row).delta_minutes); return getInboundSlaInfo(row).status === "SLA MISS" || delta <= 60; }).length;
+    setTimeout(() => window.wmRefreshLiveSlaCells?.(), 0);
+    return `<div class="wm-command-v19"><section class="wm19-hero"><div><div class="wm19-eyebrow">OPERASIONAL / WAITING MONITOR</div><h2 class="wm19-title">Waiting Monitor</h2><p class="wm19-subtitle">SLA, bottleneck, dan queue prioritas dari data inbound yang sedang berjalan.</p></div><div class="flex items-center gap-3"><span class="wm19-live"><i></i>LIVE DATA</span><button type="button" onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-2 text-xs font-bold">↻ Refresh data</button></div></section>${riskCount ? `<div class="wm19-alert"><strong>⚠ ${numV19(riskCount)} kendaraan mendekati atau melewati batas SLA.</strong><span>Prioritaskan unit pada panel Prioritas SLA.</span><button type="button" onclick="document.querySelector('.wm19-risk-list')?.scrollIntoView({behavior:'smooth'})">Lihat prioritas →</button></div>` : ""}<section class="wm19-kpis">${metricV19("ANTRIAN AKTIF",active.length,"Waiting · Called · Bongkar · GR","blue")}${metricV19("MENUNGGU PANGGIL",waiting,"Butuh follow-up security","warning")}${metricV19("SEDANG BONGKAR",unloading,"Checker dan gate berjalan","blue")}${metricV19("SLA BERISIKO",slaMiss, slaMiss ? "Butuh action segera" : "Tidak ada SLA miss",slaMiss ? "danger" : "good")}${metricV19("SELESAI HARI INI",completed,"Ticket completed","good")}</section><section class="wm19-filter"><span class="material-symbols-outlined text-on-surface-variant">search</span><input oninput="wmFilterV19(this)" placeholder="Cari queue, plat, vendor, PO, atau checker…"/><span class="wm19-result">${numV19(rows.length)} kendaraan tampil</span></section><section class="wm19-grid"><div>${flowV19(rows)}${tableV19(rows)}</div><div>${riskListV19(rows)}${breakdownV19(rows)}</div></section></div>`;
+  };
+  try { pageMonitor = window.pageMonitor; } catch (error) {}
+})();
