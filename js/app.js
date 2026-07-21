@@ -140,25 +140,21 @@ const AUTH_STORAGE_KEY = "inbound_cbt_auth_user_v1";
 const AUTH_USERS = [
   {
     username: "spv",
-    password: "spv123",
     role: "SPV",
     display_name: "SPV",
   },
   {
     username: "admin",
-    password: "admin123",
     role: "ADMIN",
     display_name: "Admin",
   },
   {
     username: "checker",
-    password: "checker123",
     role: "CHECKER",
     display_name: "Checker",
   },
   {
     username: "security",
-    password: "security123",
     role: "SECURITY",
     display_name: "Security",
   },
@@ -266,21 +262,12 @@ function loginPage() {
         </button>
       </form>
 
-      <div class="mt-6 rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4 text-xs text-on-surface-variant">
-        <div class="font-bold text-on-surface mb-2">Default user sementara:</div>
-        <div class="grid grid-cols-2 gap-2 font-queue-id text-[11px]">
-          <div>spv / spv123</div>
-          <div>admin / admin123</div>
-          <div>checker / checker123</div>
-          <div>security / security123</div>
-        </div>
-        <div class="mt-3">Ganti password di konstanta <b>AUTH_USERS</b> sebelum dipakai production.</div>
-      </div>
+      <p class="mt-5 text-xs text-on-surface-variant">Gunakan akun operasional yang telah didaftarkan oleh administrator.</p>
     </div>
   </div>`;
 }
 
-function submitLogin(e) {
+async function submitLogin(e) {
   e.preventDefault();
   const form = e.target;
   const username = String(form.username?.value || "")
@@ -288,27 +275,36 @@ function submitLogin(e) {
     .toLowerCase();
   const password = String(form.password?.value || "");
 
-  const found = AUTH_USERS.find(
-    (u) =>
-      String(u.username || "").toLowerCase() === username &&
-      String(u.password || "") === password,
-  );
+  try {
+    const response = await fetch("/api/inbound?action=login", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    const result = await response.json();
+    const found = result?.data?.user;
+    if (!response.ok || !found) throw new Error(result?.message || "Username / password salah.");
 
-  if (!found) {
-    showToast("Username / password salah.");
+    setAuthUser(found);
+    applyRoleAccessUI();
+    showToast("Login sebagai " + normalizeRole(found.role));
+    const nextPage = getDefaultPageForRole(found.role);
+    state.page = nextPage;
+    if (typeof initApi === "function") {
+      await initApi();
+    } else {
+      renderPage(nextPage, false);
+    }
+  } catch (error) {
+    showToast(error.message || "Username / password salah.");
     form.password?.classList.add("invalid");
-    return;
   }
-
-  setAuthUser(found);
-  applyRoleAccessUI();
-  showToast("Login sebagai " + normalizeRole(found.role));
-  const nextPage = getDefaultPageForRole(found.role);
-  setTimeout(() => renderPage(nextPage, false), 0);
 }
 
 function logoutUser() {
   const user = getAuthUser();
+  fetch("/api/inbound?action=logout", { method: "POST", credentials: "same-origin" }).catch(() => {});
   clearAuthUser();
   stopCallMonitorRuntime?.();
   applyTvModeStyles?.(false);
@@ -11217,31 +11213,26 @@ window.initShader = function initShaderDisabled() {
     ...preservedOperationalUsers,
     {
       username: "Mentari",
-      password: "43747",
       role: "ADMIN",
       display_name: "Mentari",
     },
     {
       username: "Raga Nugraha",
-      password: "62809",
       role: "ADMIN",
       display_name: "Raga Nugraha",
     },
     {
       username: "Abdul Hamid",
-      password: "42413",
       role: "ADMIN",
       display_name: "Abdul Hamid",
     },
     {
       username: "Ria Revina Meliska",
-      password: "78043",
       role: "ADMIN",
       display_name: "Ria Revina Meliska",
     },
     {
       username: "pandu",
-      password: "kohakuu111!!!",
       role: "DEVELOPER",
       display_name: "Pandu Developer",
     },
@@ -11692,7 +11683,7 @@ window.initShader = function initShaderDisabled() {
   renderPage = function renderPageV16(page, toast = true) {
     const result = renderPageBeforeV16.call(this, page, toast);
     if (String(page || state.page) === "daftar") {
-      setTimeout(() => handleTicketTypeChangeV16(), 0);
+      setTimeout(() => window.handleTicketTypeChange?.(), 0);
     }
     applyRoleAccessUI?.();
     return result;

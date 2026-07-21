@@ -61,6 +61,11 @@ function parseInboundDateSafe(value) {
 const API_URL_V2 =
   "https://script.google.com/macros/s/AKfycbyjby6UR8H0H397xkHbpx9F57BhPKeTCndn3Ic3aKpqvEeQnIGYUmwBMa9JzPBhIoeD/exec";
 
+// Operational queue and PO master now live in MotherDuck through the same
+// Vercel project. Keeping the URL relative makes Preview and Production use
+// their own API without exposing any database credentials to the browser.
+const MOTHERDUCK_API_URL = "/api/inbound";
+
 const columns = [
   "Timestamp",
   "location_id",
@@ -137,6 +142,18 @@ async function apiGetV2(action = "raw", params = {}) {
 }
 
 async function apiPostV2(action, payload = {}) {
+  if (
+    [
+      "updateChecker",
+      "startCheckerPo",
+      "doneCheckerPo",
+      "doneGrPo",
+      "handoverGrn",
+      "failCall",
+    ].includes(action)
+  ) {
+    return motherDuckApiPost(action, payload);
+  }
   if (!hasApiV2()) throw new Error("API_URL_V2 belum diganti.");
   const res = await fetch(apiUrlV2(action), {
     method: "POST",
@@ -155,17 +172,85 @@ async function apiPostV2(action, payload = {}) {
   return json.data || json;
 }
 
+function motherDuckApiUrl(action, params = {}) {
+  const url = new URL(MOTHERDUCK_API_URL, window.location.origin);
+  if (action) url.searchParams.set("action", action);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      url.searchParams.set(key, value);
+    }
+  });
+  return url.toString();
+}
+
+async function motherDuckApiGet(action, params = {}) {
+  const response = await fetch(motherDuckApiUrl(action, params), {
+    method: "GET",
+    credentials: "same-origin",
+  });
+  const json = await response.json();
+  if (!response.ok || json.ok === false) {
+    throw new Error(json.message || "MotherDuck API error");
+  }
+  return json.data || json;
+}
+
+async function motherDuckApiPost(action, payload = {}) {
+  const response = await fetch(motherDuckApiUrl(action), {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const json = await response.json();
+  if (!response.ok || json.ok === false) {
+    throw new Error(json.message || "MotherDuck API error");
+  }
+  return json.data || json;
+}
+
 async function submitSecurityRowsToBackend(rows = []) {
   if (!rows.length) return { rows: [], ticket_wa_results: [] };
-
-  // V17.2: WA otomatis dinonaktifkan. Web hanya menyimpan tiket ke Output form.
-  // Backend tetap memiliki hard stop agar registrasi, panggilan, dan handover
-  // tidak mengirim pesan meskipun payload lama masih tersimpan di cache browser.
-  return apiPostV2("submitSecurity", {
-    rows,
-    send_whatsapp: false,
-    wa_event: "DISABLED",
+  const groups = new Map();
+  rows.forEach((row) => {
+    const ticketId = String(row.ticket_id || "").trim();
+    if (!ticketId) return;
+    if (!groups.has(ticketId)) groups.set(ticketId, []);
+    groups.get(ticketId).push(row);
   });
+
+  const created = [];
+  for (const ticketRows of groups.values()) {
+    const master = ticketRows[0];
+    const result = await motherDuckApiPost("create_ticket", {
+      ticket: {
+        ticket_id: master.ticket_id,
+        queue_no: master.queue_no,
+        ticket_type: master.ticket_type,
+        status: master.status || "WAITING",
+        vendor_name: master.vendor_name,
+        fleet_type: master.fleet_type,
+        plat_number: master.plat_number,
+        driver_name: master.driver_name,
+        driver_phone: master.phone_number,
+        gate: master.gate,
+        slot: master.slot,
+        registered_by: master.registered_by,
+      },
+      pos: ticketRows.map((row) => ({
+        ticket_po_id: row.ticket_po_id,
+        po_number: row.po_number,
+        vendor_name: row.vendor_name,
+        request_quantity: row.total_po_qty,
+        actual_quantity: row.actual_quantity,
+        count_sku: row.count_po_sku,
+        checker_status: row.checker_status || "PENDING",
+      })),
+    });
+    created.push(result);
+  }
+
+  return { rows, created, ticket_wa_results: [] };
 }
 
 function getTicketWaFeedbackV171(result = {}) {
@@ -212,15 +297,11 @@ async function failCallToBackend(body = {}) {
 }
 
 async function fetchV2Data() {
-  // FAST SECURITY LOAD:
-  // Jangan pakai inboundRaw karena itu baca kpiRaw + table + tablev2 full.
-  // Security cuma butuh Data V2 compact untuk vendor/PO lookup + Output form untuk hide PO yang sudah daftar.
-  return apiGetV2("securityOptions");
+  return motherDuckApiGet("state");
 }
 
 async function fetchOutputFormData() {
-  // Refresh cepat untuk Checker/Laporan/Monitor: baca Output form saja.
-  return apiGetV2("output");
+  return motherDuckApiGet("state");
 }
 
 // V15.1 FIX:

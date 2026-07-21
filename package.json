@@ -1,0 +1,15 @@
+{
+  "name": "antrian-inbound-cbt",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Inbound CBT queue application",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
+  },
+  "scripts": {
+    "check": "node --check api/inbound.js"
+  }
+}
