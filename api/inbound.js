@@ -125,7 +125,7 @@ function clearSessionCookie(res) {
 function canUseAction(session, action) {
   if (!session) return false;
   const role = clean(session.role).toUpperCase();
-  if (["state", "tickets", "create_ticket"].includes(action)) return ["SECURITY", "CHECKER", "SPV", "ADMIN", "DEVELOPER"].includes(role);
+  if (["state", "tickets", "export_rows", "create_ticket"].includes(action)) return ["SECURITY", "CHECKER", "SPV", "ADMIN", "DEVELOPER"].includes(role);
   if (["updatechecker", "startcheckerpo", "donecheckerpo", "donegrpo", "donegrpos", "handovergrn", "failcall", "update_ticket_status"].includes(action)) return ["CHECKER", "SPV", "ADMIN", "DEVELOPER"].includes(role);
   return false;
 }
@@ -791,6 +791,9 @@ module.exports = async (req, res) => {
 
       if (req.method === "GET" && action === "tickets") {
         return json(res, 200, { ok: true, data: await listTickets(client, clean(req.query.status) || null) });
+      }
+      if (req.method === "GET" && action === "export_rows") {
+        return json(res, 200, { ok: true, data: await listOperationalRows(client) });
       }
       if (cronSync) {
         return json(res, 200, { ok: true, data: await syncSupersetPoMaster(client) });

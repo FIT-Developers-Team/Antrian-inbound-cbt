@@ -7397,34 +7397,54 @@ function securityFormMatchesRowsForPrint(rows = []) {
     }
   };
 
-  window.exportCsv = function exportCsvV19() {
-    const tickets = window.__waitingListFilteredRowsV181 || state.dashboard?.report_preview || [];
-    const headers = [
-      "Operational Date", "Created At", "Ticket ID", "Queue No", "Ticket Type", "Slot", "Ticket Status",
-      "Vendor", "Fleet Type", "Plate Number", "Driver", "Driver Phone", "Gate", "Called At",
-      "Start Unloading", "Finish Unloading", "PO Number", "PO Qty", "Actual Qty", "SKU Count",
-      "Checker ID", "Checker Name", "Checker Status", "Checker Started", "Checker Done",
-      "GR Status", "GR Done At", "Handover GRN At", "SLA Status", "SLA Target Hours",
+  window.exportCsv = async function exportCsvV19() {
+    const columns = [
+      ["Operational Date", "operational_date"], ["Registered At", "register_time"],
+      ["Created At", "created_at"], ["Updated At", "updated_at"],
+      ["Ticket ID", "ticket_id"], ["Ticket PO ID", "ticket_po_id"],
+      ["Queue No", "queue_no"], ["Ticket Type", "ticket_type"],
+      ["Ticket Status", "status"], ["Registered By", "registered_by"],
+      ["Vendor", "vendor_name"], ["PO Vendor", "po_vendor_name"],
+      ["Fleet Type", "fleet_type"], ["Plate Number", "plat_number"],
+      ["Driver Name", "driver_name"], ["Driver Phone", "phone_number"],
+      ["Gate", "gate"], ["Slot", "slot"], ["Called At", "called_at"],
+      ["Arrived At", "arrived_at"], ["Start Unloading At", "start_unloading_at"],
+      ["Finish Unloading At", "finish_unloading_at"], ["Expired At", "expired_at"],
+      ["Expired Reason", "expired_reason"], ["Call Count", "call_count"],
+      ["Last Call At", "last_call_at"], ["PO Number", "po_number"],
+      ["Request Quantity", "total_po_qty"], ["Actual Quantity", "actual_quantity"],
+      ["SKU Count", "count_po_sku"], ["Checker ID", "checker_id"],
+      ["Checker Name", "checker_name"], ["Checker Status", "checker_status"],
+      ["Checker Started At", "checker_started_at"], ["Checker Done At", "checker_done_at"],
+      ["GR Status", "gr_status"], ["GR Done At", "done_gr_at"],
+      ["Handover GRN At", "handover_grn_at"],
     ];
-    const value = (item) => String(item ?? "").replaceAll('"', '""');
-    const rows = tickets.flatMap((ticket) => (ticket.po_rows?.length ? ticket.po_rows : [{}]).map((po) => [
-      ticket.operational_date, ticket.created_at || ticket.register_time, ticket.ticket_id, ticket.queue_no,
-      ticket.ticket_type, ticket.slot, ticket.status, ticket.vendor_name, ticket.fleet_type, ticket.plat_number,
-      ticket.driver_name, ticket.driver_phone || ticket.phone_number, ticket.gate, ticket.called_at,
-      ticket.start_unloading_at, ticket.finish_unloading_at, po.po_number, po.total_po_qty,
-      po.actual_quantity, po.count_po_sku, po.checker_id, po.checker_name, po.checker_status,
-      po.checker_started_at, po.checker_done_at, po.gr_status, po.done_gr_at,
-      po.handover_grn_at || ticket.handover_grn_at, po.sla_status || ticket.sla_status, po.sla_target_hours || ticket.sla_target_hours,
-    ]));
-    if (!rows.length) return showToast("Tidak ada data sesuai filter.");
-    const csv = [headers, ...rows].map((row) => row.map((cell) => `"${value(cell)}"`).join(",")).join("\r\n");
-    const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `waiting-list-${new Date().toISOString().slice(0, 10)}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
-    showToast(`${rows.length} baris PO diexport sesuai filter.`);
+    try {
+      showToast("Menyiapkan CSV detail dari MotherDuck...");
+      const allRows = await motherDuckApiGet("export_rows");
+      const visibleTickets = window.__waitingListFilteredRowsV181 || state.dashboard?.report_preview || [];
+      const ticketIds = new Set(visibleTickets.map((ticket) => String(ticket.ticket_id || "")).filter(Boolean));
+      const rows = ticketIds.size
+        ? allRows.filter((row) => ticketIds.has(String(row.ticket_id || "")))
+        : allRows;
+      if (!rows.length) return showToast("Tidak ada data sesuai filter.");
+
+      const escapeCsv = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+      const csv = [
+        columns.map(([label]) => escapeCsv(label)).join(","),
+        ...rows.map((row) => columns.map(([, key]) => escapeCsv(row[key])).join(",")),
+      ].join("\r\n");
+      const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `waiting-list-detail-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      showToast(`${rows.length} baris PO dengan header detail berhasil diexport.`);
+    } catch (error) {
+      console.error(error);
+      showToast(`Export CSV gagal: ${error.message}`);
+    }
   };
   window.__exportCsvV19 = window.exportCsv;
   try { exportCsv = window.exportCsv; } catch (error) {}
