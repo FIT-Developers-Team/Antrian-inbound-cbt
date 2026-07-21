@@ -2978,9 +2978,9 @@ async function submitSecurity(e) {
 
 /* ==========================================================================
  * OPERATIONAL DAY + HISTORY ANALYTICS + MANUAL SOURCE PATCH
- * Operational Date berganti setiap jam 07:00 WIB.
+ * Operational Date berganti setiap jam 04:00 WIB.
  * Contoh:
- * 13 Jul 07:00 s/d 14 Jul 06:59 = Operational Date 13 Jul.
+ * 13 Jul 04:00 s/d 14 Jul 03:59 = Operational Date 13 Jul.
  * ========================================================================== */
 (function inboundOperationalDatePatch() {
   window.getOperationalDateKey = function getOperationalDateKey(
@@ -2990,7 +2990,7 @@ async function submitSecurity(e) {
     if (value instanceof Date) d = new Date(value);
     else d = parseInboundDateSafe(value);
     if (!d || isNaN(d.getTime())) d = new Date();
-    if (d.getHours() < 7) d.setDate(d.getDate() - 1);
+    if (d.getHours() < 4) d.setDate(d.getDate() - 1);
     return [
       d.getFullYear(),
       String(d.getMonth() + 1).padStart(2, "0"),
@@ -5061,8 +5061,16 @@ async function submitSecurity(e) {
     const slotText = ["1", "2", "3"].includes(String(slot))
       ? String(slot)
       : "3";
-    const sameSlot = queue.filter(
-      (row) => String(row.slot || queueSlotValue(row) || "") === slotText,
+    const operationalDate =
+      typeof getOperationalDateKey === "function"
+        ? getOperationalDateKey(new Date())
+        : "";
+    const sameSlot = queue.filter((row) =>
+      String(row.slot || queueSlotValue(row) || "") === slotText &&
+      (!operationalDate ||
+        (typeof getRowOperationalDateKey === "function"
+          ? getRowOperationalDateKey(row)
+          : String(row.operational_date || "")) === operationalDate),
     );
     const nextSeq =
       sameSlot.reduce(

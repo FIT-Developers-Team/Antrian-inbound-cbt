@@ -153,6 +153,25 @@ function clean(value) {
   return String(value ?? "").trim();
 }
 
+// Hari operasional inbound dimulai 04:00 WIB (UTC+7), bukan tengah malam.
+function operationalWindowWib(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23",
+  }).formatToParts(now).reduce((result, part) => ({ ...result, [part.type]: part.value }), {});
+  const localDate = new Date(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day)));
+  if (Number(parts.hour) < 4) localDate.setUTCDate(localDate.getUTCDate() - 1);
+  const key = localDate.toISOString().slice(0, 10);
+  const start = new Date(Date.UTC(localDate.getUTCFullYear(), localDate.getUTCMonth(), localDate.getUTCDate(), -3));
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  return { key, start, end };
+}
+
+function normalizeTicketType(value) {
+  const type = clean(value || "REG").toUpperCase().replace(/\s+/g, "-");
+  return type === "DROP" ? "DROP-OFF" : type;
+}
+
 const CHECKER_SEED = [
   ["MP-001", "pandu"], ["MP-002", "adit"], ["MP-003", "prety"],
   ["46916", "Ali Fahrudin"], ["46917", "Dian Ramdani"], ["46918", "SAMLAWI"],
@@ -191,7 +210,7 @@ async function ensureSchema(client) {
     ticket_id VARCHAR PRIMARY KEY, queue_no VARCHAR NOT NULL,
     ticket_type VARCHAR NOT NULL DEFAULT 'REG', status VARCHAR NOT NULL DEFAULT 'WAITING',
     vendor_name VARCHAR, fleet_type VARCHAR, plat_number VARCHAR, driver_name VARCHAR,
-    driver_phone VARCHAR, gate VARCHAR, slot VARCHAR, registered_by VARCHAR,
+    driver_phone VARCHAR, gate VARCHAR, slot VARCHAR, operational_date VARCHAR, registered_by VARCHAR,
     called_at TIMESTAMP, arrived_at TIMESTAMP, start_unloading_at TIMESTAMP,
     done_unloading_at TIMESTAMP, expired_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -221,6 +240,7 @@ async function ensureSchema(client) {
   await client.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS call_count INTEGER DEFAULT 0`);
   await client.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS last_call_at TIMESTAMP`);
   await client.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS expired_reason VARCHAR`);
+  await client.query(`ALTER TABLE tickets ADD COLUMN IF NOT EXISTS operational_date VARCHAR`);
   await client.query(`ALTER TABLE ticket_pos ADD COLUMN IF NOT EXISTS gr_status VARCHAR DEFAULT 'PENDING'`);
   await client.query(`ALTER TABLE ticket_pos ADD COLUMN IF NOT EXISTS checker_id VARCHAR`);
   await client.query(`ALTER TABLE ticket_pos ADD COLUMN IF NOT EXISTS checker_name VARCHAR`);
@@ -425,7 +445,7 @@ async function listTickets(client, status) {
     `SELECT
        t.ticket_id, t.queue_no, t.ticket_type, t.status, t.vendor_name,
        t.fleet_type, t.plat_number, t.driver_name, t.driver_phone, t.gate,
-       t.slot, t.registered_by, t.called_at, t.arrived_at,
+       t.slot, t.operational_date, t.registered_by, t.called_at, t.arrived_at,
        t.start_unloading_at, t.done_unloading_at, t.expired_at,
        t.created_at, t.updated_at,
        COALESCE(SUM(p.request_quantity), 0) AS request_quantity,
@@ -448,7 +468,7 @@ async function listOperationalRows(client, ticketId = null) {
     `SELECT
        t.ticket_id, t.queue_no, t.ticket_type, t.status, t.vendor_name,
        t.fleet_type, t.plat_number, t.driver_name, t.driver_phone AS phone_number,
-       t.gate, t.slot, t.registered_by, t.called_at, t.arrived_at,
+       t.gate, t.slot, t.operational_date, t.registered_by, t.called_at, t.arrived_at,
        t.start_unloading_at, t.done_unloading_at AS finish_unloading_at,
        t.expired_at, t.expired_reason, t.call_count, t.last_call_at,
        t.created_at AS register_time, t.created_at, t.updated_at,
@@ -493,10 +513,10 @@ async function getAppState(client) {
 async function createTicket(client, body) {
   const ticket = body.ticket || body;
   const ticketId = clean(ticket.ticket_id) || randomUUID();
-  const queueNo = clean(ticket.queue_no);
+  const ticketType = normalizeTicketType(ticket.ticket_type);
+  const slot = clean(ticket.slot) || "3";
   const poRows = Array.isArray(body.pos) ? body.pos : [];
 
-  if (!queueNo) throw new Error("queue_no wajib diisi.");
   if (!poRows.length) throw new Error("Minimal satu PO wajib diisi.");
 
   const poNumbers = [...new Set(poRows.map((po) => clean(po.po_number)).filter(Boolean))];
@@ -511,17 +531,32 @@ async function createTicket(client, body) {
 
   await client.query("BEGIN");
   try {
+    const operational = operationalWindowWib();
+    // Nomor queue selalu dihitung dari tiket yang dibuat pada hari operasional
+    // yang sama. Client tidak menjadi sumber nomor agar tidak lompat/lanjut
+    // ketika browser masih membawa state hari sebelumnya.
+    const existing = await client.query(
+      `SELECT queue_no FROM tickets
+       WHERE slot = $1 AND created_at >= $2 AND created_at < $3`,
+      [slot, operational.start, operational.end],
+    );
+    const maxSequence = existing.rows.reduce((max, row) => {
+      const match = clean(row.queue_no).match(/-\s*(\d+)\s*$/);
+      return Math.max(max, match ? Number(match[1]) : 0);
+    }, 0);
+    const queueNo = `${ticketType} ${slot}-${maxSequence + 1}`;
+
     await client.query(
       `INSERT INTO tickets (
         ticket_id, queue_no, ticket_type, status, vendor_name, fleet_type,
-        plat_number, driver_name, driver_phone, gate, slot, registered_by
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        plat_number, driver_name, driver_phone, gate, slot, operational_date, registered_by
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
       [
-        ticketId, queueNo, clean(ticket.ticket_type) || "REG",
+        ticketId, queueNo, ticketType,
         clean(ticket.status) || "WAITING", clean(ticket.vendor_name) || null,
         clean(ticket.fleet_type) || null, clean(ticket.plat_number) || null,
         clean(ticket.driver_name) || null, clean(ticket.driver_phone) || null,
-        clean(ticket.gate) || null, clean(ticket.slot) || null,
+        clean(ticket.gate) || null, slot, operational.key,
         clean(ticket.registered_by) || null,
       ],
     );
@@ -547,7 +582,7 @@ async function createTicket(client, body) {
       po_count: poRows.length,
     });
     await client.query("COMMIT");
-    return { ticket_id: ticketId, queue_no: queueNo };
+    return { ticket_id: ticketId, queue_no: queueNo, operational_date: operational.key };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
