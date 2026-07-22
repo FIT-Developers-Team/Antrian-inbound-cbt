@@ -127,6 +127,7 @@ function canUseAction(session, action) {
   const role = clean(session.role).toUpperCase();
   if (action === "delete_tickets_by_date") return ["ADMIN", "DEVELOPER"].includes(role);
   if (["state", "tickets", "export_rows", "create_ticket"].includes(action)) return ["SECURITY", "CHECKER", "SPV", "ADMIN", "DEVELOPER"].includes(role);
+  if (action === "superset_freshness") return ["SPV", "ADMIN", "DEVELOPER"].includes(role);
   if (["updatechecker", "startcheckerpo", "donecheckerpo", "donegrpo", "donegrpos", "handovergrn", "failcall", "update_ticket_status"].includes(action)) return ["CHECKER", "SPV", "ADMIN", "DEVELOPER"].includes(role);
   return false;
 }
@@ -172,6 +173,14 @@ function operationalWindowWib(now = new Date()) {
   const start = new Date(Date.UTC(localDate.getUTCFullYear(), localDate.getUTCMonth(), localDate.getUTCDate(), -3));
   const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
   return { key, start, end };
+}
+
+function calendarDateWib(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(now).reduce((result, part) => ({ ...result, [part.type]: part.value }), {});
+  return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
 function normalizeTicketType(value) {
@@ -556,6 +565,42 @@ async function getAppState(client) {
   };
 }
 
+async function getSupersetFreshness(client) {
+  const receivedDate = calendarDateWib();
+  const [year, month, day] = receivedDate.split("-");
+  const datePatterns = [
+    `%${receivedDate}%`,
+    `%${day}/${month}/${year}%`,
+    `%${day}-${month}-${year}%`,
+  ];
+  const summary = await client.query(`
+    SELECT
+      COUNT(*)::int AS total_master_po,
+      MAX(synced_at) AS last_synced_at,
+      COUNT(*) FILTER (
+        WHERE COALESCE(fulfillment_arrived_start_at, '') LIKE $1
+           OR COALESCE(fulfillment_arrived_start_at, '') LIKE $2
+           OR COALESCE(fulfillment_arrived_start_at, '') LIKE $3
+      )::int AS received_today_count
+    FROM superset_po_master
+  `, datePatterns);
+  const samples = await client.query(`
+    SELECT po_number, vendor_name, fulfillment_arrived_start_at,
+      request_shipping_date, po_status, synced_at
+    FROM superset_po_master
+    WHERE COALESCE(fulfillment_arrived_start_at, '') LIKE $1
+       OR COALESCE(fulfillment_arrived_start_at, '') LIKE $2
+       OR COALESCE(fulfillment_arrived_start_at, '') LIKE $3
+    ORDER BY synced_at DESC, po_number ASC
+    LIMIT 8
+  `, datePatterns);
+  return {
+    received_date_wib: receivedDate,
+    ...summary.rows[0],
+    received_today_samples: samples.rows,
+  };
+}
+
 async function createTicket(client, body) {
   const ticket = body.ticket || body;
   const ticketId = clean(ticket.ticket_id) || randomUUID();
@@ -829,6 +874,9 @@ module.exports = async (req, res) => {
 
       if (req.method === "GET" && action === "state") {
         return json(res, 200, { ok: true, data: await getAppState(client) });
+      }
+      if (req.method === "GET" && action === "superset_freshness") {
+        return json(res, 200, { ok: true, data: await getSupersetFreshness(client) });
       }
 
       if (req.method === "GET" && action === "tickets") {

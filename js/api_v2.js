@@ -2463,6 +2463,7 @@ async function loadDebug() {
   if (out) out.textContent = "Loading debug V2...";
   try {
     if (!v2RawResponse) v2RawResponse = await fetchV2Data();
+    const freshness = await motherDuckApiGet("superset_freshness");
     state.debug = {
       api_url: API_URL_V2,
       timestamp: v2RawResponse.timestamp,
@@ -2481,12 +2482,57 @@ async function loadDebug() {
       kpi_sample: getKpiRawRows(v2RawResponse).slice(0, 3),
       po_index_sample: Object.values(v2PoIndex || {}).slice(0, 5),
       local_tickets: getLocalTickets(),
+      superset_freshness: freshness,
     };
+    renderSupersetFreshness(freshness);
     if (out) out.textContent = JSON.stringify(state.debug, null, 2);
     showToast("Debug V2 selesai");
   } catch (err) {
     if (out) out.textContent = err.stack || err.message;
     showToast("Debug gagal");
+  }
+}
+
+function formatDebugTimestamp(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat("id-ID", {
+    timeZone: "Asia/Jakarta", dateStyle: "medium", timeStyle: "medium",
+  }).format(date) + " WIB";
+}
+
+function renderSupersetFreshness(freshness = null) {
+  const target = document.getElementById("superset-freshness-output");
+  if (!target) return;
+  if (!freshness) {
+    target.innerHTML = '<p class="text-sm text-on-surface-variant">Klik cek freshness untuk membaca data live MotherDuck.</p>';
+    return;
+  }
+  const todayCount = Number(freshness.received_today_count || 0);
+  const samples = Array.isArray(freshness.received_today_samples)
+    ? freshness.received_today_samples : [];
+  target.innerHTML = `
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+      <div class="rounded-lg border border-outline-variant bg-surface-container-low p-3"><p class="text-xs uppercase font-bold text-on-surface-variant">Master PO</p><p class="text-2xl font-black">${Number(freshness.total_master_po || 0).toLocaleString("id-ID")}</p></div>
+      <div class="rounded-lg border border-primary/30 bg-primary-container/10 p-3"><p class="text-xs uppercase font-bold text-on-surface-variant">Received ${esc(freshness.received_date_wib || "hari ini")}</p><p class="text-2xl font-black text-primary">${todayCount.toLocaleString("id-ID")}</p></div>
+      <div class="rounded-lg border border-outline-variant bg-surface-container-low p-3"><p class="text-xs uppercase font-bold text-on-surface-variant">Sync terakhir</p><p class="text-sm font-bold leading-5">${esc(formatDebugTimestamp(freshness.last_synced_at))}</p></div>
+    </div>
+    <p class="text-xs text-on-surface-variant mb-2">Sample PO dengan received time tanggal ${esc(freshness.received_date_wib || "hari ini")}</p>
+    <div class="overflow-x-auto"><table class="w-full text-xs"><thead><tr class="text-left text-on-surface-variant border-b border-outline-variant"><th class="py-2 pr-3">PO</th><th class="py-2 pr-3">Vendor</th><th class="py-2">Received time</th></tr></thead><tbody>${samples.length ? samples.map((row) => `<tr class="border-b border-outline-variant/50"><td class="py-2 pr-3 font-bold">${esc(row.po_number || "-")}</td><td class="py-2 pr-3">${esc(row.vendor_name || "-")}</td><td class="py-2">${esc(row.fulfillment_arrived_start_at || "-")}</td></tr>`).join("") : '<tr><td colspan="3" class="py-3 text-on-surface-variant">Belum ada received time yang cocok untuk tanggal ini.</td></tr>'}</tbody></table></div>`;
+}
+
+async function loadSupersetFreshness() {
+  const target = document.getElementById("superset-freshness-output");
+  if (target) target.innerHTML = '<p class="text-sm text-on-surface-variant">Membaca freshness MotherDuck...</p>';
+  try {
+    const freshness = await motherDuckApiGet("superset_freshness");
+    state.debug = { ...(state.debug || {}), superset_freshness: freshness };
+    renderSupersetFreshness(freshness);
+    showToast("Freshness Superset diperbarui", "success");
+  } catch (error) {
+    if (target) target.innerHTML = `<p class="text-sm text-error">Gagal membaca freshness: ${esc(error.message || "Unknown error")}</p>`;
+    showToast("Freshness Superset gagal dibaca", "error");
   }
 }
 
@@ -4408,9 +4454,6 @@ async function submitSecurity(e) {
         });
       });
 
-      const localRowsV15 = getLocalTickets();
-      localRowsV15.unshift(...outputRows);
-      saveLocalTickets(localRowsV15);
       showToast("Menyimpan tiket digital...");
       const result = await submitSecurityRowsToBackend(outputRows);
       const waFeedbackV171 = getTicketWaFeedbackV171(result);
@@ -4420,6 +4463,14 @@ async function submitSecurity(e) {
         Array.isArray(result?.rows) && result.rows.length
           ? result.rows
           : outputRows;
+      // Cache lokal hanya diisi setelah MotherDuck mengonfirmasi ticket tersimpan.
+      // Ini mencegah nomor terlihat sukses di device Security tetapi tidak muncul di Checker.
+      const savedTicketIds = new Set(savedRows.map((row) => String(row.ticket_id || "")));
+      const localRowsV15 = getLocalTickets().filter(
+        (row) => !savedTicketIds.has(String(row.ticket_id || "")),
+      );
+      localRowsV15.unshift(...savedRows);
+      saveLocalTickets(localRowsV15);
       upsertOutputRowsToRawResponse(savedRows);
       if (!v2RawResponse) {
         v2RawResponse = {

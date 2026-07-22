@@ -3571,6 +3571,10 @@ function pageSetting() {
 function pageDebug() {
   return `<div class="glass-card rounded-xl p-6">
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4"><div><h3 class="font-headline-md text-headline-md">Debug API</h3><p class="text-on-surface-variant">Cek schema, sample row, dan hasil agregasi.</p></div><button onclick="loadDebug()" class="bg-primary-container text-on-primary-container px-5 py-3 rounded-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined">bug_report</span>Run Debug</button></div>
+    <section class="mb-5 rounded-xl border border-primary/25 bg-primary-container/5 p-4">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3"><div><h4 class="font-bold">Freshness Master Superset</h4><p class="text-sm text-on-surface-variant">Read-only dari database produksi MotherDuck. Khusus SPV/Admin/Developer.</p></div><button onclick="loadSupersetFreshness()" class="thin-tab rounded-lg px-4 py-2 font-bold inline-flex items-center gap-2"><span class="material-symbols-outlined">sync</span>Cek data live</button></div>
+      <div id="superset-freshness-output"><p class="text-sm text-on-surface-variant">Klik cek data live untuk melihat received time dan sync terakhir.</p></div>
+    </section>
     <pre id="debug-output" class="bg-surface-container-high/60 border border-outline-variant rounded-lg p-4 text-xs overflow-auto max-h-[650px]">${esc(JSON.stringify(state.debug || { info: "Klik Run Debug" }, null, 2))}</pre>
     <div class="mt-6 border border-error/30 rounded-lg p-4 bg-error-container/10">
       <h4 class="font-bold text-error mb-1">Hapus data operasional per tanggal</h4>
