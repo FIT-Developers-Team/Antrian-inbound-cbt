@@ -247,6 +247,7 @@ async function submitSecurityRowsToBackend(rows = []) {
   });
 
   const created = [];
+  const persistedRows = [];
   for (const ticketRows of groups.values()) {
     const master = ticketRows[0];
     const result = await motherDuckApiPost("create_ticket", {
@@ -278,9 +279,19 @@ async function submitSecurityRowsToBackend(rows = []) {
       })),
     });
     created.push(result);
+    // Nomor antrean final berasal dari MotherDuck, bukan hasil prediksi browser.
+    // Backend menghitung sequence berdasarkan slot dan hari operasional yang sama.
+    persistedRows.push(
+      ...ticketRows.map((row) => ({
+        ...row,
+        ticket_id: result.ticket_id || row.ticket_id,
+        queue_no: result.queue_no || row.queue_no,
+        operational_date: result.operational_date || row.operational_date,
+      })),
+    );
   }
 
-  return { rows, created, ticket_wa_results: [] };
+  return { rows: persistedRows, created, ticket_wa_results: [] };
 }
 
 function getTicketWaFeedbackV171(result = {}) {
