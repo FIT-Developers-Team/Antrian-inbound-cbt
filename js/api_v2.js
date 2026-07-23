@@ -236,6 +236,43 @@ async function deleteTicketsByOperationalDate() {
   }
 }
 
+async function bulkCompleteOperationalTasks() {
+  const input = document.getElementById("bulk-complete-operational-date");
+  const button = document.getElementById("bulk-complete-operational-button");
+  const result = document.getElementById("bulk-complete-operational-result");
+  const operationalDate = String(input?.value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(operationalDate)) {
+    showToast("Pilih tanggal operasional yang valid.", "error");
+    return;
+  }
+  const warning = [
+    `Clear semua tiket AKTIF tanggal ${operationalDate}?`,
+    "",
+    "Status akan diproses sampai COMPLETED.",
+    "PO menjadi Done Checking + Done GR + Handover GRN.",
+    "Actual Qty yang kosong akan memakai Qty PO.",
+    "Riwayat ticket tidak dihapus.",
+  ].join("\n");
+  if (!confirm(warning)) return;
+  if (button) button.disabled = true;
+  if (result) result.textContent = "Memproses tiket aktif di MotherDuck...";
+  try {
+    const completed = await motherDuckApiPost("bulk_complete_operational", {
+      operational_date: operationalDate,
+    });
+    const message = `Selesai: ${Number(completed.tickets_completed || 0)} tiket dan ${Number(completed.po_completed || 0)} PO menjadi COMPLETED.`;
+    if (result) result.textContent = message;
+    showToast(message, "success");
+    await refreshDashboard();
+  } catch (error) {
+    const message = error?.message || "Gagal clear task otomatis.";
+    if (result) result.textContent = message;
+    showToast(message, "error");
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
 async function submitSecurityRowsToBackend(rows = []) {
   if (!rows.length) return { rows: [], ticket_wa_results: [] };
   const groups = new Map();

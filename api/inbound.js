@@ -128,6 +128,7 @@ function canUseAction(session, action) {
   if (!session) return false;
   const role = clean(session.role).toUpperCase();
   if (action === "delete_tickets_by_date") return ["ADMIN", "DEVELOPER"].includes(role);
+  if (action === "bulk_complete_operational") return role === "DEVELOPER";
   if (["state", "tickets", "export_rows", "create_ticket"].includes(action)) return ["SECURITY", "CHECKER", "SPV", "ADMIN", "DEVELOPER"].includes(role);
   if (action === "superset_freshness") return ["SPV", "ADMIN", "DEVELOPER"].includes(role);
   if (["ba_list", "ba_detail", "product_lookup", "create_ba"].includes(action)) return ["SPV", "ADMIN", "DEVELOPER"].includes(role);
@@ -710,6 +711,85 @@ async function deleteTicketsByDate(client, operationalDate) {
   }
 }
 
+// Developer-only tool for closing test/stuck operational tickets without deleting
+// their audit trail. Any blank actual quantity follows the PO request quantity.
+async function bulkCompleteOperational(client, body, session) {
+  const operationalDate = clean(body.operational_date) || operationalWindowWib().key;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(operationalDate)) {
+    throw new Error("operational_date harus format YYYY-MM-DD.");
+  }
+
+  const active = await client.query(
+    `SELECT ticket_id, queue_no, gate
+     FROM tickets
+     WHERE operational_date = $1
+       AND UPPER(COALESCE(status, 'WAITING')) NOT IN ('COMPLETED', 'EXPIRED')
+     ORDER BY created_at ASC`,
+    [operationalDate],
+  );
+  if (!active.rows.length) {
+    return { operational_date: operationalDate, tickets_completed: 0, po_completed: 0 };
+  }
+
+  const actor = {
+    role: clean(session?.role) || "DEVELOPER",
+    name: clean(session?.display_name || session?.username) || "Developer",
+  };
+  const ticketIds = active.rows.map((row) => row.ticket_id);
+  const ticketPlaceholders = ticketIds.map((_, index) => `$${index + 1}`).join(",");
+  const poPlaceholders = ticketIds.map((_, index) => `$${index + 3}`).join(",");
+
+  await client.query("BEGIN");
+  try {
+    const pos = await client.query(
+      `UPDATE ticket_pos
+       SET checker_id = COALESCE(NULLIF(checker_id, ''), $1),
+           checker_name = COALESCE(NULLIF(checker_name, ''), $2),
+           checker_status = 'DONE',
+           checking_started_at = COALESCE(checking_started_at, CURRENT_TIMESTAMP),
+           checking_done_at = COALESCE(checking_done_at, CURRENT_TIMESTAMP),
+           actual_quantity = CASE
+             WHEN COALESCE(actual_quantity, 0) <= 0 THEN COALESCE(request_quantity, 0)
+             ELSE actual_quantity
+           END,
+           gr_status = 'DONE GR',
+           gr_done_at = COALESCE(gr_done_at, CURRENT_TIMESTAMP),
+           handover_grn_at = COALESCE(handover_grn_at, CURRENT_TIMESTAMP),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE ticket_id IN (${poPlaceholders})`,
+      [actor.name, actor.name, ...ticketIds],
+    );
+    const tickets = await client.query(
+      `UPDATE tickets
+       SET status = 'COMPLETED',
+           called_at = COALESCE(called_at, CURRENT_TIMESTAMP),
+           start_unloading_at = COALESCE(start_unloading_at, CURRENT_TIMESTAMP),
+           done_unloading_at = COALESCE(done_unloading_at, CURRENT_TIMESTAMP),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE ticket_id IN (${ticketPlaceholders})`,
+      ticketIds,
+    );
+
+    for (const ticket of active.rows) {
+      await appendEvent(client, ticket.ticket_id, "DEVELOPER_BULK_COMPLETE", actor, {
+        operational_date: operationalDate,
+        flow: ["CALLED", "UNLOADING", "DONE CHECKER", "DONE GR", "HANDOVER GRN"],
+        gate: clean(ticket.gate) || null,
+        note: "Developer bulk completion; actual qty kosong memakai request qty PO.",
+      });
+    }
+    await client.query("COMMIT");
+    return {
+      operational_date: operationalDate,
+      tickets_completed: tickets.rowCount,
+      po_completed: pos.rowCount,
+    };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  }
+}
+
 async function getAppState(client) {
   const [master, outputForm, inboundMp] = await Promise.all([
     client.query(`SELECT
@@ -1081,6 +1161,9 @@ module.exports = async (req, res) => {
       }
       if (req.method === "POST" && action === "delete_tickets_by_date") {
         return json(res, 200, { ok: true, data: await deleteTicketsByDate(client, clean(body.operational_date)) });
+      }
+      if (req.method === "POST" && action === "bulk_complete_operational") {
+        return json(res, 200, { ok: true, data: await bulkCompleteOperational(client, body, session) });
       }
       if (req.method === "POST" && action === "create_ticket") {
         return json(res, 201, { ok: true, data: await createTicket(client, body) });
