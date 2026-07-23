@@ -1,4 +1,6 @@
 const { Pool } = require("pg");
+const fs = require("fs");
+const path = require("path");
 const { randomUUID, createHash, createHmac, timingSafeEqual } = require("crypto");
 
 let pool;
@@ -128,8 +130,48 @@ function canUseAction(session, action) {
   if (action === "delete_tickets_by_date") return ["ADMIN", "DEVELOPER"].includes(role);
   if (["state", "tickets", "export_rows", "create_ticket"].includes(action)) return ["SECURITY", "CHECKER", "SPV", "ADMIN", "DEVELOPER"].includes(role);
   if (action === "superset_freshness") return ["SPV", "ADMIN", "DEVELOPER"].includes(role);
+  if (["ba_list", "ba_detail", "product_lookup", "create_ba"].includes(action)) return ["SPV", "ADMIN", "DEVELOPER"].includes(role);
   if (["updatechecker", "startcheckerpo", "donecheckerpo", "donegrpo", "donegrpos", "handovergrn", "failcall", "update_ticket_status"].includes(action)) return ["CHECKER", "SPV", "ADMIN", "DEVELOPER"].includes(role);
   return false;
+}
+
+const BA_REASONS = [
+  "MSLOR", "BARANG RUSAK", "KURANG KIRIM", "TIDAK DATANG", "LEBIH KIRIM",
+  "BARANG TIDAK ADA DI PO", "TOLAK BEDA SKU", "TOLAK BEDA GRAMASI", "SALAH BAWA BARANG",
+];
+
+function parseCsvRows(raw) {
+  const rows = [];
+  let row = [], field = "", quoted = false;
+  for (let index = 0; index < raw.length; index += 1) {
+    const char = raw[index];
+    if (char === '"') {
+      if (quoted && raw[index + 1] === '"') { field += '"'; index += 1; }
+      else quoted = !quoted;
+    } else if (char === "," && !quoted) { row.push(field); field = ""; }
+    else if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && raw[index + 1] === "\n") index += 1;
+      row.push(field); field = "";
+      if (row.some((value) => value !== "")) rows.push(row);
+      row = [];
+    } else field += char;
+  }
+  if (field || row.length) { row.push(field); rows.push(row); }
+  return rows;
+}
+
+function productMasterSeed() {
+  const csvPath = path.join(process.cwd(), "data", "product_master.csv");
+  if (!fs.existsSync(csvPath)) throw new Error("File master product tidak ditemukan di deployment.");
+  const rows = parseCsvRows(fs.readFileSync(csvPath, "utf8"));
+  const header = rows.shift().map((value) => clean(value).toLowerCase());
+  const skuAt = header.indexOf("sku_number");
+  const nameAt = header.indexOf("product_name");
+  const productAt = header.indexOf("product_id");
+  if (skuAt < 0 || nameAt < 0 || productAt < 0) throw new Error("Header master product tidak valid.");
+  return rows.map((row) => ({
+    sku_number: clean(row[skuAt]), product_name: clean(row[nameAt]), product_id: clean(row[productAt]),
+  })).filter((row) => row.sku_number && row.product_name);
 }
 
 function authenticateUser(body) {
@@ -284,6 +326,38 @@ async function ensureSchema(client) {
     count_sku BIGINT DEFAULT 0,
     synced_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   )`);
+  await client.query(`CREATE TABLE IF NOT EXISTS product_master (
+    sku_number VARCHAR PRIMARY KEY, product_name VARCHAR NOT NULL, product_id VARCHAR,
+    imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await client.query(`CREATE INDEX IF NOT EXISTS product_master_product_id_idx ON product_master(product_id)`);
+  await client.query(`CREATE TABLE IF NOT EXISTS ba_sequences (
+    sequence_key VARCHAR PRIMARY KEY, last_number INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await client.query(`CREATE TABLE IF NOT EXISTS ba_documents (
+    ba_id VARCHAR PRIMARY KEY, ba_number VARCHAR UNIQUE NOT NULL, ba_date VARCHAR NOT NULL,
+    day_name VARCHAR NOT NULL, po_number VARCHAR, supplier_name VARCHAR, note VARCHAR,
+    created_by VARCHAR, created_role VARCHAR, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await client.query(`CREATE TABLE IF NOT EXISTS ba_items (
+    ba_item_id VARCHAR PRIMARY KEY, ba_id VARCHAR NOT NULL, sku_number VARCHAR,
+    product_id VARCHAR, product_name VARCHAR NOT NULL, quantity VARCHAR NOT NULL,
+    reason VARCHAR NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )`);
+
+  const productCount = await client.query(`SELECT COUNT(*)::int AS count FROM product_master`);
+  if (Number(productCount.rows[0]?.count || 0) === 0) {
+    const master = productMasterSeed();
+    await client.query(
+      `INSERT INTO product_master (sku_number, product_name, product_id, imported_at)
+       SELECT * FROM UNNEST($1::VARCHAR[], $2::VARCHAR[], $3::VARCHAR[], $4::TIMESTAMP[])
+       ON CONFLICT (sku_number) DO UPDATE SET
+         product_name = excluded.product_name, product_id = excluded.product_id, imported_at = excluded.imported_at`,
+      [master.map((row) => row.sku_number), master.map((row) => row.product_name), master.map((row) => row.product_id), master.map(() => new Date())],
+    );
+  }
 
   const checkerCount = await client.query(`SELECT COUNT(*) AS count FROM checker_master`);
   if (Number(checkerCount.rows[0]?.count || 0) === 0) {
@@ -505,6 +579,94 @@ async function listOperationalRows(client, ticketId = null) {
     args,
   );
   return rows;
+}
+
+async function lookupProduct(client, query) {
+  const value = clean(query);
+  if (!value) throw new Error("SKU atau Product ID wajib diisi.");
+  const { rows } = await client.query(
+    `SELECT sku_number, product_id, product_name
+     FROM product_master
+     WHERE sku_number = $1 OR product_id = $1
+     ORDER BY CASE WHEN sku_number = $1 THEN 0 ELSE 1 END
+     LIMIT 1`,
+    [value],
+  );
+  return rows[0] || null;
+}
+
+async function listBaDocuments(client) {
+  const { rows } = await client.query(
+    `SELECT ba_id, ba_number, ba_date, day_name, po_number, supplier_name, note,
+       created_by, created_role, created_at,
+       COUNT(i.ba_item_id)::int AS item_count
+     FROM ba_documents d
+     LEFT JOIN ba_items i ON i.ba_id = d.ba_id
+     GROUP BY ALL
+     ORDER BY d.created_at DESC
+     LIMIT 100`,
+  );
+  return rows;
+}
+
+async function getBaDetail(client, baId) {
+  const document = await client.query(`SELECT * FROM ba_documents WHERE ba_id = $1`, [clean(baId)]);
+  if (!document.rows[0]) throw new Error("Dokumen BA tidak ditemukan.");
+  const items = await client.query(`SELECT * FROM ba_items WHERE ba_id = $1 ORDER BY created_at ASC`, [clean(baId)]);
+  return { document: document.rows[0], items: items.rows };
+}
+
+function toBaDayName(dateText) {
+  const date = new Date(`${dateText}T12:00:00Z`);
+  const days = ["MINGGU", "SENIN", "SELASA", "RABU", "KAMIS", "JUMAT", "SABTU"];
+  return Number.isNaN(date.getTime()) ? "" : days[date.getUTCDay()];
+}
+
+async function createBaDocument(client, body, session) {
+  const baDate = /^\d{4}-\d{2}-\d{2}$/.test(clean(body.ba_date)) ? clean(body.ba_date) : calendarDateWib();
+  const items = Array.isArray(body.items) ? body.items : [];
+  const validItems = items.map((item) => ({
+    sku_number: clean(item.sku_number), product_id: clean(item.product_id),
+    product_name: clean(item.product_name), quantity: clean(item.quantity), reason: clean(item.reason).toUpperCase(),
+  })).filter((item) => item.sku_number || item.product_name);
+  if (!validItems.length) throw new Error("Isi minimal satu barang BA.");
+  for (const item of validItems) {
+    if (!item.product_name) throw new Error("Deskripsi barang wajib diisi.");
+    if (!item.quantity) throw new Error("Qty barang wajib diisi.");
+    if (!BA_REASONS.includes(item.reason)) throw new Error("Reason BA tidak valid.");
+  }
+  const [year, month] = baDate.split("-");
+  const sequenceKey = `${year}-${month}`;
+  await client.query("BEGIN");
+  try {
+    const sequence = await client.query(
+      `INSERT INTO ba_sequences (sequence_key, last_number, updated_at) VALUES ($1, 1, CURRENT_TIMESTAMP)
+       ON CONFLICT (sequence_key) DO UPDATE SET last_number = ba_sequences.last_number + 1, updated_at = CURRENT_TIMESTAMP
+       RETURNING last_number`, [sequenceKey],
+    );
+    const number = String(sequence.rows[0].last_number).padStart(6, "0");
+    const baId = randomUUID();
+    const baNumber = `${number}/CBT/${month}/${year}`;
+    const dayName = clean(body.day_name) || toBaDayName(baDate);
+    await client.query(
+      `INSERT INTO ba_documents (ba_id, ba_number, ba_date, day_name, po_number, supplier_name, note, created_by, created_role)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [baId, baNumber, baDate, dayName, clean(body.po_number) || null, clean(body.supplier_name) || null,
+        clean(body.note) || null, clean(session.display_name || session.username), clean(session.role)],
+    );
+    const params = [];
+    const values = validItems.map((item, index) => {
+      const start = index * 7;
+      params.push(randomUUID(), baId, item.sku_number || null, item.product_id || null, item.product_name, item.quantity, item.reason);
+      return `($${start + 1},$${start + 2},$${start + 3},$${start + 4},$${start + 5},$${start + 6},$${start + 7})`;
+    });
+    await client.query(`INSERT INTO ba_items (ba_item_id, ba_id, sku_number, product_id, product_name, quantity, reason) VALUES ${values.join(",")}`, params);
+    await client.query("COMMIT");
+    return getBaDetail(client, baId);
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  }
 }
 
 async function deleteTicketsByDate(client, operationalDate) {
@@ -861,12 +1023,13 @@ module.exports = async (req, res) => {
 
       const apiKeyValid = isAuthorized(req);
       const cronSync = req.method === "GET" && action === "cron_sync_superset";
+      let session = null;
       if (action === "sync_superset_pos") {
         if (!apiKeyValid) return json(res, 401, { ok: false, message: "Unauthorized" });
       } else if (cronSync) {
         if (!isCronAuthorized(req)) return json(res, 401, { ok: false, message: "Unauthorized" });
       } else {
-        const session = readSession(req);
+        session = readSession(req);
         if (!canUseAction(session, action)) {
           return json(res, 401, { ok: false, message: "Unauthorized" });
         }
@@ -885,6 +1048,15 @@ module.exports = async (req, res) => {
       if (req.method === "GET" && action === "export_rows") {
         return json(res, 200, { ok: true, data: await listOperationalRows(client) });
       }
+      if (req.method === "GET" && action === "product_lookup") {
+        return json(res, 200, { ok: true, data: await lookupProduct(client, req.query.q) });
+      }
+      if (req.method === "GET" && action === "ba_list") {
+        return json(res, 200, { ok: true, data: await listBaDocuments(client) });
+      }
+      if (req.method === "GET" && action === "ba_detail") {
+        return json(res, 200, { ok: true, data: await getBaDetail(client, req.query.ba_id) });
+      }
       if (cronSync) {
         return json(res, 200, { ok: true, data: await syncSupersetPoMaster(client) });
       }
@@ -898,6 +1070,9 @@ module.exports = async (req, res) => {
       }
       if (req.method === "POST" && action === "create_ticket") {
         return json(res, 201, { ok: true, data: await createTicket(client, body) });
+      }
+      if (req.method === "POST" && action === "create_ba") {
+        return json(res, 201, { ok: true, data: await createBaDocument(client, body, session) });
       }
       if (req.method === "POST" && action === "update_ticket_status") {
         return json(res, 200, { ok: true, data: await updateTicketStatus(client, body) });
