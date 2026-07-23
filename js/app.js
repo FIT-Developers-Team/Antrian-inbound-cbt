@@ -13700,11 +13700,19 @@ window.initShader = function initShaderDisabled() {
   } catch (error) {}
 
   window.pageLaporan = function pageLaporanV181() {
-    const allRows = Array.isArray(state.dashboard?.report_preview)
+    const f = window.waitingListFiltersV181 || { ...DEFAULT_FILTERS };
+    const activeRows = Array.isArray(state.dashboard?.report_preview)
       ? state.dashboard.report_preview
       : [];
+    const historyRows = Array.isArray(state.dashboard?.history_queue)
+      ? state.dashboard.history_queue
+      : activeRows;
+    // Default tetap ringkas untuk operasional hari ini. Begitu user memilih
+    // tanggal/range tanggal, gunakan seluruh history MotherDuck supaya tiket
+    // COMPLETED lama ikut tampil dan ikut diekspor.
+    const usingHistory = Boolean(f.operationalDate || f.dateFrom || f.dateTo);
+    const allRows = usingHistory ? historyRows : activeRows;
     const filteredRows = filterRowsV181(allRows);
-    const f = window.waitingListFiltersV181 || { ...DEFAULT_FILTERS };
     const totalPages = Math.max(1, Math.ceil(filteredRows.length / f.pageSize));
     f.page = Math.min(totalPages, Math.max(1, Number(f.page || 1)));
     const startIndex = (f.page - 1) * f.pageSize;
@@ -13717,7 +13725,7 @@ window.initShader = function initShaderDisabled() {
 
     return `<div class="glass-card rounded-xl p-4 sm:p-6">
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-        <div><h3 class="font-headline-md text-headline-md">Waiting List</h3><p class="text-on-surface-variant">Satu kendaraan tampil satu baris. Admin wajib mengisi Actual Qty per PO sebelum Done GR. Gunakan filter dan pagination agar data tetap ringan.</p></div>
+        <div><h3 class="font-headline-md text-headline-md">Waiting List</h3><p class="text-on-surface-variant">Satu kendaraan tampil satu baris. ${usingHistory ? "Menampilkan history MotherDuck sesuai filter tanggal; CSV mengikuti hasil filter ini." : "Default menampilkan operasional aktif. Pilih tanggal atau range tanggal untuk menarik history Completed dari MotherDuck."}</p></div>
         <div class="flex flex-wrap gap-2"><button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">refresh</span>Refresh</button><button onclick="doneGrBatchV19()" class="bg-secondary-container text-on-secondary-container px-4 py-3 rounded-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined">playlist_add_check</span>Simpan Semua Actual Qty</button><button onclick="exportCsv()" class="bg-primary-container text-on-primary-container px-5 py-3 rounded-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined">download</span>Export CSV</button></div>
       </div>
       ${filterPanelV181(allRows, filteredRows)}
