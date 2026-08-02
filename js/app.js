@@ -291,10 +291,11 @@ async function submitLogin(e) {
     showToast("Login sebagai " + normalizeRole(found.role));
     const nextPage = getDefaultPageForRole(found.role);
     state.page = nextPage;
+    // Tinggalkan layar login segera setelah autentikasi berhasil. Initial API
+    // load dapat terkena cold start MotherDuck dan tidak boleh menahan transisi UI.
+    renderPage(nextPage, false);
     if (typeof initApi === "function") {
       await initApi();
-    } else {
-      renderPage(nextPage, false);
     }
   } catch (error) {
     showToast(error.message || "Username / password salah.");

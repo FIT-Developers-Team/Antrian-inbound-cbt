@@ -13,6 +13,7 @@
   },
   "scripts": {
     "check": "node --check api/inbound.js && node --check api/sync-superset.js",
+    "test": "node --test test/*.test.js",
     "android:sync": "npx cap sync android",
     "android:build:debug": "cd android && gradlew.bat assembleDebug"
   },
