@@ -1,8 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/sync-superset",
-      "schedule": "0 0 * * *"
-    }
-  ]
-}
