@@ -99,6 +99,20 @@ test("backend exposes authorized transactional bulk ticket creation", () => {
   );
 });
 
+test("Superset sync follows the latest saved chart query context", () => {
+  const functionSource = extractFunction(
+    backendSource,
+    "async function fetchSupersetPoRows",
+    "\nfunction asNumber",
+  );
+  assert.match(
+    functionSource,
+    /\/api\/v1\/chart\/20662\/data\/\?force=true/,
+  );
+  assert.doesNotMatch(functionSource, /security\/csrf_token/);
+  assert.doesNotMatch(functionSource, /supersetChartRequest/);
+});
+
 test("delta merge updates changed rows and removes deleted tickets", () => {
   const functionSource = extractFunction(
     frontendSource,

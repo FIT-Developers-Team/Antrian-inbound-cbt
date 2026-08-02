@@ -490,75 +490,21 @@ function supersetConfig() {
   };
 }
 
-function supersetChartRequest() {
-  const metrics = [
-    { aggregate: "SUM", column: { column_name: "request_quantity" }, expressionType: "SIMPLE", label: "SUM(request_quantity)" },
-    { aggregate: "SUM", column: { column_name: "actual_quantity" }, expressionType: "SIMPLE", label: "SUM(actual_quantity)" },
-    { aggregate: "COUNT_DISTINCT", column: { column_name: "sku_number" }, expressionType: "SIMPLE", label: "COUNT_DISTINCT(sku_number)" },
-  ];
-  const columns = [
-    { timeGrain: "PT1M", columnType: "BASE_AXIS", sqlExpression: "request_shipping_date", label: "request_shipping_date", expressionType: "SQL" },
-    "location_id", "fulfillment_arrived_start_at", "schedule_type", "location_name",
-    "company_name", "po_status", "po_number", "fulfillment_receiving_start_at",
-    "fulfillment_completed_at",
-  ];
-  const filters = [
-    { col: "created_at", op: "TEMPORAL_RANGE", val: "Current month" },
-    { col: "location_id", op: "IN", val: ["819"] },
-  ];
-  return {
-    datasource: { id: 160, type: "table" },
-    force: true,
-    queries: [{
-      filters,
-      extras: { time_grain_sqla: "PT1M", having: "", where: "" },
-      applied_time_extras: {},
-      columns,
-      metrics,
-      orderby: [[metrics[0], false]],
-      annotation_layers: [],
-      row_limit: 50000,
-      series_limit: 0,
-      order_desc: true,
-      url_params: { datasource_id: "160", datasource_type: "table", save_action: "saveas", slice_id: "20662" },
-      custom_params: {}, custom_form_data: {}, post_processing: [], time_offsets: [],
-    }],
-    form_data: {
-      datasource: "160__table", viz_type: "table", slice_id: 20662,
-      query_mode: "aggregate", groupby: columns.map((column) => typeof column === "string" ? column : column.sqlExpression),
-      time_grain_sqla: "PT1M", metrics,
-      adhoc_filters: [
-        { clause: "WHERE", comparator: "Current month", expressionType: "SIMPLE", operator: "TEMPORAL_RANGE", subject: "created_at" },
-        { clause: "WHERE", comparator: ["819"], expressionType: "SIMPLE", operator: "IN", subject: "location_id" },
-      ],
-      row_limit: 50000, order_desc: true, result_format: "json", result_type: "full",
-    },
-    result_format: "json",
-    result_type: "full",
-  };
-}
-
 async function fetchSupersetPoRows() {
   const { baseUrl, cookie } = supersetConfig();
   const commonHeaders = { accept: "application/json", cookie, referer: `${baseUrl}/` };
-  const csrfResponse = await fetch(`${baseUrl}/api/v1/security/csrf_token/`, { headers: commonHeaders });
-  if (!csrfResponse.ok) throw new Error(`Superset CSRF gagal: HTTP ${csrfResponse.status}`);
-  const csrfPayload = await csrfResponse.json();
-  const csrfToken = clean(csrfPayload?.result);
-  if (!csrfToken) throw new Error("Superset tidak mengembalikan CSRF token.");
-
   const chartResponse = await fetch(
-    `${baseUrl}/api/v1/chart/data?form_data=${encodeURIComponent(JSON.stringify({ slice_id: 20662 }))}`,
-    {
-      method: "POST",
-      headers: { ...commonHeaders, "content-type": "application/json", "x-csrftoken": csrfToken },
-      body: JSON.stringify(supersetChartRequest()),
-    },
+    `${baseUrl}/api/v1/chart/20662/data/?force=true`,
+    { headers: commonHeaders },
   );
-  if (!chartResponse.ok) throw new Error(`Superset chart gagal: HTTP ${chartResponse.status}`);
+  if (!chartResponse.ok) {
+    throw new Error(`Superset saved chart gagal: HTTP ${chartResponse.status}`);
+  }
   const chartPayload = await chartResponse.json();
   const data = chartPayload?.result?.[0]?.data;
-  if (!Array.isArray(data)) throw new Error("Format respons Superset tidak berisi result[0].data.");
+  if (!Array.isArray(data)) {
+    throw new Error("Format saved chart Superset tidak berisi result[0].data.");
+  }
   return data;
 }
 
