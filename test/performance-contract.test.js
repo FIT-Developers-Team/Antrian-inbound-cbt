@@ -168,3 +168,35 @@ test("bulk backend keeps queue sequences independent per slot", async () => {
   assert.deepEqual(result.created.map((ticket) => ticket.queue_no), ["REG 1-1", "REG 1-2", "REG 2-1"]);
   assert.deepEqual(transactionLog, ["BEGIN", "COMMIT"]);
 });
+
+test("schema initialization is cached after the first request", async () => {
+  const hooks = require("../api/inbound.js")._test;
+  assert.equal(typeof hooks.ensureDatabaseReady, "function");
+  hooks.resetSchemaCacheForTests();
+
+  function fakeClient() {
+    const queries = [];
+    return {
+      queries,
+      async query(sql) {
+        const normalized = String(sql).replace(/\s+/g, " ").trim();
+        queries.push(normalized);
+        if (normalized.includes("COUNT(*)::int AS count FROM product_master")) {
+          return { rows: [{ count: 1 }], rowCount: 1 };
+        }
+        if (normalized.includes("COUNT(*) AS count FROM checker_master")) {
+          return { rows: [{ count: 1 }], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    };
+  }
+
+  const first = fakeClient();
+  const second = fakeClient();
+  await hooks.ensureDatabaseReady(first);
+  await hooks.ensureDatabaseReady(second);
+
+  assert.ok(first.queries.length > 20, "first request should initialize the schema");
+  assert.deepEqual(second.queries, ["USE inbound_cbt_app"]);
+});

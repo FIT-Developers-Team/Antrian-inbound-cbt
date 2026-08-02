@@ -4,6 +4,8 @@ const path = require("path");
 const { randomUUID, createHash, createHmac, timingSafeEqual } = require("crypto");
 
 let pool;
+let schemaReady = false;
+let schemaReadyPromise = null;
 
 function json(res, status, body) {
   res.status(status).json(body);
@@ -374,6 +376,30 @@ async function ensureSchema(client) {
       CHECKER_SEED.flat(),
     );
   }
+}
+
+async function ensureDatabaseReady(client) {
+  if (!schemaReady) {
+    if (!schemaReadyPromise) {
+      schemaReadyPromise = ensureSchema(client)
+        .then(() => {
+          schemaReady = true;
+        })
+        .catch((error) => {
+          schemaReadyPromise = null;
+          throw error;
+        });
+    }
+    await schemaReadyPromise;
+  }
+  // `USE` berlaku per koneksi MotherDuck/Postgres, sehingga tetap dijalankan
+  // sekali pada client yang dipinjam tanpa mengulang seluruh DDL/migrasi.
+  await client.query(`USE ${databaseName()}`);
+}
+
+function resetSchemaCacheForTests() {
+  schemaReady = false;
+  schemaReadyPromise = null;
 }
 
 function supersetConfig() {
@@ -1202,7 +1228,7 @@ module.exports = async (req, res) => {
   try {
     const client = await getPool().connect();
     try {
-      await ensureSchema(client);
+      await ensureDatabaseReady(client);
 
       if (req.method === "GET" && action === "health") {
         const [result, products] = await Promise.all([
@@ -1311,4 +1337,8 @@ module.exports = async (req, res) => {
 };
 
 // Narrow test hooks for transaction and queue-number regression tests.
-module.exports._test = { createTicketsBulk };
+module.exports._test = {
+  createTicketsBulk,
+  ensureDatabaseReady,
+  resetSchemaCacheForTests,
+};
