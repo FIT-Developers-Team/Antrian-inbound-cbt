@@ -323,11 +323,10 @@ async function submitSecurityRowsToBackend(rows = []) {
     groups.get(ticketId).push(row);
   });
 
-  const created = [];
-  const persistedRows = [];
-  for (const ticketRows of groups.values()) {
+  const ticketGroups = [...groups.values()];
+  const tickets = ticketGroups.map((ticketRows) => {
     const master = ticketRows[0];
-    const result = await motherDuckApiPost("create_ticket", {
+    return {
       ticket: {
         ticket_id: master.ticket_id,
         queue_no: master.queue_no,
@@ -354,8 +353,16 @@ async function submitSecurityRowsToBackend(rows = []) {
         count_sku: row.count_po_sku,
         checker_status: row.checker_status || "PENDING",
       })),
-    });
-    created.push(result);
+    };
+  });
+  const bulkResult = await motherDuckApiPost("create_tickets_bulk", { tickets });
+  const created = Array.isArray(bulkResult?.created) ? bulkResult.created : [];
+  if (created.length !== ticketGroups.length) {
+    throw new Error("Jumlah ticket tersimpan tidak sesuai request. Refresh data lalu cek kembali.");
+  }
+  const persistedRows = [];
+  ticketGroups.forEach((ticketRows, index) => {
+    const result = created[index] || {};
     // Nomor antrean final berasal dari MotherDuck, bukan hasil prediksi browser.
     // Backend menghitung sequence berdasarkan slot dan hari operasional yang sama.
     persistedRows.push(
@@ -366,9 +373,14 @@ async function submitSecurityRowsToBackend(rows = []) {
         operational_date: result.operational_date || row.operational_date,
       })),
     );
-  }
+  });
 
-  return { rows: persistedRows, created, ticket_wa_results: [] };
+  return {
+    rows: persistedRows,
+    created,
+    inserted_tickets: Number(bulkResult?.inserted_tickets || created.length),
+    ticket_wa_results: [],
+  };
 }
 
 function getTicketWaFeedbackV171(result = {}) {
@@ -414,12 +426,45 @@ async function failCallToBackend(body = {}) {
   return apiPostV2("failCall", body);
 }
 
+function outputRowKeyV12(row = {}) {
+  const poId = String(row.ticket_po_id || "").trim();
+  if (poId) return `po:${poId}`;
+  return `ticket:${String(row.ticket_id || "").trim()}\u001f${String(row.po_number || "").trim()}`;
+}
+
+function mergeOutputDeltaV12(currentRows = [], deltaRows = [], activeTicketIds = null) {
+  const hasActiveSnapshot = Array.isArray(activeTicketIds);
+  const active = new Set((activeTicketIds || []).map((value) => String(value || "").trim()).filter(Boolean));
+  const merged = new Map();
+  (currentRows || []).forEach((row) => {
+    const ticketId = String(row?.ticket_id || "").trim();
+    if (!hasActiveSnapshot || active.has(ticketId)) merged.set(outputRowKeyV12(row), row);
+  });
+  (deltaRows || []).forEach((row) => {
+    const ticketId = String(row?.ticket_id || "").trim();
+    if (!hasActiveSnapshot || active.has(ticketId)) merged.set(outputRowKeyV12(row), row);
+  });
+  return [...merged.values()];
+}
+
+function overlapDeltaCursorV12(value) {
+  const parsed = new Date(value || "");
+  if (Number.isNaN(parsed.getTime())) return "";
+  return new Date(parsed.getTime() - 2000).toISOString();
+}
+
 async function fetchV2Data() {
   return motherDuckApiGet("state");
 }
 
 async function fetchOutputFormData() {
   return motherDuckApiGet("state");
+}
+
+async function fetchOutputFormDelta(since) {
+  const cursor = overlapDeltaCursorV12(since);
+  if (!cursor) return fetchOutputFormData();
+  return motherDuckApiGet("state_delta", { since: cursor });
 }
 
 // V15.1 FIX:
@@ -3686,7 +3731,7 @@ async function submitSecurity(e) {
 
 /* ==========================================================================
  * GLOBAL AUTO SYNC V11
- * - Cek Output form setiap 5 detik.
+ * - Cek perubahan operasional setiap 10 detik.
  * - Hanya rebuild data ketika signature berubah.
  * - Semua PC mendapat perubahan status tanpa menekan Refresh.
  * ========================================================================== */
@@ -3694,10 +3739,13 @@ async function submitSecurity(e) {
   if (window.__globalAutoSyncApiV11Installed) return;
   window.__globalAutoSyncApiV11Installed = true;
 
-  const INTERVAL_MS = 5000;
+  const INTERVAL_MS = 10000;
+  const FULL_REFRESH_MS = 5 * 60 * 1000;
   let timer = null;
   let busy = false;
   let lastSignature = "";
+  let lastCursor = "";
+  let lastFullRefreshAt = Date.now();
   let uiPending = false;
   let stopped = false;
 
@@ -3798,10 +3846,28 @@ async function submitSecurity(e) {
     updateSyncIndicatorV11("checking", "Mengecek perubahan...");
 
     try {
-      const outputResponse = await fetchOutputFormData();
-      const rows = getOutputFormRows(outputResponse);
+      const currentRows = getOutputFormRows(v2RawResponse || {});
+      if (!lastSignature && currentRows.length) {
+        lastSignature = buildOutputSignatureV11(currentRows);
+      }
+      const cursor = lastCursor || v2RawResponse?.timestamp || "";
+      const needsFullSnapshot =
+        !cursor || Date.now() - lastFullRefreshAt >= FULL_REFRESH_MS;
+      const outputResponse = needsFullSnapshot
+        ? await fetchOutputFormData()
+        : await fetchOutputFormDelta(cursor);
+      const responseRows = getOutputFormRows(outputResponse);
+      const rows = !needsFullSnapshot
+        ? mergeOutputDeltaV12(
+            currentRows,
+            responseRows,
+            Array.isArray(outputResponse?.ticket_ids) ? outputResponse.ticket_ids : null,
+          )
+        : responseRows;
       const signature = buildOutputSignatureV11(rows);
-      const changed = !!lastSignature && signature !== lastSignature;
+      const changed = signature !== lastSignature;
+      lastCursor = outputResponse?.timestamp || new Date().toISOString();
+      if (needsFullSnapshot) lastFullRefreshAt = Date.now();
 
       if (!lastSignature) {
         lastSignature = signature;

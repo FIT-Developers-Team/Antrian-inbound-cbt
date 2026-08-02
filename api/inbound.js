@@ -129,7 +129,7 @@ function canUseAction(session, action) {
   const role = clean(session.role).toUpperCase();
   if (["delete_tickets_by_date", "delete_single_ticket"].includes(action)) return ["ADMIN", "DEVELOPER"].includes(role);
   if (action === "bulk_complete_operational") return role === "DEVELOPER";
-  if (["state", "tickets", "export_rows", "create_ticket"].includes(action)) return ["SECURITY", "CHECKER", "SPV", "ADMIN", "DEVELOPER"].includes(role);
+  if (["state", "state_delta", "tickets", "export_rows", "create_ticket", "create_tickets_bulk"].includes(action)) return ["SECURITY", "CHECKER", "SPV", "ADMIN", "DEVELOPER"].includes(role);
   if (action === "superset_freshness") return ["SPV", "ADMIN", "DEVELOPER"].includes(role);
   if (["ba_list", "ba_detail", "product_lookup", "create_ba"].includes(action)) return ["SPV", "ADMIN", "DEVELOPER"].includes(role);
   if (["updatechecker", "startcheckerpo", "donecheckerpo", "donegrpo", "donegrpos", "handovergrn", "failcall", "update_ticket_status"].includes(action)) return ["CHECKER", "SPV", "ADMIN", "DEVELOPER"].includes(role);
@@ -561,9 +561,23 @@ async function listTickets(client, status) {
   return rows;
 }
 
-async function listOperationalRows(client, ticketId = null) {
-  const args = ticketId ? [ticketId] : [];
-  const where = ticketId ? "WHERE t.ticket_id = $1" : "";
+async function listOperationalRows(client, ticketId = null, updatedSince = null) {
+  const args = [];
+  const conditions = [];
+  if (ticketId) {
+    args.push(ticketId);
+    conditions.push(`t.ticket_id = $${args.length}`);
+  }
+  if (updatedSince) {
+    args.push(updatedSince);
+    conditions.push(
+      `GREATEST(
+        COALESCE(t.updated_at, t.created_at),
+        COALESCE(p.updated_at, p.created_at, t.updated_at, t.created_at)
+      ) >= $${args.length}`,
+    );
+  }
+  const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   const { rows } = await client.query(
     `SELECT
        t.ticket_id, t.queue_no, t.ticket_type, t.status, t.vendor_name,
@@ -865,6 +879,27 @@ async function getAppState(client) {
   };
 }
 
+async function getAppStateDelta(client, sinceValue) {
+  const parsedSince = new Date(clean(sinceValue));
+  if (Number.isNaN(parsedSince.getTime())) {
+    throw new Error("Parameter since wajib berupa timestamp ISO yang valid.");
+  }
+  const cursor = new Date().toISOString();
+  const [outputForm, ticketIds, inboundMp] = await Promise.all([
+    listOperationalRows(client, null, parsedSince.toISOString()),
+    client.query(`SELECT ticket_id FROM tickets ORDER BY ticket_id ASC`),
+    client.query(`SELECT mp_id, mp_id AS checker_id, checker_name
+      FROM checker_master WHERE active = TRUE ORDER BY checker_name ASC`),
+  ]);
+  return {
+    status: "success",
+    timestamp: cursor,
+    outputForm,
+    ticket_ids: ticketIds.rows.map((row) => row.ticket_id),
+    inboundMp: inboundMp.rows,
+  };
+}
+
 async function getSupersetFreshness(client) {
   const receivedDate = calendarDateWib();
   const [year, month, day] = receivedDate.split("-");
@@ -901,7 +936,7 @@ async function getSupersetFreshness(client) {
   };
 }
 
-async function createTicket(client, body) {
+async function createTicketRecord(client, body, operational = operationalWindowWib()) {
   const ticket = body.ticket || body;
   const ticketId = clean(ticket.ticket_id) || randomUUID();
   const ticketType = normalizeTicketType(ticket.ticket_type);
@@ -920,62 +955,88 @@ async function createTicket(client, body) {
     throw new Error("Ada PO yang tidak ditemukan di master MotherDuck.");
   }
 
+  // Nomor queue selalu dihitung di transaksi backend. Insert sebelumnya dalam
+  // bulk yang sama sudah terlihat di sini, sehingga sequence per slot/hari
+  // tetap berurutan tanpa mempercayai nomor prediksi browser.
+  const existing = await client.query(
+    `SELECT queue_no FROM tickets
+     WHERE slot = $1 AND created_at >= $2 AND created_at < $3`,
+    [slot, operational.start, operational.end],
+  );
+  const maxSequence = existing.rows.reduce((max, row) => {
+    const match = clean(row.queue_no).match(/-\s*(\d+)\s*$/);
+    return Math.max(max, match ? Number(match[1]) : 0);
+  }, 0);
+  const queueNo = `${ticketType} ${slot}-${maxSequence + 1}`;
+
+  await client.query(
+    `INSERT INTO tickets (
+      ticket_id, queue_no, ticket_type, status, vendor_name, fleet_type,
+      plat_number, driver_name, driver_phone, gate, slot, operational_date, registered_by,
+      ktp_6_digit, unload_sla, source
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+    [
+      ticketId, queueNo, ticketType,
+      clean(ticket.status) || "WAITING", clean(ticket.vendor_name) || null,
+      clean(ticket.fleet_type) || null, clean(ticket.plat_number) || null,
+      clean(ticket.driver_name) || null, clean(ticket.driver_phone) || null,
+      clean(ticket.gate) || null, slot, operational.key,
+      clean(ticket.registered_by) || null, clean(ticket.ktp_6_digit) || null,
+      clean(ticket.unload_sla) || "ON PROCESS", clean(ticket.source) || "MotherDuck",
+    ],
+  );
+
+  for (const po of poRows) {
+    const poNumber = clean(po.po_number);
+    if (!poNumber) throw new Error("po_number wajib diisi.");
+    await client.query(
+      `INSERT INTO ticket_pos (
+        ticket_po_id, ticket_id, po_number, vendor_name, request_quantity,
+        actual_quantity, count_sku, checker_status
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [
+        clean(po.ticket_po_id) || randomUUID(), ticketId, poNumber, clean(po.vendor_name) || clean(ticket.vendor_name) || null,
+        Number(po.request_quantity || 0), Number(po.actual_quantity || 0),
+        Number(po.count_sku || 0), clean(po.checker_status) || "PENDING",
+      ],
+    );
+  }
+
+  await appendEvent(client, ticketId, "SECURITY_REGISTERED", body.actor, {
+    queue_no: queueNo,
+    po_count: poRows.length,
+  });
+  return { ticket_id: ticketId, queue_no: queueNo, operational_date: operational.key };
+}
+
+async function createTicket(client, body) {
+  await client.query("BEGIN");
+  try {
+    const created = await createTicketRecord(client, body);
+    await client.query("COMMIT");
+    return created;
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  }
+}
+
+async function createTicketsBulk(client, body) {
+  const tickets = Array.isArray(body.tickets) ? body.tickets : [];
+  if (!tickets.length) throw new Error("Minimal satu ticket wajib diisi.");
+  if (tickets.length > 50) throw new Error("Maksimal 50 ticket per submit.");
+  const ticketIds = tickets.map((item) => clean(item?.ticket?.ticket_id || item?.ticket_id)).filter(Boolean);
+  if (new Set(ticketIds).size !== ticketIds.length) throw new Error("ticket_id duplikat dalam satu submit.");
+
   await client.query("BEGIN");
   try {
     const operational = operationalWindowWib();
-    // Nomor queue selalu dihitung dari tiket yang dibuat pada hari operasional
-    // yang sama. Client tidak menjadi sumber nomor agar tidak lompat/lanjut
-    // ketika browser masih membawa state hari sebelumnya.
-    const existing = await client.query(
-      `SELECT queue_no FROM tickets
-       WHERE slot = $1 AND created_at >= $2 AND created_at < $3`,
-      [slot, operational.start, operational.end],
-    );
-    const maxSequence = existing.rows.reduce((max, row) => {
-      const match = clean(row.queue_no).match(/-\s*(\d+)\s*$/);
-      return Math.max(max, match ? Number(match[1]) : 0);
-    }, 0);
-    const queueNo = `${ticketType} ${slot}-${maxSequence + 1}`;
-
-    await client.query(
-      `INSERT INTO tickets (
-        ticket_id, queue_no, ticket_type, status, vendor_name, fleet_type,
-        plat_number, driver_name, driver_phone, gate, slot, operational_date, registered_by,
-        ktp_6_digit, unload_sla, source
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
-      [
-        ticketId, queueNo, ticketType,
-        clean(ticket.status) || "WAITING", clean(ticket.vendor_name) || null,
-        clean(ticket.fleet_type) || null, clean(ticket.plat_number) || null,
-        clean(ticket.driver_name) || null, clean(ticket.driver_phone) || null,
-        clean(ticket.gate) || null, slot, operational.key,
-        clean(ticket.registered_by) || null, clean(ticket.ktp_6_digit) || null,
-        clean(ticket.unload_sla) || "ON PROCESS", clean(ticket.source) || "MotherDuck",
-      ],
-    );
-
-    for (const po of poRows) {
-      const poNumber = clean(po.po_number);
-      if (!poNumber) throw new Error("po_number wajib diisi.");
-      await client.query(
-        `INSERT INTO ticket_pos (
-          ticket_po_id, ticket_id, po_number, vendor_name, request_quantity,
-          actual_quantity, count_sku, checker_status
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [
-          clean(po.ticket_po_id) || randomUUID(), ticketId, poNumber, clean(po.vendor_name) || clean(ticket.vendor_name) || null,
-          Number(po.request_quantity || 0), Number(po.actual_quantity || 0),
-          Number(po.count_sku || 0), clean(po.checker_status) || "PENDING",
-        ],
-      );
+    const created = [];
+    for (const ticketBody of tickets) {
+      created.push(await createTicketRecord(client, ticketBody, operational));
     }
-
-    await appendEvent(client, ticketId, "SECURITY_REGISTERED", body.actor, {
-      queue_no: queueNo,
-      po_count: poRows.length,
-    });
     await client.query("COMMIT");
-    return { ticket_id: ticketId, queue_no: queueNo, operational_date: operational.key };
+    return { created, inserted_tickets: created.length };
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -1184,6 +1245,9 @@ module.exports = async (req, res) => {
       if (req.method === "GET" && action === "state") {
         return json(res, 200, { ok: true, data: await getAppState(client) });
       }
+      if (req.method === "GET" && action === "state_delta") {
+        return json(res, 200, { ok: true, data: await getAppStateDelta(client, req.query?.since) });
+      }
       if (req.method === "GET" && action === "superset_freshness") {
         return json(res, 200, { ok: true, data: await getSupersetFreshness(client) });
       }
@@ -1223,6 +1287,9 @@ module.exports = async (req, res) => {
       if (req.method === "POST" && action === "create_ticket") {
         return json(res, 201, { ok: true, data: await createTicket(client, body) });
       }
+      if (req.method === "POST" && action === "create_tickets_bulk") {
+        return json(res, 201, { ok: true, data: await createTicketsBulk(client, body) });
+      }
       if (req.method === "POST" && action === "create_ba") {
         return json(res, 201, { ok: true, data: await createBaDocument(client, body, session) });
       }
@@ -1242,3 +1309,6 @@ module.exports = async (req, res) => {
     return json(res, 500, { ok: false, message: error.message || "Database error" });
   }
 };
+
+// Narrow test hooks for transaction and queue-number regression tests.
+module.exports._test = { createTicketsBulk };
