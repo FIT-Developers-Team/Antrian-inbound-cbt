@@ -306,6 +306,7 @@ async function submitLogin(e) {
 function logoutUser() {
   const user = getAuthUser();
   fetch("/api/inbound?action=logout", { method: "POST", credentials: "same-origin" }).catch(() => {});
+  window.stopInboundRealtime?.();
   clearAuthUser();
   stopCallMonitorRuntime?.();
   applyTvModeStyles?.(false);

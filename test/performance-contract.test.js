@@ -125,6 +125,83 @@ test("backend delta endpoint is authenticated and accepts a cursor", () => {
   );
 });
 
+test("realtime broadcast only signals clients and keeps polling as fallback", () => {
+  const indexSource = fs.readFileSync(
+    path.join(__dirname, "..", "index.html"),
+    "utf8",
+  );
+  const realtimeSource = fs.readFileSync(
+    path.join(__dirname, "..", "js", "realtime_client_source.js"),
+    "utf8",
+  );
+
+  assert.match(indexSource, /js\/realtime_client\.js\?v=/);
+  assert.match(realtimeSource, /action=realtime_config/);
+  assert.match(realtimeSource, /\.on\("broadcast"/);
+  assert.match(realtimeSource, /forceGlobalAutoSyncV11/);
+  assert.match(realtimeSource, /Polling cadangan aktif/);
+  assert.match(backendSource, /waitUntil\(task\)/);
+  assert.match(backendSource, /realtime\/v1\/api\/broadcast/);
+});
+
+test("public realtime config never exposes the server secret", () => {
+  const hooks = require("../api/inbound.js")._test;
+  const previous = {
+    url: process.env.SUPABASE_REALTIME_URL,
+    publishable: process.env.SUPABASE_REALTIME_PUBLISHABLE_KEY,
+    secret: process.env.SUPABASE_REALTIME_SECRET_KEY,
+  };
+  process.env.SUPABASE_REALTIME_URL = "https://project.supabase.co";
+  process.env.SUPABASE_REALTIME_PUBLISHABLE_KEY = "sb_publishable_test";
+  process.env.SUPABASE_REALTIME_SECRET_KEY = "sb_secret_never_expose";
+  try {
+    const config = hooks.realtimePublicConfig();
+    assert.equal(config.enabled, true);
+    assert.equal(config.publishable_key, "sb_publishable_test");
+    assert.equal(JSON.stringify(config).includes("sb_secret_never_expose"), false);
+  } finally {
+    if (previous.url === undefined) delete process.env.SUPABASE_REALTIME_URL;
+    else process.env.SUPABASE_REALTIME_URL = previous.url;
+    if (previous.publishable === undefined) delete process.env.SUPABASE_REALTIME_PUBLISHABLE_KEY;
+    else process.env.SUPABASE_REALTIME_PUBLISHABLE_KEY = previous.publishable;
+    if (previous.secret === undefined) delete process.env.SUPABASE_REALTIME_SECRET_KEY;
+    else process.env.SUPABASE_REALTIME_SECRET_KEY = previous.secret;
+  }
+});
+
+test("realtime broadcast sends only an invalidation timestamp", async () => {
+  const hooks = require("../api/inbound.js")._test;
+  const previous = {
+    url: process.env.SUPABASE_REALTIME_URL,
+    publishable: process.env.SUPABASE_REALTIME_PUBLISHABLE_KEY,
+    secret: process.env.SUPABASE_REALTIME_SECRET_KEY,
+    fetch: global.fetch,
+  };
+  const calls = [];
+  process.env.SUPABASE_REALTIME_URL = "https://project.supabase.co/";
+  process.env.SUPABASE_REALTIME_PUBLISHABLE_KEY = "sb_publishable_test";
+  process.env.SUPABASE_REALTIME_SECRET_KEY = "sb_secret_server_only";
+  global.fetch = async (url, options) => {
+    calls.push({ url, options });
+    return { ok: true, status: 200 };
+  };
+  try {
+    assert.equal(await hooks.publishRealtimeChange(), true);
+    assert.equal(calls.length, 1);
+    assert.match(calls[0].url, /realtime\/v1\/api\/broadcast\/inbound-cbt-operations\/events\/ticket-changed$/);
+    assert.equal(calls[0].options.headers.apikey, "sb_secret_server_only");
+    assert.deepEqual(Object.keys(JSON.parse(calls[0].options.body)), ["changed_at"]);
+  } finally {
+    global.fetch = previous.fetch;
+    if (previous.url === undefined) delete process.env.SUPABASE_REALTIME_URL;
+    else process.env.SUPABASE_REALTIME_URL = previous.url;
+    if (previous.publishable === undefined) delete process.env.SUPABASE_REALTIME_PUBLISHABLE_KEY;
+    else process.env.SUPABASE_REALTIME_PUBLISHABLE_KEY = previous.publishable;
+    if (previous.secret === undefined) delete process.env.SUPABASE_REALTIME_SECRET_KEY;
+    else process.env.SUPABASE_REALTIME_SECRET_KEY = previous.secret;
+  }
+});
+
 test("bulk backend keeps queue sequences independent per slot", async () => {
   const { createTicketsBulk } = require("../api/inbound.js")._test;
   const tickets = [];

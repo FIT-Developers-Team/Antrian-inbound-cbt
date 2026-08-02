@@ -9,9 +9,12 @@
   "dependencies": {
     "@capacitor/android": "^8.4.2",
     "@capacitor/core": "^8.4.2",
+    "@supabase/realtime-js": "^2.111.0",
+    "@vercel/functions": "^3.7.6",
     "pg": "^8.16.3"
   },
   "scripts": {
+    "build:realtime": "esbuild js/realtime_client_source.js --bundle --minify --platform=browser --format=iife --outfile=js/realtime_client.js",
     "check": "node --check api/inbound.js && node --check api/sync-superset.js",
     "test": "node --test test/*.test.js",
     "android:sync": "npx cap sync android",
@@ -19,6 +22,7 @@
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",
-    "@capacitor/cli": "^8.4.2"
+    "@capacitor/cli": "^8.4.2",
+    "esbuild": "^0.28.1"
   }
 }

@@ -1518,6 +1518,7 @@ async function initApi() {
         ? getLatestCallTicket(state.dashboard.queue)
         : state.dashboard.queue[0] || state.lastCalled;
     updateApiPill("on", "API live");
+    window.startInboundRealtime?.();
     const nextPage =
       state.page === "login"
         ? getDefaultPageForRole(getAuthUser()?.role)
@@ -3747,6 +3748,7 @@ async function submitSecurity(e) {
   let lastCursor = "";
   let lastFullRefreshAt = Date.now();
   let uiPending = false;
+  let rerunRequested = false;
   let stopped = false;
 
   function outputFieldV11(row = {}, aliases = []) {
@@ -3839,6 +3841,7 @@ async function submitSecurity(e) {
       !hasApiV2() ||
       !isLoggedIn?.()
     ) {
+      if (forceUi && busy) rerunRequested = true;
       return;
     }
 
@@ -3906,6 +3909,10 @@ async function submitSecurity(e) {
       updateSyncIndicatorV11("error", "Sinkron otomatis gagal");
     } finally {
       busy = false;
+      if (rerunRequested && !stopped && document.visibilityState === "visible") {
+        rerunRequested = false;
+        setTimeout(() => runAutoSyncV11(true), 100);
+      }
     }
   }
 

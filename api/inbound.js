@@ -2,6 +2,7 @@ const { Pool } = require("pg");
 const fs = require("fs");
 const path = require("path");
 const { randomUUID, createHash, createHmac, timingSafeEqual } = require("crypto");
+const { waitUntil } = require("@vercel/functions");
 
 let pool;
 let schemaReady = false;
@@ -69,6 +70,82 @@ function isCronAuthorized(req) {
   return Boolean(secret && authorization === `Bearer ${secret}`);
 }
 
+const REALTIME_TOPIC = "inbound-cbt-operations";
+const REALTIME_EVENT = "ticket-changed";
+
+function realtimeSettings() {
+  const url = clean(process.env.SUPABASE_REALTIME_URL).replace(/\/+$/, "");
+  const publishableKey = clean(process.env.SUPABASE_REALTIME_PUBLISHABLE_KEY);
+  const secretKey = clean(process.env.SUPABASE_REALTIME_SECRET_KEY);
+  return {
+    enabled: Boolean(url && publishableKey && secretKey),
+    url,
+    publishableKey,
+    secretKey,
+  };
+}
+
+function realtimePublicConfig() {
+  const settings = realtimeSettings();
+  return {
+    enabled: settings.enabled,
+    url: settings.enabled ? settings.url : "",
+    publishable_key: settings.enabled ? settings.publishableKey : "",
+    topic: REALTIME_TOPIC,
+    event: REALTIME_EVENT,
+  };
+}
+
+async function publishRealtimeChange() {
+  const settings = realtimeSettings();
+  if (!settings.enabled) return false;
+
+  const endpoint =
+    `${settings.url}/realtime/v1/api/broadcast/` +
+    `${encodeURIComponent(REALTIME_TOPIC)}/events/${encodeURIComponent(REALTIME_EVENT)}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4000);
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        apikey: settings.secretKey,
+        Authorization: `Bearer ${settings.secretKey}`,
+        "Content-Type": "application/json",
+      },
+      // Broadcast hanya berfungsi sebagai invalidation signal. Data tiket
+      // tetap dibaca dari MotherDuck melalui endpoint delta yang terautentikasi.
+      body: JSON.stringify({ changed_at: new Date().toISOString() }),
+    });
+    if (!response.ok) {
+      throw new Error(`Supabase Broadcast HTTP ${response.status}`);
+    }
+    return true;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function scheduleRealtimeChange() {
+  const task = publishRealtimeChange().catch((error) => {
+    // Broadcast tidak boleh menggagalkan transaksi operasional. Polling delta
+    // 10 detik tetap menjadi fallback bila kanal realtime sedang bermasalah.
+    console.error("Supabase Realtime broadcast gagal", error);
+  });
+  try {
+    waitUntil(task);
+  } catch {
+    // Local/dev runtimes may not expose a Vercel request context.
+    void task;
+  }
+}
+
+function operationalJson(res, status, data) {
+  scheduleRealtimeChange();
+  return json(res, status, { ok: true, data });
+}
+
 function cookieValue(req, name) {
   const prefix = `${name}=`;
   return String(req.headers.cookie || "")
@@ -131,7 +208,7 @@ function canUseAction(session, action) {
   const role = clean(session.role).toUpperCase();
   if (["delete_tickets_by_date", "delete_single_ticket"].includes(action)) return ["ADMIN", "DEVELOPER"].includes(role);
   if (action === "bulk_complete_operational") return role === "DEVELOPER";
-  if (["state", "state_delta", "tickets", "export_rows", "create_ticket", "create_tickets_bulk"].includes(action)) return ["SECURITY", "CHECKER", "SPV", "ADMIN", "DEVELOPER"].includes(role);
+  if (["state", "state_delta", "realtime_config", "tickets", "export_rows", "create_ticket", "create_tickets_bulk"].includes(action)) return ["SECURITY", "CHECKER", "SPV", "ADMIN", "DEVELOPER"].includes(role);
   if (action === "superset_freshness") return ["SPV", "ADMIN", "DEVELOPER"].includes(role);
   if (["ba_list", "ba_detail", "product_lookup", "create_ba"].includes(action)) return ["SPV", "ADMIN", "DEVELOPER"].includes(role);
   if (["updatechecker", "startcheckerpo", "donecheckerpo", "donegrpo", "donegrpos", "handovergrn", "failcall", "update_ticket_status"].includes(action)) return ["CHECKER", "SPV", "ADMIN", "DEVELOPER"].includes(role);
@@ -1226,6 +1303,16 @@ module.exports = async (req, res) => {
   const requestBody = parseBody(req);
   const action = clean(req.query?.action || requestBody.action).toLowerCase();
   try {
+    // Realtime config tidak membutuhkan koneksi MotherDuck. Menjawabnya sebelum
+    // pool checkout menghindari cold-start database saat browser membuka socket.
+    if (req.method === "GET" && action === "realtime_config") {
+      const session = readSession(req);
+      if (!canUseAction(session, action)) {
+        return json(res, 401, { ok: false, message: "Unauthorized" });
+      }
+      return json(res, 200, { ok: true, data: realtimePublicConfig() });
+    }
+
     const client = await getPool().connect();
     try {
       await ensureDatabaseReady(client);
@@ -1302,28 +1389,28 @@ module.exports = async (req, res) => {
         return json(res, 200, { ok: true, data: await syncSupersetPoMaster(client) });
       }
       if (req.method === "POST" && action === "delete_tickets_by_date") {
-        return json(res, 200, { ok: true, data: await deleteTicketsByDate(client, clean(body.operational_date)) });
+        return operationalJson(res, 200, await deleteTicketsByDate(client, clean(body.operational_date)));
       }
       if (req.method === "POST" && action === "delete_single_ticket") {
-        return json(res, 200, { ok: true, data: await deleteSingleTicket(client, body) });
+        return operationalJson(res, 200, await deleteSingleTicket(client, body));
       }
       if (req.method === "POST" && action === "bulk_complete_operational") {
-        return json(res, 200, { ok: true, data: await bulkCompleteOperational(client, body, session) });
+        return operationalJson(res, 200, await bulkCompleteOperational(client, body, session));
       }
       if (req.method === "POST" && action === "create_ticket") {
-        return json(res, 201, { ok: true, data: await createTicket(client, body) });
+        return operationalJson(res, 201, await createTicket(client, body));
       }
       if (req.method === "POST" && action === "create_tickets_bulk") {
-        return json(res, 201, { ok: true, data: await createTicketsBulk(client, body) });
+        return operationalJson(res, 201, await createTicketsBulk(client, body));
       }
       if (req.method === "POST" && action === "create_ba") {
         return json(res, 201, { ok: true, data: await createBaDocument(client, body, session) });
       }
       if (req.method === "POST" && action === "update_ticket_status") {
-        return json(res, 200, { ok: true, data: await updateTicketStatus(client, body) });
+        return operationalJson(res, 200, await updateTicketStatus(client, body));
       }
       if (req.method === "POST" && ["updatechecker", "startcheckerpo", "donecheckerpo", "donegrpo", "donegrpos", "handovergrn", "failcall"].includes(action)) {
-        return json(res, 200, { ok: true, data: await updateTicketPos(client, body, action) });
+        return operationalJson(res, 200, await updateTicketPos(client, body, action));
       }
 
       return json(res, 404, { ok: false, message: "Action tidak ditemukan." });
@@ -1340,5 +1427,7 @@ module.exports = async (req, res) => {
 module.exports._test = {
   createTicketsBulk,
   ensureDatabaseReady,
+  publishRealtimeChange,
+  realtimePublicConfig,
   resetSchemaCacheForTests,
 };
