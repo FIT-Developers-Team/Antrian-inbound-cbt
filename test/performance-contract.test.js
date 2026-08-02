@@ -71,6 +71,11 @@ test("Daftar exposes explicit manual vendor and PO choices", () => {
   assert.match(appSource, /Gunakan vendor manual/);
   assert.match(appSource, /Gunakan PO manual/);
   assert.match(appSource, /Tambah \/ Manual/);
+  assert.match(
+    appSource,
+    /function commitPendingManualSecurityInputs[\s\S]*commitPendingManualSecurityInputs\(form\);/,
+  );
+  assert.match(appSource, /if \(!currentVendorIsMaster \|\| !getPoMeta\(po\)\) return true;/);
 });
 
 test("auto sync polls no faster than every ten seconds", () => {

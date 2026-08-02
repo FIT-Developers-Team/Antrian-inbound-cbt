@@ -3917,12 +3917,16 @@ function vendorMatchesFilter(vendor, filter) {
 
 function handleVendorFilterInput(input) {
   const currentVendor = getVendorValue() || String(input?.value || "").trim();
+  const currentVendorIsMaster = isMasterVendorValue(currentVendor);
   const selected = getSelectedPoNumbers();
 
   if (selected.length) {
-    const kept = selected.filter((po) =>
-      vendorMatchesFilter(getPoVendor(po), currentVendor),
-    );
+    const kept = selected.filter((po) => {
+      // Vendor manual boleh dipasangkan dengan PO manual maupun PO master.
+      // PO manual juga tidak mempunyai metadata vendor untuk dibandingkan.
+      if (!currentVendorIsMaster || !getPoMeta(po)) return true;
+      return vendorMatchesFilter(getPoVendor(po), currentVendor);
+    });
     if (kept.length !== selected.length) {
       setSelectedPoNumbers(kept, true);
       showToast("PO yang beda vendor otomatis dilepas.");
@@ -8315,6 +8319,30 @@ function securityFormMatchesRowsForPrint(rows = []) {
 
   let explicitSubmitRunning = false;
 
+  function commitPendingManualSecurityInputs(form) {
+    if (!form) return;
+
+    // Mobile users often type a value and immediately tap Buat Nomor without
+    // pressing Enter or selecting the dropdown action. Preserve both raw texts
+    // before committing Vendor because changing Vendor refreshes the PO search.
+    const pendingVendor = String(
+      document.getElementById("vendor-search-input")?.value || "",
+    )
+      .replace(/\s+/g, " ")
+      .trim();
+    const pendingPo = String(
+      document.getElementById("po-search-input")?.value || "",
+    ).trim();
+    const committedVendor = String(form.vendor_name?.value || "").trim();
+
+    if (!committedVendor && pendingVendor) {
+      setVendorValue(pendingVendor.slice(0, 180), true);
+    }
+    if (pendingPo) {
+      addPoChoice(pendingPo);
+    }
+  }
+
   window.explicitSecuritySubmit = async function explicitSecuritySubmit(
     button,
   ) {
@@ -8326,6 +8354,8 @@ function securityFormMatchesRowsForPrint(rows = []) {
       showToast?.("Form Security tidak ditemukan.");
       return;
     }
+
+    commitPendingManualSecurityInputs(form);
 
     if (explicitSubmitRunning || window.securitySubmitBusy) {
       showToast?.("Submit sedang diproses, tunggu sebentar.");
