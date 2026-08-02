@@ -352,6 +352,10 @@ async function submitSecurityRowsToBackend(rows = []) {
         actual_quantity: row.actual_quantity,
         count_sku: row.count_po_sku,
         checker_status: row.checker_status || "PENDING",
+        is_manual:
+          row.is_manual_po === true ||
+          row.is_manual_vendor === true ||
+          String(row.data_source || "").toUpperCase() === "MANUAL",
       })),
     };
   });
@@ -4607,10 +4611,15 @@ async function submitSecurity(e) {
                 ? getOperationalDateKey(registerTime)
                 : "",
             data_source:
-              typeof getManualSecurityEntry === "function" &&
-              getManualSecurityEntry()?.valid
+              item.data_source === "MANUAL" ||
+              item.is_manual_po ||
+              item.is_manual_vendor ||
+              (typeof getManualSecurityEntry === "function" &&
+                getManualSecurityEntry()?.valid)
                 ? "MANUAL"
                 : "BACKEND",
+            is_manual_po: item.is_manual_po === true,
+            is_manual_vendor: item.is_manual_vendor === true,
           });
         });
       });

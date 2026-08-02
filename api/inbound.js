@@ -1050,12 +1050,27 @@ async function createTicketRecord(client, body, operational = operationalWindowW
 
   const poNumbers = [...new Set(poRows.map((po) => clean(po.po_number)).filter(Boolean))];
   if (poNumbers.length !== poRows.length) throw new Error("po_number wajib diisi.");
-  const knownPos = await client.query(
-    `SELECT DISTINCT po_number FROM superset_po_master WHERE po_number IN (${poNumbers.map((_, i) => `$${i + 1}`).join(",")})`,
-    poNumbers,
-  );
-  if (knownPos.rows.length !== poNumbers.length) {
-    throw new Error("Ada PO yang tidak ditemukan di master MotherDuck.");
+  const masterPoNumbers = [
+    ...new Set(
+      poRows
+        .filter((po) => po.is_manual !== true)
+        .map((po) => clean(po.po_number))
+        .filter(Boolean),
+    ),
+  ];
+  if (masterPoNumbers.length) {
+    const knownPos = await client.query(
+      `SELECT DISTINCT po_number FROM superset_po_master WHERE po_number IN (${masterPoNumbers.map((_, i) => `$${i + 1}`).join(",")})`,
+      masterPoNumbers,
+    );
+    if (knownPos.rows.length !== masterPoNumbers.length) {
+      throw new Error("Ada PO yang tidak ditemukan di master MotherDuck. Pilih opsi PO manual jika memang belum tersedia.");
+    }
+  }
+  for (const po of poRows.filter((item) => item.is_manual === true)) {
+    if (!clean(po.vendor_name) && !clean(ticket.vendor_name)) {
+      throw new Error("Vendor Name wajib diisi untuk PO manual.");
+    }
   }
 
   // Nomor queue selalu dihitung di transaksi backend. Insert sebelumnya dalam

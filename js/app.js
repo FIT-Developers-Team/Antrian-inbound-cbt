@@ -4115,18 +4115,33 @@ function getVendorValue() {
   ).trim();
 }
 
+function isMasterVendorValue(value = "") {
+  const key = normalizeKey(value);
+  return Boolean(
+    key &&
+      (state.options.vendor_name || []).some(
+        (vendor) => normalizeKey(vendor) === key,
+      ),
+  );
+}
+
 function setVendorValue(value = "", trigger = true) {
   const safeValue = String(value || "").trim();
+  const isManual = Boolean(safeValue && !isMasterVendorValue(safeValue));
   const hidden = document.getElementById("vendor-name-value");
   const search = document.getElementById("vendor-search-input");
   const label = document.getElementById("vendor-selected-label");
 
-  if (hidden) hidden.value = safeValue;
+  if (hidden) {
+    hidden.value = safeValue;
+    hidden.dataset.manualVendor = isManual ? "true" : "false";
+  }
   if (search) search.value = "";
   if (label) {
     label.innerHTML = safeValue
       ? `<span class="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/25 text-primary px-2 py-1 text-[11px] font-extrabold max-w-full">
           <span class="break-words">${esc(safeValue)}</span>
+          ${isManual ? '<span class="rounded bg-warning/15 text-warning px-1.5 py-0.5 text-[9px]">MANUAL</span>' : ""}
           <button type="button" class="w-5 h-5 rounded-full bg-primary/10 hover:bg-primary/20 leading-none shrink-0" onclick="event.stopPropagation(); clearVendorChoice()" title="Hapus vendor">×</button>
         </span>`
       : `<span class="text-[12px] text-on-surface-variant px-1">Belum ada vendor dipilih</span>`;
@@ -4211,7 +4226,7 @@ function vendorCustomSelectInput(value = "") {
         <div id="vendor-dropdown-list"></div>
       </div>
     </div>
-    <span class="form-help">Pilih vendor dari dropdown custom. Setelah vendor dipilih, PO Number otomatis filter sesuai vendor.</span>
+    <span class="form-help">Pilih hasil master. Jika tidak ditemukan, ketik nama lengkap lalu pilih <b>Gunakan vendor manual</b>.</span>
   </label>`;
 }
 
@@ -4233,15 +4248,23 @@ function filterVendorDropdown() {
 
   const options = getFilteredVendorOptions();
   const q = getVendorSearchText();
+  const exactMaster = isMasterVendorValue(q);
+  const manualAction =
+    q && !exactMaster
+      ? `<button type="button" onclick="commitManualVendor(event)" class="w-full mb-2 px-3 py-3 rounded-lg bg-warning/10 border border-warning/30 hover:bg-warning/20 text-left touch-manipulation">
+          <span class="block text-[10px] text-warning font-extrabold uppercase">Vendor tidak ada di master?</span>
+          <span class="block mt-1 font-bold text-[12px] sm:text-[13px] text-on-surface break-words">Gunakan manual: ${esc(q)}</span>
+        </button>`
+      : "";
 
   if (!options.length) {
-    list.innerHTML = `<div class="px-3 py-3 text-[12px] text-on-surface-variant">${
+    list.innerHTML = `${manualAction}<div class="px-3 py-3 text-[12px] text-on-surface-variant">${
       q ? "Vendor tidak ditemukan." : "Vendor belum tersedia dari Data V2."
     }</div>`;
     return;
   }
 
-  list.innerHTML = options
+  list.innerHTML = manualAction + options
     .map((vendor) => {
       const poCount = (state.options.po_number || []).filter((po) =>
         vendorMatchesFilter(getPoVendor(po), vendor),
@@ -4254,6 +4277,18 @@ function filterVendorDropdown() {
       </button>`;
     })
     .join("");
+}
+
+function commitManualVendor(event = null) {
+  event?.preventDefault?.();
+  event?.stopPropagation?.();
+  const vendor = getVendorSearchText().replace(/\s+/g, " ").trim().slice(0, 180);
+  if (!vendor) return showToast("Ketik Vendor Name manual terlebih dahulu.");
+  setVendorValue(vendor, true);
+  document.getElementById("vendor-dropdown")?.classList.add("hidden");
+  showToast(`Vendor manual digunakan: ${vendor}`);
+  const poSearch = document.getElementById("po-search-input");
+  if (poSearch && !isMobileTouchFormDevice()) poSearch.focus();
 }
 
 function selectVendorChoice(encoded) {
@@ -4281,6 +4316,7 @@ function handleVendorSearchKeydown(event) {
     event.preventDefault();
     const first = getFilteredVendorOptions()[0];
     if (first) selectVendorChoice(poEncode(first));
+    else commitManualVendor(event);
   } else if (event.key === "Escape") {
     document.getElementById("vendor-dropdown")?.classList.add("hidden");
   }
@@ -4313,7 +4349,7 @@ function poMultiSelectInput(value = "") {
         onclick="handleCustomSearchContainerClick(event, 'po-search-input', 'po')">
         <div id="po-selected-chips" class="contents">${chipHtml}</div>
         <input id="po-search-input" type="text" class="min-w-[150px] sm:min-w-[220px] flex-1 bg-transparent border-0 outline-none focus:ring-0 p-1 text-on-surface placeholder:text-on-surface-variant/70 text-sm sm:text-base" placeholder="Cari PO sesuai vendor..." autocomplete="off" onfocus="openPoDropdown()" onblur="closePoDropdownSoon()" oninput="handlePoSearchInput(this)" onkeydown="handlePoSearchKeydown(event)" />
-        <button type="button" class="thin-tab rounded-md px-3 py-2 text-[11px] font-extrabold shrink-0" onclick="event.stopPropagation(); addPoFromSearch()">Tambah</button>
+        <button type="button" class="thin-tab rounded-md px-3 py-2 text-[11px] font-extrabold shrink-0" onclick="event.stopPropagation(); addPoFromSearch()">Tambah / Manual</button>
       </div>
       <div id="po-dropdown"
         onpointerdown="window.__poDropdownInteracting=true; setTimeout(()=>window.__poDropdownInteracting=false,500)"
@@ -4322,7 +4358,7 @@ function poMultiSelectInput(value = "") {
         <div id="po-dropdown-list"></div>
       </div>
     </div>
-    <span class="form-help">PO list otomatis mengikuti Vendor Name. Jika 1 plat memilih banyak PO vendor sama, tetap jadi 1 antrian/mobil.</span>
+    <span class="form-help">PO list mengikuti Vendor Name. Jika PO tidak ada, ketik nomor lengkap lalu tekan <b>Tambah / Manual</b> atau Enter.</span>
   </label>`;
 }
 
@@ -12360,6 +12396,18 @@ window.initShader = function initShaderDisabled() {
     ).trim();
     const vendorFilter = getSelectedVendorFilter();
     const registeredCount = getRegisteredPoSet().size;
+    const queryKey = normalizeKey(query);
+    const queryIsMaster = (state.options.po_number || []).some(
+      (po) => normalizeKey(po) === queryKey,
+    );
+    const queryIsRegistered = queryKey && getRegisteredPoSet().has(queryKey);
+    const manualAction =
+      query && !queryIsMaster && !queryIsRegistered
+        ? `<button type="button" onpointerdown="preventDropdownBlurSelect(event)" onclick="event.preventDefault(); event.stopPropagation(); addPoFromSearch(); closePoDropdownV162()" class="w-full mb-2 px-3 py-3 rounded-lg bg-warning/10 border border-warning/30 hover:bg-warning/20 text-left touch-manipulation">
+            <span class="block text-[10px] text-warning font-extrabold uppercase">PO tidak ada di master?</span>
+            <span class="block mt-1 font-queue-id text-[12px] sm:text-[13px] text-on-surface break-all">Gunakan PO manual: ${esc(query)}</span>
+          </button>`
+        : "";
 
     // Hapus pilihan yang sudah tidak ada di list aktif/vendor sekarang.
     const available = new Set(options.map((po) => normalizeKey(po)));
@@ -12375,11 +12423,11 @@ window.initShader = function initShaderDisabled() {
           ? "PO tidak ada untuk vendor/filter tersebut, atau PO sudah pernah daftar."
           : "Belum ada PO available untuk vendor ini."
         : "Pilih Vendor Name dulu supaya list PO terfilter.";
-      list.innerHTML = `<div class="px-3 py-3 text-[12px] text-on-surface-variant">${message}${registeredCount ? `<div class="mt-1 text-warning font-bold">${registeredCount} PO sudah terdaftar dan disembunyikan.</div>` : ""}</div>`;
+      list.innerHTML = `${manualAction}<div class="px-3 py-3 text-[12px] text-on-surface-variant">${message}${registeredCount ? `<div class="mt-1 text-warning font-bold">${registeredCount} PO sudah terdaftar dan disembunyikan.</div>` : ""}</div>`;
       return;
     }
 
-    list.innerHTML = `<div class="space-y-1 pb-14">
+    list.innerHTML = `${manualAction}<div class="space-y-1 pb-14">
       ${options
         .map((po) => {
           const meta = getPoMeta(po);

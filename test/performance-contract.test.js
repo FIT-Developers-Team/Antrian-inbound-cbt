@@ -8,6 +8,10 @@ const frontendSource = fs.readFileSync(
   path.join(__dirname, "..", "js", "api_v2.js"),
   "utf8",
 );
+const appSource = fs.readFileSync(
+  path.join(__dirname, "..", "js", "app.js"),
+  "utf8",
+);
 const backendSource = fs.readFileSync(
   path.join(__dirname, "..", "api", "inbound.js"),
   "utf8",
@@ -49,6 +53,7 @@ test("security multi-ticket submit uses one bulk HTTP request", async () => {
     ticket_id: `T-${index + 1}`,
     queue_no: `REG 1-${index + 1}`,
     po_number: `PO-${index + 1}`,
+    data_source: index === 0 ? "MANUAL" : "BACKEND",
   }));
 
   const result = await context.__submit(rows);
@@ -56,7 +61,16 @@ test("security multi-ticket submit uses one bulk HTTP request", async () => {
   assert.equal(calls.length, 1);
   assert.equal(calls[0].action, "create_tickets_bulk");
   assert.equal(calls[0].payload.tickets.length, 6);
+  assert.equal(calls[0].payload.tickets[0].pos[0].is_manual, true);
+  assert.equal(calls[0].payload.tickets[1].pos[0].is_manual, false);
   assert.equal(result.rows.length, 6);
+});
+
+test("Daftar exposes explicit manual vendor and PO choices", () => {
+  assert.match(appSource, /function commitManualVendor/);
+  assert.match(appSource, /Gunakan vendor manual/);
+  assert.match(appSource, /Gunakan PO manual/);
+  assert.match(appSource, /Tambah \/ Manual/);
 });
 
 test("auto sync polls no faster than every ten seconds", () => {
@@ -244,6 +258,57 @@ test("bulk backend keeps queue sequences independent per slot", async () => {
 
   assert.deepEqual(result.created.map((ticket) => ticket.queue_no), ["REG 1-1", "REG 1-2", "REG 2-1"]);
   assert.deepEqual(transactionLog, ["BEGIN", "COMMIT"]);
+});
+
+test("bulk backend accepts an explicitly manual PO outside Superset master", async () => {
+  const { createTicketsBulk } = require("../api/inbound.js")._test;
+  let masterLookupCount = 0;
+  const client = {
+    async query(sql, params = []) {
+      const normalized = String(sql).replace(/\s+/g, " ").trim();
+      if (["BEGIN", "COMMIT", "ROLLBACK"].includes(normalized)) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (normalized.startsWith("SELECT DISTINCT po_number FROM superset_po_master")) {
+        masterLookupCount += 1;
+        return { rows: [], rowCount: 0 };
+      }
+      if (normalized.startsWith("SELECT queue_no FROM tickets")) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (
+        normalized.startsWith("INSERT INTO tickets") ||
+        normalized.startsWith("INSERT INTO ticket_pos") ||
+        normalized.startsWith("INSERT INTO ticket_events")
+      ) {
+        return { rows: [], rowCount: 1 };
+      }
+      throw new Error(`Unexpected SQL in test: ${normalized} ${params}`);
+    },
+  };
+
+  const result = await createTicketsBulk(client, {
+    tickets: [
+      {
+        ticket: {
+          ticket_id: "T-MANUAL-1",
+          ticket_type: "REG",
+          slot: "3",
+          vendor_name: "PT VENDOR DARURAT",
+        },
+        pos: [
+          {
+            po_number: "PO-MANUAL-001",
+            vendor_name: "PT VENDOR DARURAT",
+            is_manual: true,
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.inserted_tickets, 1);
+  assert.equal(masterLookupCount, 0);
 });
 
 test("schema initialization is cached after the first request", async () => {
