@@ -370,6 +370,7 @@ test("schema initialization is cached after the first request", async () => {
 test("ticket creation queues one durable GSheet sync job per PO", async () => {
   const hooks = require("../api/inbound.js")._test;
   const queued = [];
+  let outboxInsertSql = "";
   const client = {
     async query(sql, params = []) {
       const normalized = String(sql).replace(/\s+/g, " ").trim();
@@ -383,6 +384,7 @@ test("ticket creation queues one durable GSheet sync job per PO", async () => {
         return { rows: [{ po_number: "PO-1" }, { po_number: "PO-2" }], rowCount: 2 };
       }
       if (normalized.startsWith("INSERT INTO gsheet_sync_outbox")) {
+        outboxInsertSql = normalized;
         queued.push(params[0]);
         return { rows: [], rowCount: 1 };
       }
@@ -409,6 +411,8 @@ test("ticket creation queues one durable GSheet sync job per PO", async () => {
   });
 
   assert.deepEqual(queued, ["TP-1", "TP-2"]);
+  assert.match(outboxInsertSql, /\bnow\(\)/i);
+  assert.doesNotMatch(outboxInsertSql, /\bCURRENT_TIMESTAMP\b/i);
 });
 
 test("GSheet worker uses legacy submitSecurity contract and marks rows synced", async () => {

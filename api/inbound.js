@@ -1449,11 +1449,11 @@ async function createTicketRecord(client, body, operational = operationalWindowW
     await client.query(
       `INSERT INTO gsheet_sync_outbox (
         ticket_po_id, ticket_id, sync_status, attempt_count, created_at, updated_at
-      ) VALUES ($1,$2,'PENDING',0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+      ) VALUES ($1,$2,'PENDING',0,now(),now())
       ON CONFLICT (ticket_po_id) DO UPDATE SET
         ticket_id = excluded.ticket_id, sync_status = 'PENDING',
         attempt_count = 0, last_error = NULL, synced_at = NULL,
-        updated_at = CURRENT_TIMESTAMP`,
+        updated_at = now()`,
       [ticketPoId, ticketId],
     );
   }
