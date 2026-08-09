@@ -29,6 +29,23 @@ var GSHEET_SYNC_HEADERS = [
 ];
 
 var GSHEET_SYNC_PLAIN_TEXT_HEADERS = {
+  Timestamp: true,
+  created_at: true,
+  register_time: true,
+  called_at: true,
+  updated_at: true,
+  completed_at: true,
+  start_unloading_at: true,
+  last_call_attempt_at: true,
+  expired_at: true,
+  sla_finished_at: true,
+  last_call_at: true,
+  waiting_gr_at: true,
+  done_gr_at: true,
+  handover_grn_at: true,
+  finish_unloading_at: true,
+  checker_started_at: true,
+  checker_done_at: true,
   ktp_6_digit: true,
   po_number: true,
   driver_waiting_duration: true,

@@ -194,6 +194,44 @@ function gsheetDuration(from, to) {
   return { text: `${hours}:${String(minutes % 60).padStart(2, "0")}:00`, minutes };
 }
 
+function gsheetDateTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return clean(value);
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Jakarta",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date).map((part) => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+}
+
+function gsheetSlaTargetHours(row) {
+  const fleet = clean(row.fleet_type).toUpperCase().replace(/\s+/g, " ");
+  const sku = Number(row.ticket_total_sku || row.count_po_sku || 0) || 0;
+  if (fleet.includes("FUSO") || fleet.includes("WINGBOX") || fleet.includes("WING BOX")) return 4;
+  if (["CDD", "CDDL", "CDE", "CDEL"].some((name) => fleet.includes(name))) return sku > 40 ? 4 : 2;
+  if (["VAN", "PICKUP", "PICK UP", "L300 BOX", "MOBIL", "GRANDMAX"].some((name) => fleet.includes(name))) return 1;
+  return 0;
+}
+
+function gsheetSlaStatus(row, targetHours) {
+  const status = clean(row.status).toUpperCase();
+  if (status.includes("EXPIRED") || row.expired_at) return "EXPIRED";
+  if (!targetHours) return "NO SLA";
+  const start = row.start_unloading_at ? new Date(row.start_unloading_at) : null;
+  if (!start || Number.isNaN(start.getTime())) return "WAITING START UNLOADING";
+  const final = row.ticket_all_done_gr === true || String(row.ticket_all_done_gr).toLowerCase() === "true";
+  const endValue = final ? (row.ticket_done_gr_at || row.done_gr_at) : new Date();
+  const end = endValue ? new Date(endValue) : null;
+  if (!end || Number.isNaN(end.getTime()) || end < start) return final ? "SLA OK" : "ON PROCESS";
+  const actualMinutes = Math.floor((end.getTime() - start.getTime()) / 60000);
+  const missed = actualMinutes > targetHours * 60;
+  if (final) return missed ? "SLA MISS" : "SLA OK";
+  return missed ? "SLA MISS" : "ON PROCESS";
+}
+
 function gsheetSixDigits(value) {
   const text = clean(value);
   return /^\d{1,6}$/.test(text) ? text.padStart(6, "0") : text;
@@ -213,8 +251,10 @@ function formatGsheetOutputRow(row) {
   const checker = gsheetDuration(row.checker_started_at, row.checker_done_at);
   const grWait = gsheetDuration(row.checker_done_at, row.done_gr_at);
   const inboundSla = gsheetDuration(row.start_unloading_at, finish || row.done_gr_at);
+  const slaTargetHours = gsheetSlaTargetHours(row);
+  const slaStatus = gsheetSlaStatus(row, slaTargetHours);
   return {
-    Timestamp: row.created_at || row.register_time || "",
+    Timestamp: gsheetDateTime(row.created_at || row.register_time),
     ticket_id: row.ticket_id || "", queue_no: row.queue_no || "",
     ticket_type: row.ticket_type || "", slot: row.slot || "",
     fleet_type: row.fleet_type || "", plat_number: row.plat_number || "",
@@ -223,30 +263,30 @@ function formatGsheetOutputRow(row) {
     po_number: gsheetPoNumber(row), total_po_qty: row.total_po_qty || 0,
     actual_quantity: row.actual_quantity || 0, count_po_sku: row.count_po_sku || 0,
     status: row.status || "", gate: row.gate || "", unload_sla: row.unload_sla || "",
-    source: row.source || "MotherDuck", created_at: row.created_at || "",
-    register_time: row.register_time || row.created_at || "", called_at: row.called_at || "",
-    updated_at: row.updated_at || row.po_updated_at || "",
-    completed_at: clean(row.status).toUpperCase() === "COMPLETED" ? finish : "",
-    start_unloading_at: row.start_unloading_at || "",
+    source: row.source || "MotherDuck", created_at: gsheetDateTime(row.created_at),
+    register_time: gsheetDateTime(row.register_time || row.created_at), called_at: gsheetDateTime(row.called_at),
+    updated_at: gsheetDateTime(row.updated_at || row.po_updated_at),
+    completed_at: clean(row.status).toUpperCase() === "COMPLETED" ? gsheetDateTime(finish) : "",
+    start_unloading_at: gsheetDateTime(row.start_unloading_at),
     driver_waiting_duration: driverWaiting.text, driver_waiting_minutes: driverWaiting.minutes,
     unloading_duration: unloading.text, unloading_duration_minutes: unloading.minutes,
-    sla_target_hours: "", sla_status: row.unload_sla || "",
+    sla_target_hours: slaTargetHours, sla_status: slaStatus,
     wa_call_status: "", wa_call_sent_at: "", wa_call_error: "",
     wa_call_provider: "", wa_call_target: "", call_count: row.call_count || 0,
-    last_call_attempt_at: row.last_call_at || "", expired_at: row.expired_at || "",
-    expired_reason: row.expired_reason || "", sla_finished_at: finish,
+    last_call_attempt_at: gsheetDateTime(row.last_call_at), expired_at: gsheetDateTime(row.expired_at),
+    expired_reason: row.expired_reason || "", sla_finished_at: gsheetDateTime(finish),
     operational_date: row.operational_date || "", data_source: "MotherDuck",
-    last_call_at: row.last_call_at || "", waiting_gr_at: row.checker_done_at || "",
-    done_gr_at: row.done_gr_at || "", handover_grn_at: row.handover_grn_at || "",
+    last_call_at: gsheetDateTime(row.last_call_at), waiting_gr_at: gsheetDateTime(row.checker_done_at),
+    done_gr_at: gsheetDateTime(row.done_gr_at), handover_grn_at: gsheetDateTime(row.handover_grn_at),
     wa_handover_status: "", wa_handover_sent_at: "", wa_handover_error: "",
     wa_handover_target: "", ticket_po_id: row.ticket_po_id || "",
     po_sequence: Number(row.po_sequence || 0),
     ticket_po_count: Number(row.ticket_po_count || 0),
     ticket_total_qty: Number(row.ticket_total_qty || 0),
     ticket_total_sku: Number(row.ticket_total_sku || 0),
-    finish_unloading_at: finish, checker_id: row.checker_id || "",
+    finish_unloading_at: gsheetDateTime(finish), checker_id: row.checker_id || "",
     checker_name: row.checker_name || "", checker_status: row.checker_status || "",
-    checker_started_at: row.checker_started_at || "", checker_done_at: row.checker_done_at || "",
+    checker_started_at: gsheetDateTime(row.checker_started_at), checker_done_at: gsheetDateTime(row.checker_done_at),
     checker_started_by: "", checker_done_by: "", checker_duration: checker.text,
     checker_duration_minutes: checker.minutes, gr_status: row.gr_status || "",
     done_gr_by: "", gr_wait_duration: grWait.text, gr_wait_minutes: grWait.minutes,
@@ -276,6 +316,9 @@ async function syncPendingGsheetRows(
         COUNT(*) OVER (PARTITION BY p.ticket_id) AS ticket_po_count,
         COALESCE(SUM(p.request_quantity) OVER (PARTITION BY p.ticket_id), 0) AS ticket_total_qty,
         COALESCE(SUM(p.count_sku) OVER (PARTITION BY p.ticket_id), 0) AS ticket_total_sku
+        , MAX(p.gr_done_at) OVER (PARTITION BY p.ticket_id) AS ticket_done_gr_at
+        , COUNT(*) FILTER (WHERE UPPER(COALESCE(p.gr_status, '')) = 'DONE GR') OVER (PARTITION BY p.ticket_id)
+            = COUNT(*) OVER (PARTITION BY p.ticket_id) AS ticket_all_done_gr
       FROM ticket_pos p
     )
     SELECT
