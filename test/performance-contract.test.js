@@ -531,6 +531,40 @@ test("GSheet target is configured server-side and has no stale URL fallback", ()
   assert.doesNotMatch(settingsSource, /script\.google\.com/);
 });
 
+test("GSheet rows match the 76-column waiting-list CSV contract", () => {
+  const hooks = require("../api/inbound.js")._test;
+  const output = hooks.formatGsheetOutputRow({
+    ticket_id: "IBT-TEST-01",
+    ticket_po_id: "IBT-TEST-01-PO-01",
+    status: "COMPLETED",
+    source: "SECURITY_INPUT",
+    created_at: "2026-08-08T09:39:27.134Z",
+    start_unloading_at: "2026-08-08T10:58:07.674Z",
+    finish_unloading_at: "2026-08-08T10:58:14.210Z",
+    checker_started_at: "2026-08-08T10:58:07.674Z",
+    checker_done_at: "2026-08-08T10:58:14.210Z",
+    done_gr_at: "2026-08-08T17:15:57.998Z",
+    unload_sla: "ON PROCESS",
+    po_sequence: 1,
+    ticket_po_count: 2,
+    ticket_total_qty: 600,
+    ticket_total_sku: 5,
+  });
+
+  assert.equal(hooks.GSHEET_OUTPUT_HEADERS.length, 76);
+  assert.deepEqual(Object.keys(output), hooks.GSHEET_OUTPUT_HEADERS);
+  assert.equal(output.Timestamp, "2026-08-08T09:39:27.134Z");
+  assert.equal(output.completed_at, "2026-08-08T10:58:14.210Z");
+  assert.equal(output.driver_waiting_duration, "01:19:00");
+  assert.equal(output.driver_waiting_minutes, 79);
+  assert.equal(output.gr_wait_duration, "06:18:00");
+  assert.equal(output.gr_wait_minutes, 378);
+  assert.equal(output.data_source, "MotherDuck");
+  assert.equal(output.ticket_po_count, 2);
+  assert.equal(output.ticket_total_qty, 600);
+  assert.equal(output.wa_ticket_status, "");
+});
+
 test("historical GSheet backfill is secret-protected", () => {
   const hooks = require("../api/inbound.js")._test;
   const previousSecret = process.env.GSHEET_BACKFILL_SECRET;

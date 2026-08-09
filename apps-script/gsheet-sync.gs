@@ -8,15 +8,24 @@ var GSHEET_SYNC_SPREADSHEET_ID = "1Q9R1TQuksL5pCc94vWfwKFUrzdN9nQlwXJZvtBxRbfE";
 var GSHEET_SYNC_SHEET_NAME = "Output form";
 
 var GSHEET_SYNC_HEADERS = [
-  "ticket_po_id", "ticket_id", "queue_no", "ticket_type", "status",
-  "vendor_name", "po_number", "total_po_qty", "actual_quantity", "count_po_sku",
-  "fleet_type", "plat_number", "driver_name", "phone_number", "ktp_6_digit",
-  "gate", "slot", "operational_date", "registered_by", "unload_sla", "source",
-  "register_time", "created_at", "updated_at", "called_at", "arrived_at",
-  "start_unloading_at", "finish_unloading_at", "expired_at", "expired_reason",
-  "call_count", "last_call_at", "checker_status", "gr_status", "checker_id",
-  "checker_name", "checker_started_at", "checker_done_at", "done_gr_at",
-  "handover_grn_at", "po_updated_at"
+  "Timestamp", "ticket_id", "queue_no", "ticket_type", "slot", "fleet_type",
+  "plat_number", "driver_name", "phone_number", "ktp_6_digit", "vendor_name",
+  "po_number", "total_po_qty", "actual_quantity", "count_po_sku", "status",
+  "gate", "unload_sla", "source", "created_at", "register_time", "called_at",
+  "updated_at", "completed_at", "start_unloading_at", "driver_waiting_duration",
+  "driver_waiting_minutes", "unloading_duration", "unloading_duration_minutes",
+  "sla_target_hours", "sla_status", "wa_call_status", "wa_call_sent_at",
+  "wa_call_error", "wa_call_provider", "wa_call_target", "call_count",
+  "last_call_attempt_at", "expired_at", "expired_reason", "sla_finished_at",
+  "operational_date", "data_source", "last_call_at", "waiting_gr_at", "done_gr_at",
+  "handover_grn_at", "wa_handover_status", "wa_handover_sent_at",
+  "wa_handover_error", "wa_handover_target", "ticket_po_id", "po_sequence",
+  "ticket_po_count", "ticket_total_qty", "ticket_total_sku", "finish_unloading_at",
+  "checker_id", "checker_name", "checker_status", "checker_started_at",
+  "checker_done_at", "checker_started_by", "checker_done_by", "checker_duration",
+  "checker_duration_minutes", "gr_status", "done_gr_by", "gr_wait_duration",
+  "gr_wait_minutes", "inbound_sla_duration", "inbound_sla_minutes",
+  "wa_ticket_status", "wa_ticket_sent_at", "wa_ticket_error", "wa_ticket_target"
 ];
 
 function doGet(e) {
