@@ -90,6 +90,7 @@ function gsheetSyncUpsertRows_(rows) {
     var sheet = spreadsheet.getSheetByName(GSHEET_SYNC_SHEET_NAME);
     if (!sheet) sheet = spreadsheet.insertSheet(GSHEET_SYNC_SHEET_NAME);
     var headers = gsheetSyncEnsureHeaders_(sheet);
+    gsheetSyncPreparePlainTextColumns_(sheet, headers);
     var keyIndex = headers.indexOf("ticket_po_id");
     if (keyIndex < 0) throw new Error("Header ticket_po_id tidak tersedia");
 
@@ -158,9 +159,18 @@ function gsheetSyncEnsureHeaders_(sheet) {
 
 function gsheetSyncSafeCell_(value, header) {
   if (value === undefined || value === null) return "";
-  if (GSHEET_SYNC_PLAIN_TEXT_HEADERS[header] && value !== "") return "'" + String(value);
+  if (GSHEET_SYNC_PLAIN_TEXT_HEADERS[header] && value !== "") return String(value);
   if (typeof value === "string" && /^[=+@]/.test(value)) return "'" + value;
   return value;
+}
+
+function gsheetSyncPreparePlainTextColumns_(sheet, headers) {
+  var maxRow = Math.max(sheet.getMaxRows(), 2);
+  var ranges = Object.keys(GSHEET_SYNC_PLAIN_TEXT_HEADERS).map(function(header) {
+    var index = headers.indexOf(header);
+    return index < 0 ? "" : sheet.getRange(2, index + 1, maxRow - 1, 1).getA1Notation();
+  }).filter(function(value) { return Boolean(value); });
+  if (ranges.length) sheet.getRangeList(ranges).setNumberFormat("@");
 }
 
 function gsheetSyncParseBody_(e) {

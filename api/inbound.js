@@ -260,7 +260,7 @@ async function syncPendingGsheetRows(
 
   const pending = await client.query(`WITH ranked_pos AS (
       SELECT p.*,
-        ROW_NUMBER() OVER (PARTITION BY p.ticket_id ORDER BY p.created_at ASC) AS po_sequence,
+        ROW_NUMBER() OVER (PARTITION BY p.ticket_id ORDER BY p.created_at ASC, p.rowid ASC) AS po_sequence,
         COUNT(*) OVER (PARTITION BY p.ticket_id) AS ticket_po_count,
         COALESCE(SUM(p.request_quantity) OVER (PARTITION BY p.ticket_id), 0) AS ticket_total_qty,
         COALESCE(SUM(p.count_sku) OVER (PARTITION BY p.ticket_id), 0) AS ticket_total_sku
