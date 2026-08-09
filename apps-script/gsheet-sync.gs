@@ -28,6 +28,16 @@ var GSHEET_SYNC_HEADERS = [
   "wa_ticket_status", "wa_ticket_sent_at", "wa_ticket_error", "wa_ticket_target"
 ];
 
+var GSHEET_SYNC_PLAIN_TEXT_HEADERS = {
+  ktp_6_digit: true,
+  po_number: true,
+  driver_waiting_duration: true,
+  unloading_duration: true,
+  checker_duration: true,
+  gr_wait_duration: true,
+  inbound_sla_duration: true
+};
+
 function doGet(e) {
   var action = String((e && e.parameter && e.parameter.action) || "").trim();
   if (action !== "health") return gsheetSyncJson_({ status: "error", message: "Unknown action" });
@@ -103,7 +113,7 @@ function gsheetSyncUpsertRows_(rows) {
         return;
       }
       var values = headers.map(function(header) {
-        return gsheetSyncSafeCell_(row[header]);
+        return gsheetSyncSafeCell_(row[header], header);
       });
       var existing = existingKeys[key];
       if (existing && existing.rowNumber > 0) {
@@ -146,8 +156,9 @@ function gsheetSyncEnsureHeaders_(sheet) {
   return headers;
 }
 
-function gsheetSyncSafeCell_(value) {
+function gsheetSyncSafeCell_(value, header) {
   if (value === undefined || value === null) return "";
+  if (GSHEET_SYNC_PLAIN_TEXT_HEADERS[header] && value !== "") return "'" + String(value);
   if (typeof value === "string" && /^[=+@]/.test(value)) return "'" + value;
   return value;
 }

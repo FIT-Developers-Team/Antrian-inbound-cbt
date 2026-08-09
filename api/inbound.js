@@ -258,7 +258,15 @@ async function syncPendingGsheetRows(
     ? `AND o.ticket_po_id IN (${scopedIds.map((_, index) => `$${index + 1}`).join(",")})`
     : "";
 
-  const pending = await client.query(`SELECT
+  const pending = await client.query(`WITH ranked_pos AS (
+      SELECT p.*,
+        ROW_NUMBER() OVER (PARTITION BY p.ticket_id ORDER BY p.created_at ASC) AS po_sequence,
+        COUNT(*) OVER (PARTITION BY p.ticket_id) AS ticket_po_count,
+        COALESCE(SUM(p.request_quantity) OVER (PARTITION BY p.ticket_id), 0) AS ticket_total_qty,
+        COALESCE(SUM(p.count_sku) OVER (PARTITION BY p.ticket_id), 0) AS ticket_total_sku
+      FROM ticket_pos p
+    )
+    SELECT
       o.ticket_po_id,
       t.ticket_id, t.queue_no, t.ticket_type, t.status,
       COALESCE(p.vendor_name, t.vendor_name) AS vendor_name,
@@ -273,14 +281,9 @@ async function syncPendingGsheetRows(
       p.checker_id, p.checker_name, p.checking_started_at AS checker_started_at,
       p.checking_done_at AS checker_done_at, p.gr_done_at AS done_gr_at,
       p.handover_grn_at, p.updated_at AS po_updated_at,
-      (SELECT COUNT(*) FROM ticket_pos p2 WHERE p2.ticket_id = p.ticket_id) AS ticket_po_count,
-      (SELECT COALESCE(SUM(p2.request_quantity), 0) FROM ticket_pos p2 WHERE p2.ticket_id = p.ticket_id) AS ticket_total_qty,
-      (SELECT COALESCE(SUM(p2.count_sku), 0) FROM ticket_pos p2 WHERE p2.ticket_id = p.ticket_id) AS ticket_total_sku,
-      (SELECT COUNT(*) FROM ticket_pos p2
-       WHERE p2.ticket_id = p.ticket_id
-         AND (p2.created_at < p.created_at OR (p2.created_at = p.created_at AND p2.ticket_po_id <= p.ticket_po_id))) AS po_sequence
+      p.ticket_po_count, p.ticket_total_qty, p.ticket_total_sku, p.po_sequence
     FROM gsheet_sync_outbox o
-    JOIN ticket_pos p ON p.ticket_po_id = o.ticket_po_id
+    JOIN ranked_pos p ON p.ticket_po_id = o.ticket_po_id
     JOIN tickets t ON t.ticket_id = p.ticket_id
     WHERE (
       (o.sync_status IN ('PENDING', 'FAILED') AND o.attempt_count < 10)
