@@ -259,7 +259,11 @@ test("bulk backend keeps queue sequences independent per slot", async () => {
         tickets.push({ ticket_id: params[0], queue_no: params[1], slot: params[10] });
         return { rows: [], rowCount: 1 };
       }
-      if (normalized.startsWith("INSERT INTO ticket_pos") || normalized.startsWith("INSERT INTO ticket_events")) {
+      if (
+        normalized.startsWith("INSERT INTO ticket_pos") ||
+        normalized.startsWith("INSERT INTO ticket_events") ||
+        normalized.startsWith("INSERT INTO gsheet_sync_outbox")
+      ) {
         return { rows: [], rowCount: 1 };
       }
       throw new Error(`Unexpected SQL in test: ${normalized}`);
@@ -298,7 +302,8 @@ test("bulk backend accepts an explicitly manual PO outside Superset master", asy
       if (
         normalized.startsWith("INSERT INTO tickets") ||
         normalized.startsWith("INSERT INTO ticket_pos") ||
-        normalized.startsWith("INSERT INTO ticket_events")
+        normalized.startsWith("INSERT INTO ticket_events") ||
+        normalized.startsWith("INSERT INTO gsheet_sync_outbox")
       ) {
         return { rows: [], rowCount: 1 };
       }
@@ -360,4 +365,156 @@ test("schema initialization is cached after the first request", async () => {
 
   assert.ok(first.queries.length > 20, "first request should initialize the schema");
   assert.deepEqual(second.queries, ["USE inbound_cbt_app"]);
+});
+
+test("ticket creation queues one durable GSheet sync job per PO", async () => {
+  const hooks = require("../api/inbound.js")._test;
+  const queued = [];
+  const client = {
+    async query(sql, params = []) {
+      const normalized = String(sql).replace(/\s+/g, " ").trim();
+      if (["BEGIN", "COMMIT", "ROLLBACK"].includes(normalized)) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (normalized.startsWith("SELECT queue_no FROM tickets")) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (normalized.startsWith("SELECT DISTINCT po_number FROM superset_po_master")) {
+        return { rows: [{ po_number: "PO-1" }, { po_number: "PO-2" }], rowCount: 2 };
+      }
+      if (normalized.startsWith("INSERT INTO gsheet_sync_outbox")) {
+        queued.push(params[0]);
+        return { rows: [], rowCount: 1 };
+      }
+      if (
+        normalized.startsWith("INSERT INTO tickets") ||
+        normalized.startsWith("INSERT INTO ticket_pos") ||
+        normalized.startsWith("INSERT INTO ticket_events") ||
+        normalized.startsWith("INSERT INTO gsheet_sync_outbox")
+      ) {
+        return { rows: [], rowCount: 1 };
+      }
+      throw new Error(`Unexpected SQL in test: ${normalized} ${params}`);
+    },
+  };
+
+  await hooks.createTicketsBulk(client, {
+    tickets: [{
+      ticket: { ticket_id: "T-GSHEET-1", ticket_type: "REG", slot: "3" },
+      pos: [
+        { ticket_po_id: "TP-1", po_number: "PO-1" },
+        { ticket_po_id: "TP-2", po_number: "PO-2" },
+      ],
+    }],
+  });
+
+  assert.deepEqual(queued, ["TP-1", "TP-2"]);
+});
+
+test("GSheet worker uses legacy submitSecurity contract and marks rows synced", async () => {
+  const hooks = require("../api/inbound.js")._test;
+  const updates = [];
+  const client = {
+    async query(sql, params = []) {
+      const normalized = String(sql).replace(/\s+/g, " ").trim();
+      if (normalized.includes("FROM gsheet_sync_outbox o")) {
+        return {
+          rows: [
+            { ticket_po_id: "TP-1", ticket_id: "T-1", queue_no: "REG 3-1", po_number: "PO-1" },
+            { ticket_po_id: "TP-2", ticket_id: "T-1", queue_no: "REG 3-1", po_number: "PO-2" },
+          ],
+          rowCount: 2,
+        };
+      }
+      if (normalized.startsWith("UPDATE gsheet_sync_outbox SET sync_status = 'PROCESSING'")) {
+        return {
+          rows: params.map((ticketPoId) => ({ ticket_po_id: ticketPoId })),
+          rowCount: params.length,
+        };
+      }
+      if (normalized.startsWith("UPDATE gsheet_sync_outbox SET sync_status = 'SYNCED'")) {
+        updates.push(params);
+        return { rows: [], rowCount: params.length };
+      }
+      throw new Error(`Unexpected SQL in test: ${normalized} ${params}`);
+    },
+  };
+  const requests = [];
+  const fetchImpl = async (url, options) => {
+    requests.push({ url, options, body: JSON.parse(options.body) });
+    return {
+      ok: true,
+      status: 200,
+      async json() { return { status: "success" }; },
+    };
+  };
+
+  const result = await hooks.syncPendingGsheetRows(client, fetchImpl, {
+    url: "https://script.google.test/exec",
+    secret: "server-secret",
+    enabled: true,
+  });
+
+  assert.equal(result.synced, 2);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].body.action, "submitSecurity");
+  assert.equal(requests[0].body.payload.rows.length, 2);
+  assert.equal(requests[0].body.payload.sync_mode, "upsert");
+  assert.equal(requests[0].body.payload.sync_secret, "server-secret");
+  assert.deepEqual(updates, [["TP-1", "TP-2"]]);
+});
+
+test("GSheet worker records failure without failing the ticket transaction", async () => {
+  const hooks = require("../api/inbound.js")._test;
+  let failureParams = null;
+  const client = {
+    async query(sql, params = []) {
+      const normalized = String(sql).replace(/\s+/g, " ").trim();
+      if (normalized.includes("FROM gsheet_sync_outbox o")) {
+        return { rows: [{ ticket_po_id: "TP-FAIL", ticket_id: "T-FAIL" }], rowCount: 1 };
+      }
+      if (normalized.startsWith("UPDATE gsheet_sync_outbox SET sync_status = 'PROCESSING'")) {
+        return { rows: [{ ticket_po_id: "TP-FAIL" }], rowCount: 1 };
+      }
+      if (normalized.startsWith("UPDATE gsheet_sync_outbox SET sync_status = 'FAILED'")) {
+        failureParams = params;
+        return { rows: [], rowCount: 1 };
+      }
+      throw new Error(`Unexpected SQL in test: ${normalized} ${params}`);
+    },
+  };
+  const fetchImpl = async () => ({
+    ok: false,
+    status: 503,
+    async json() { return {}; },
+  });
+
+  await assert.rejects(
+    hooks.syncPendingGsheetRows(client, fetchImpl, {
+      url: "https://script.google.test/exec",
+      secret: "",
+      enabled: true,
+    }),
+    /HTTP 503/,
+  );
+  assert.equal(failureParams[0], "Google Sheets sync HTTP 503");
+  assert.deepEqual(failureParams.slice(1), ["TP-FAIL"]);
+});
+
+test("ticket response schedules GSheet sync without awaiting Google", () => {
+  const operationalJsonSource = extractFunction(
+    backendSource,
+    "function operationalJson",
+    "\nfunction cookieValue",
+  );
+  const schedulerSource = extractFunction(
+    backendSource,
+    "function scheduleGsheetSync",
+    "\nfunction operationalJson",
+  );
+
+  assert.match(operationalJsonSource, /scheduleGsheetSync\(\);/);
+  assert.doesNotMatch(operationalJsonSource, /await\s+scheduleGsheetSync/);
+  assert.match(schedulerSource, /waitUntil\(task\)/);
+  assert.match(schedulerSource, /\.catch\(\(error\) =>/);
 });

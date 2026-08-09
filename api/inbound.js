@@ -72,6 +72,8 @@ function isCronAuthorized(req) {
 
 const REALTIME_TOPIC = "inbound-cbt-operations";
 const REALTIME_EVENT = "ticket-changed";
+const LEGACY_GSHEET_SYNC_URL =
+  "https://script.google.com/macros/s/AKfycbyjby6UR8H0H397xkHbpx9F57BhPKeTCndn3Ic3aKpqvEeQnIGYUmwBMa9JzPBhIoeD/exec";
 
 function realtimeSettings() {
   const url = clean(process.env.SUPABASE_REALTIME_URL).replace(/\/+$/, "");
@@ -141,8 +143,138 @@ function scheduleRealtimeChange() {
   }
 }
 
+function gsheetSyncSettings(overrides = null) {
+  if (overrides) return overrides;
+  const enabledValue = clean(process.env.GSHEET_SYNC_ENABLED || "true").toLowerCase();
+  return {
+    enabled: !["0", "false", "off", "disabled"].includes(enabledValue),
+    url: clean(process.env.GSHEET_SYNC_URL || LEGACY_GSHEET_SYNC_URL),
+    secret: clean(process.env.GSHEET_SYNC_SECRET),
+  };
+}
+
+async function syncPendingGsheetRows(client, fetchImpl = fetch, settings = gsheetSyncSettings()) {
+  if (!settings.enabled || !settings.url) return { enabled: false, queued: 0, synced: 0 };
+
+  const pending = await client.query(`SELECT
+      o.ticket_po_id,
+      t.ticket_id, t.queue_no, t.ticket_type, t.status,
+      COALESCE(p.vendor_name, t.vendor_name) AS vendor_name,
+      t.fleet_type, t.plat_number, t.driver_name, t.driver_phone AS phone_number,
+      t.ktp_6_digit, t.gate, t.slot, t.operational_date, t.registered_by,
+      t.unload_sla, t.source, t.called_at, t.arrived_at,
+      t.start_unloading_at, t.done_unloading_at AS finish_unloading_at,
+      t.expired_at, t.expired_reason, t.call_count, t.last_call_at,
+      t.created_at AS register_time, t.created_at, t.updated_at,
+      p.po_number, p.request_quantity AS total_po_qty, p.actual_quantity,
+      p.count_sku AS count_po_sku, p.checker_status, p.gr_status,
+      p.checker_id, p.checker_name, p.checking_started_at AS checker_started_at,
+      p.checking_done_at AS checker_done_at, p.gr_done_at AS done_gr_at,
+      p.handover_grn_at, p.updated_at AS po_updated_at
+    FROM gsheet_sync_outbox o
+    JOIN ticket_pos p ON p.ticket_po_id = o.ticket_po_id
+    JOIN tickets t ON t.ticket_id = p.ticket_id
+    WHERE (
+      (o.sync_status IN ('PENDING', 'FAILED') AND o.attempt_count < 10)
+      OR (o.sync_status = 'PROCESSING' AND o.updated_at < CURRENT_TIMESTAMP - INTERVAL '5 minutes')
+    )
+    ORDER BY o.created_at ASC
+    LIMIT 100`);
+  if (!pending.rows.length) return { enabled: true, queued: 0, synced: 0 };
+
+  const ids = pending.rows.map((row) => clean(row.ticket_po_id)).filter(Boolean);
+  const placeholders = ids.map((_, index) => `$${index + 1}`).join(",");
+  const claimed = await client.query(
+    `UPDATE gsheet_sync_outbox
+     SET sync_status = 'PROCESSING', updated_at = CURRENT_TIMESTAMP
+     WHERE ticket_po_id IN (${placeholders})
+       AND (
+         sync_status IN ('PENDING', 'FAILED')
+         OR (sync_status = 'PROCESSING' AND updated_at < CURRENT_TIMESTAMP - INTERVAL '5 minutes')
+       )
+     RETURNING ticket_po_id`,
+    ids,
+  );
+  const claimedIds = new Set(claimed.rows.map((row) => clean(row.ticket_po_id)));
+  const rows = pending.rows.filter((row) => claimedIds.has(clean(row.ticket_po_id)));
+  if (!rows.length) return { enabled: true, queued: pending.rows.length, synced: 0 };
+
+  const claimedRowIds = rows.map((row) => clean(row.ticket_po_id));
+  const claimedPlaceholders = claimedRowIds.map((_, index) => `$${index + 1}`).join(",");
+  try {
+    const response = await fetchImpl(settings.url, {
+      method: "POST",
+      redirect: "follow",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "submitSecurity",
+        payload: {
+          rows,
+          send_whatsapp: false,
+          wa_event: "DISABLED",
+          sync_mode: "upsert",
+          sync_key: "ticket_po_id",
+          ...(settings.secret ? { sync_secret: settings.secret } : {}),
+        },
+        timestamp: new Date().toISOString(),
+      }),
+    });
+    let responsePayload = null;
+    try {
+      responsePayload = await response.json();
+    } catch {
+      responsePayload = null;
+    }
+    if (!response.ok) throw new Error(`Google Sheets sync HTTP ${response.status}`);
+    if (responsePayload?.status && responsePayload.status !== "success") {
+      throw new Error(responsePayload.message || "Google Sheets sync ditolak Apps Script");
+    }
+    await client.query(
+      `UPDATE gsheet_sync_outbox
+       SET sync_status = 'SYNCED', attempt_count = attempt_count + 1,
+           last_error = NULL, synced_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+       WHERE ticket_po_id IN (${claimedPlaceholders})`,
+      claimedRowIds,
+    );
+    return { enabled: true, queued: pending.rows.length, synced: rows.length };
+  } catch (error) {
+    await client.query(
+      `UPDATE gsheet_sync_outbox
+       SET sync_status = 'FAILED', attempt_count = attempt_count + 1,
+           last_error = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE ticket_po_id IN (${claimedRowIds.map((_, index) => `$${index + 2}`).join(",")})`,
+      [clean(error.message).slice(0, 500), ...claimedRowIds],
+    );
+    throw error;
+  }
+}
+
+async function drainGsheetSyncOutbox() {
+  const client = await getPool().connect();
+  try {
+    await ensureDatabaseReady(client);
+    return await syncPendingGsheetRows(client);
+  } finally {
+    client.release();
+  }
+}
+
+function scheduleGsheetSync() {
+  const task = drainGsheetSyncOutbox().catch((error) => {
+    // GSheet adalah mirror. Gangguan Google tidak boleh membatalkan transaksi
+    // antrean yang sudah berhasil di MotherDuck; job tetap FAILED untuk retry.
+    console.error("Google Sheets background sync gagal", error);
+  });
+  try {
+    waitUntil(task);
+  } catch {
+    void task;
+  }
+}
+
 function operationalJson(res, status, data) {
   scheduleRealtimeChange();
+  scheduleGsheetSync();
   return json(res, status, { ok: true, data });
 }
 
@@ -411,6 +543,16 @@ async function ensureSchema(client) {
     imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   )`);
   await client.query(`CREATE INDEX IF NOT EXISTS product_master_product_id_idx ON product_master(product_id)`);
+  await client.query(`CREATE TABLE IF NOT EXISTS gsheet_sync_outbox (
+    ticket_po_id VARCHAR PRIMARY KEY,
+    ticket_id VARCHAR NOT NULL,
+    sync_status VARCHAR NOT NULL DEFAULT 'PENDING',
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    last_error VARCHAR,
+    synced_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )`);
   await client.query(`CREATE TABLE IF NOT EXISTS ba_sequences (
     sequence_key VARCHAR PRIMARY KEY, last_number INTEGER NOT NULL DEFAULT 0,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -1053,16 +1195,27 @@ async function createTicketRecord(client, body, operational = operationalWindowW
   for (const po of poRows) {
     const poNumber = clean(po.po_number);
     if (!poNumber) throw new Error("po_number wajib diisi.");
+    const ticketPoId = clean(po.ticket_po_id) || randomUUID();
     await client.query(
       `INSERT INTO ticket_pos (
         ticket_po_id, ticket_id, po_number, vendor_name, request_quantity,
         actual_quantity, count_sku, checker_status
       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [
-        clean(po.ticket_po_id) || randomUUID(), ticketId, poNumber, clean(po.vendor_name) || clean(ticket.vendor_name) || null,
+        ticketPoId, ticketId, poNumber, clean(po.vendor_name) || clean(ticket.vendor_name) || null,
         Number(po.request_quantity || 0), Number(po.actual_quantity || 0),
         Number(po.count_sku || 0), clean(po.checker_status) || "PENDING",
       ],
+    );
+    await client.query(
+      `INSERT INTO gsheet_sync_outbox (
+        ticket_po_id, ticket_id, sync_status, attempt_count, created_at, updated_at
+      ) VALUES ($1,$2,'PENDING',0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)
+      ON CONFLICT (ticket_po_id) DO UPDATE SET
+        ticket_id = excluded.ticket_id, sync_status = 'PENDING',
+        attempt_count = 0, last_error = NULL, synced_at = NULL,
+        updated_at = CURRENT_TIMESTAMP`,
+      [ticketPoId, ticketId],
     );
   }
 
@@ -1391,4 +1544,5 @@ module.exports._test = {
   publishRealtimeChange,
   realtimePublicConfig,
   resetSchemaCacheForTests,
+  syncPendingGsheetRows,
 };
