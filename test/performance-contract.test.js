@@ -457,6 +457,7 @@ test("GSheet worker uses legacy submitSecurity contract and marks rows synced", 
 
   assert.equal(result.synced, 2);
   assert.equal(requests.length, 1);
+  assert.match(requests[0].url, /[?&]action=submitSecurity/);
   assert.equal(requests[0].body.action, "submitSecurity");
   assert.equal(requests[0].body.payload.rows.length, 2);
   assert.equal(requests[0].body.payload.sync_mode, "upsert");
@@ -517,4 +518,15 @@ test("ticket response schedules GSheet sync without awaiting Google", () => {
   assert.doesNotMatch(operationalJsonSource, /await\s+scheduleGsheetSync/);
   assert.match(schedulerSource, /waitUntil\(task\)/);
   assert.match(schedulerSource, /\.catch\(\(error\) =>/);
+});
+
+test("GSheet target is configured server-side and has no stale URL fallback", () => {
+  const settingsSource = extractFunction(
+    backendSource,
+    "function gsheetSyncSettings",
+    "\nasync function syncPendingGsheetRows",
+  );
+  assert.match(settingsSource, /process\.env\.GSHEET_SYNC_URL/);
+  assert.match(settingsSource, /process\.env\.GSHEET_SYNC_SECRET/);
+  assert.doesNotMatch(settingsSource, /script\.google\.com/);
 });

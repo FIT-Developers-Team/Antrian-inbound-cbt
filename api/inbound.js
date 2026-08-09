@@ -72,8 +72,6 @@ function isCronAuthorized(req) {
 
 const REALTIME_TOPIC = "inbound-cbt-operations";
 const REALTIME_EVENT = "ticket-changed";
-const LEGACY_GSHEET_SYNC_URL =
-  "https://script.google.com/macros/s/AKfycbyjby6UR8H0H397xkHbpx9F57BhPKeTCndn3Ic3aKpqvEeQnIGYUmwBMa9JzPBhIoeD/exec";
 
 function realtimeSettings() {
   const url = clean(process.env.SUPABASE_REALTIME_URL).replace(/\/+$/, "");
@@ -145,10 +143,11 @@ function scheduleRealtimeChange() {
 
 function gsheetSyncSettings(overrides = null) {
   if (overrides) return overrides;
-  const enabledValue = clean(process.env.GSHEET_SYNC_ENABLED || "true").toLowerCase();
+  const url = clean(process.env.GSHEET_SYNC_URL);
+  const enabledValue = clean(process.env.GSHEET_SYNC_ENABLED || (url ? "true" : "false")).toLowerCase();
   return {
     enabled: !["0", "false", "off", "disabled"].includes(enabledValue),
-    url: clean(process.env.GSHEET_SYNC_URL || LEGACY_GSHEET_SYNC_URL),
+    url,
     secret: clean(process.env.GSHEET_SYNC_SECRET),
   };
 }
@@ -202,7 +201,9 @@ async function syncPendingGsheetRows(client, fetchImpl = fetch, settings = gshee
   const claimedRowIds = rows.map((row) => clean(row.ticket_po_id));
   const claimedPlaceholders = claimedRowIds.map((_, index) => `$${index + 1}`).join(",");
   try {
-    const response = await fetchImpl(settings.url, {
+    const targetUrl = new URL(settings.url);
+    targetUrl.searchParams.set("action", "submitSecurity");
+    const response = await fetchImpl(targetUrl.toString(), {
       method: "POST",
       redirect: "follow",
       headers: { "Content-Type": "application/json" },
