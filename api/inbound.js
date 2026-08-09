@@ -318,7 +318,7 @@ async function backfillGsheetBatch(client, body, syncImpl = syncPendingGsheetRow
        synced_at, created_at, updated_at
      )
      SELECT ticket_po_id, ticket_id, 'PENDING', 0, NULL,
-            NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            NULL, now(), now()
      FROM ticket_pos
      WHERE ticket_po_id IN (${placeholders})
      ON CONFLICT (ticket_po_id) DO UPDATE SET
