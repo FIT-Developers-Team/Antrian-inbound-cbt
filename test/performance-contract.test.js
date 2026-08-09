@@ -572,6 +572,17 @@ test("GSheet rows match the 76-column waiting-list CSV contract", () => {
   assert.equal(output.ticket_po_count, 2);
   assert.equal(output.ticket_total_qty, 600);
   assert.equal(output.wa_ticket_status, "");
+
+  const completedWithoutDoneGr = hooks.formatGsheetOutputRow({
+    status: "COMPLETED",
+    fleet_type: "VAN",
+    ticket_total_sku: 2,
+    start_unloading_at: "2026-08-08T10:00:00.000Z",
+    finish_unloading_at: "2026-08-08T10:30:00.000Z",
+    ticket_all_done_gr: false,
+  });
+  assert.equal(completedWithoutDoneGr.sla_target_hours, 1);
+  assert.equal(completedWithoutDoneGr.sla_status, "SLA OK");
 });
 
 test("historical GSheet backfill is secret-protected", () => {

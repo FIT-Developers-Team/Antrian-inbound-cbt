@@ -222,8 +222,11 @@ function gsheetSlaStatus(row, targetHours) {
   if (!targetHours) return "NO SLA";
   const start = row.start_unloading_at ? new Date(row.start_unloading_at) : null;
   if (!start || Number.isNaN(start.getTime())) return "WAITING START UNLOADING";
-  const final = row.ticket_all_done_gr === true || String(row.ticket_all_done_gr).toLowerCase() === "true";
-  const endValue = final ? (row.ticket_done_gr_at || row.done_gr_at) : new Date();
+  const allDoneGr = row.ticket_all_done_gr === true || String(row.ticket_all_done_gr).toLowerCase() === "true";
+  const final = status.includes("COMPLETED") || allDoneGr;
+  const endValue = final
+    ? (row.ticket_done_gr_at || row.done_gr_at || row.finish_unloading_at)
+    : new Date();
   const end = endValue ? new Date(endValue) : null;
   if (!end || Number.isNaN(end.getTime()) || end < start) return final ? "SLA OK" : "ON PROCESS";
   const actualMinutes = Math.floor((end.getTime() - start.getTime()) / 60000);
