@@ -325,7 +325,7 @@ async function backfillGsheetBatch(client, body, syncImpl = syncPendingGsheetRow
        ticket_id = excluded.ticket_id,
        sync_status = 'PENDING', attempt_count = 0,
        last_error = NULL, synced_at = NULL,
-       updated_at = CURRENT_TIMESTAMP`,
+       updated_at = now()`,
     ids,
   );
 
