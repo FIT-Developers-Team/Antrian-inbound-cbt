@@ -194,6 +194,18 @@ function gsheetDuration(from, to) {
   return { text: `${hours}:${String(minutes % 60).padStart(2, "0")}:00`, minutes };
 }
 
+function gsheetSixDigits(value) {
+  const text = clean(value);
+  return /^\d{1,6}$/.test(text) ? text.padStart(6, "0") : text;
+}
+
+function gsheetPoNumber(row) {
+  const value = clean(row.po_number);
+  const match = clean(row.ticket_po_id).match(/-PO-(\d+)-\d+$/);
+  if (match && /^\d+$/.test(value) && Number(match[1]) === Number(value)) return match[1];
+  return value;
+}
+
 function formatGsheetOutputRow(row) {
   const finish = row.finish_unloading_at || "";
   const driverWaiting = gsheetDuration(row.created_at || row.register_time, row.start_unloading_at || finish);
@@ -207,8 +219,8 @@ function formatGsheetOutputRow(row) {
     ticket_type: row.ticket_type || "", slot: row.slot || "",
     fleet_type: row.fleet_type || "", plat_number: row.plat_number || "",
     driver_name: row.driver_name || "", phone_number: row.phone_number || "",
-    ktp_6_digit: row.ktp_6_digit || "", vendor_name: row.vendor_name || "",
-    po_number: row.po_number || "", total_po_qty: row.total_po_qty || 0,
+    ktp_6_digit: gsheetSixDigits(row.ktp_6_digit), vendor_name: row.vendor_name || "",
+    po_number: gsheetPoNumber(row), total_po_qty: row.total_po_qty || 0,
     actual_quantity: row.actual_quantity || 0, count_po_sku: row.count_po_sku || 0,
     status: row.status || "", gate: row.gate || "", unload_sla: row.unload_sla || "",
     source: row.source || "MotherDuck", created_at: row.created_at || "",
@@ -260,7 +272,7 @@ async function syncPendingGsheetRows(
 
   const pending = await client.query(`WITH ranked_pos AS (
       SELECT p.*,
-        ROW_NUMBER() OVER (PARTITION BY p.ticket_id ORDER BY p.created_at ASC, p.rowid ASC) AS po_sequence,
+        ROW_NUMBER() OVER (PARTITION BY p.ticket_id ORDER BY p.created_at ASC) AS po_sequence,
         COUNT(*) OVER (PARTITION BY p.ticket_id) AS ticket_po_count,
         COALESCE(SUM(p.request_quantity) OVER (PARTITION BY p.ticket_id), 0) AS ticket_total_qty,
         COALESCE(SUM(p.count_sku) OVER (PARTITION BY p.ticket_id), 0) AS ticket_total_sku

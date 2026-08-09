@@ -536,6 +536,8 @@ test("GSheet rows match the 76-column waiting-list CSV contract", () => {
   const output = hooks.formatGsheetOutputRow({
     ticket_id: "IBT-TEST-01",
     ticket_po_id: "IBT-TEST-01-PO-01",
+    ktp_6_digit: "2040",
+    po_number: "000553",
     status: "COMPLETED",
     source: "SECURITY_INPUT",
     created_at: "2026-08-08T09:39:27.134Z",
@@ -555,6 +557,8 @@ test("GSheet rows match the 76-column waiting-list CSV contract", () => {
   assert.deepEqual(Object.keys(output), hooks.GSHEET_OUTPUT_HEADERS);
   assert.equal(output.Timestamp, "2026-08-08T09:39:27.134Z");
   assert.equal(output.completed_at, "2026-08-08T10:58:14.210Z");
+  assert.equal(output.ktp_6_digit, "002040");
+  assert.equal(output.po_number, "000553");
   assert.equal(output.driver_waiting_duration, "01:19:00");
   assert.equal(output.driver_waiting_minutes, 79);
   assert.equal(output.gr_wait_duration, "06:18:00");

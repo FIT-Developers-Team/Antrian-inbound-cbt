@@ -159,7 +159,9 @@ function gsheetSyncEnsureHeaders_(sheet) {
 
 function gsheetSyncSafeCell_(value, header) {
   if (value === undefined || value === null) return "";
-  if (GSHEET_SYNC_PLAIN_TEXT_HEADERS[header] && value !== "") return String(value);
+  if (GSHEET_SYNC_PLAIN_TEXT_HEADERS[header] && value !== "") {
+    return "=\"" + String(value).replace(/\"/g, "\"\"") + "\"";
+  }
   if (typeof value === "string" && /^[=+@]/.test(value)) return "'" + value;
   return value;
 }
