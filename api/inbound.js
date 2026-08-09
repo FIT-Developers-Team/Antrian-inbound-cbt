@@ -70,6 +70,16 @@ function isCronAuthorized(req) {
   return Boolean(secret && authorization === `Bearer ${secret}`);
 }
 
+function isGsheetBackfillAuthorized(req) {
+  const expected = clean(process.env.GSHEET_BACKFILL_SECRET);
+  const supplied = clean(req.headers["x-gsheet-backfill-secret"]);
+  if (!expected || !supplied) return false;
+  const expectedBuffer = Buffer.from(expected);
+  const suppliedBuffer = Buffer.from(supplied);
+  return expectedBuffer.length === suppliedBuffer.length
+    && timingSafeEqual(expectedBuffer, suppliedBuffer);
+}
+
 const REALTIME_TOPIC = "inbound-cbt-operations";
 const REALTIME_EVENT = "ticket-changed";
 
@@ -152,8 +162,20 @@ function gsheetSyncSettings(overrides = null) {
   };
 }
 
-async function syncPendingGsheetRows(client, fetchImpl = fetch, settings = gsheetSyncSettings()) {
+async function syncPendingGsheetRows(
+  client,
+  fetchImpl = fetch,
+  settings = gsheetSyncSettings(),
+  onlyTicketPoIds = [],
+) {
   if (!settings.enabled || !settings.url) return { enabled: false, queued: 0, synced: 0 };
+
+  const scopedIds = Array.isArray(onlyTicketPoIds)
+    ? [...new Set(onlyTicketPoIds.map(clean).filter(Boolean))].slice(0, 100)
+    : [];
+  const scopedWhere = scopedIds.length
+    ? `AND o.ticket_po_id IN (${scopedIds.map((_, index) => `$${index + 1}`).join(",")})`
+    : "";
 
   const pending = await client.query(`SELECT
       o.ticket_po_id,
@@ -177,8 +199,9 @@ async function syncPendingGsheetRows(client, fetchImpl = fetch, settings = gshee
       (o.sync_status IN ('PENDING', 'FAILED') AND o.attempt_count < 10)
       OR (o.sync_status = 'PROCESSING' AND o.updated_at < CURRENT_TIMESTAMP - INTERVAL '5 minutes')
     )
+    ${scopedWhere}
     ORDER BY o.created_at ASC
-    LIMIT 100`);
+    LIMIT 100`, scopedIds);
   if (!pending.rows.length) return { enabled: true, queued: 0, synced: 0 };
 
   const ids = pending.rows.map((row) => clean(row.ticket_po_id)).filter(Boolean);
@@ -248,6 +271,72 @@ async function syncPendingGsheetRows(client, fetchImpl = fetch, settings = gshee
     );
     throw error;
   }
+}
+
+async function gsheetBackfillStatus(client) {
+  const result = await client.query(`SELECT
+    (SELECT COUNT(*)::INTEGER FROM ticket_pos) AS total_rows,
+    (SELECT COUNT(*)::INTEGER FROM gsheet_sync_outbox WHERE sync_status = 'SYNCED') AS synced_rows,
+    (SELECT COUNT(*)::INTEGER FROM gsheet_sync_outbox WHERE sync_status = 'PENDING') AS pending_rows,
+    (SELECT COUNT(*)::INTEGER FROM gsheet_sync_outbox WHERE sync_status = 'FAILED') AS failed_rows`);
+  const row = result.rows[0] || {};
+  return {
+    total_rows: Number(row.total_rows || 0),
+    synced_rows: Number(row.synced_rows || 0),
+    pending_rows: Number(row.pending_rows || 0),
+    failed_rows: Number(row.failed_rows || 0),
+  };
+}
+
+async function backfillGsheetBatch(client, body, syncImpl = syncPendingGsheetRows) {
+  const cursor = clean(body.cursor);
+  const requestedLimit = Number(body.limit || 100);
+  const limit = Math.min(Math.max(Number.isFinite(requestedLimit) ? Math.floor(requestedLimit) : 100, 1), 100);
+  const candidates = await client.query(
+    `SELECT ticket_po_id, ticket_id
+     FROM ticket_pos
+     WHERE ($1 = '' OR ticket_po_id > $1)
+     ORDER BY ticket_po_id ASC
+     LIMIT ${limit}`,
+    [cursor],
+  );
+  if (!candidates.rows.length) {
+    return {
+      done: true,
+      cursor,
+      selected_rows: 0,
+      synced_rows: 0,
+      status: await gsheetBackfillStatus(client),
+    };
+  }
+
+  const ids = candidates.rows.map((row) => clean(row.ticket_po_id)).filter(Boolean);
+  const placeholders = ids.map((_, index) => `$${index + 1}`).join(",");
+  await client.query(
+    `INSERT INTO gsheet_sync_outbox (
+       ticket_po_id, ticket_id, sync_status, attempt_count, last_error,
+       synced_at, created_at, updated_at
+     )
+     SELECT ticket_po_id, ticket_id, 'PENDING', 0, NULL,
+            NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+     FROM ticket_pos
+     WHERE ticket_po_id IN (${placeholders})
+     ON CONFLICT (ticket_po_id) DO UPDATE SET
+       ticket_id = excluded.ticket_id,
+       sync_status = 'PENDING', attempt_count = 0,
+       last_error = NULL, synced_at = NULL,
+       updated_at = CURRENT_TIMESTAMP`,
+    ids,
+  );
+
+  const syncResult = await syncImpl(client, fetch, gsheetSyncSettings(), ids);
+  return {
+    done: candidates.rows.length < limit,
+    cursor: ids[ids.length - 1],
+    selected_rows: ids.length,
+    synced_rows: Number(syncResult.synced || 0),
+    status: await gsheetBackfillStatus(client),
+  };
 }
 
 async function drainGsheetSyncOutbox() {
@@ -1459,7 +1548,11 @@ module.exports = async (req, res) => {
       const apiKeyValid = isAuthorized(req);
       const cronSync = req.method === "GET" && action === "cron_sync_superset";
       let session = null;
-      if (action === "sync_superset_pos") {
+      if (action === "backfill_gsheet") {
+        if (req.method !== "POST" || !isGsheetBackfillAuthorized(req)) {
+          return json(res, 401, { ok: false, message: "Unauthorized" });
+        }
+      } else if (action === "sync_superset_pos") {
         if (!apiKeyValid) return json(res, 401, { ok: false, message: "Unauthorized" });
       } else if (cronSync) {
         if (!isCronAuthorized(req)) return json(res, 401, { ok: false, message: "Unauthorized" });
@@ -1500,6 +1593,9 @@ module.exports = async (req, res) => {
       }
 
       const body = requestBody;
+      if (req.method === "POST" && action === "backfill_gsheet") {
+        return json(res, 200, { ok: true, data: await backfillGsheetBatch(client, body) });
+      }
       if (req.method === "POST" && action === "sync_superset_pos") {
         return json(res, 200, { ok: true, data: await syncSupersetPoMaster(client) });
       }
@@ -1545,5 +1641,7 @@ module.exports._test = {
   publishRealtimeChange,
   realtimePublicConfig,
   resetSchemaCacheForTests,
+  backfillGsheetBatch,
+  isGsheetBackfillAuthorized,
   syncPendingGsheetRows,
 };

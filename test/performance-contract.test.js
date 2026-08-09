@@ -530,3 +530,71 @@ test("GSheet target is configured server-side and has no stale URL fallback", ()
   assert.match(settingsSource, /process\.env\.GSHEET_SYNC_SECRET/);
   assert.doesNotMatch(settingsSource, /script\.google\.com/);
 });
+
+test("historical GSheet backfill is secret-protected", () => {
+  const hooks = require("../api/inbound.js")._test;
+  const previousSecret = process.env.GSHEET_BACKFILL_SECRET;
+  process.env.GSHEET_BACKFILL_SECRET = "backfill-secret";
+  try {
+    assert.equal(hooks.isGsheetBackfillAuthorized({
+      headers: { "x-gsheet-backfill-secret": "backfill-secret" },
+    }), true);
+    assert.equal(hooks.isGsheetBackfillAuthorized({
+      headers: { "x-gsheet-backfill-secret": "wrong-secret" },
+    }), false);
+  } finally {
+    if (previousSecret === undefined) delete process.env.GSHEET_BACKFILL_SECRET;
+    else process.env.GSHEET_BACKFILL_SECRET = previousSecret;
+  }
+});
+
+test("historical GSheet backfill enqueues and syncs one idempotent cursor batch", async () => {
+  const hooks = require("../api/inbound.js")._test;
+  const queries = [];
+  const client = {
+    async query(sql, params = []) {
+      const normalized = String(sql).replace(/\s+/g, " ").trim();
+      queries.push({ sql: normalized, params });
+      if (normalized.startsWith("SELECT ticket_po_id, ticket_id FROM ticket_pos")) {
+        return {
+          rows: [
+            { ticket_po_id: "TP-101", ticket_id: "T-1" },
+            { ticket_po_id: "TP-102", ticket_id: "T-2" },
+          ],
+          rowCount: 2,
+        };
+      }
+      if (normalized.startsWith("INSERT INTO gsheet_sync_outbox")) {
+        return { rows: [], rowCount: 2 };
+      }
+      if (normalized.startsWith("SELECT (SELECT COUNT(*)::INTEGER FROM ticket_pos)")) {
+        return {
+          rows: [{ total_rows: 2, synced_rows: 2, pending_rows: 0, failed_rows: 0 }],
+          rowCount: 1,
+        };
+      }
+      throw new Error(`Unexpected SQL in test: ${normalized} ${params}`);
+    },
+  };
+  let scopedIds = null;
+  const syncImpl = async (_client, _fetch, _settings, ids) => {
+    scopedIds = ids;
+    return { synced: ids.length };
+  };
+
+  const result = await hooks.backfillGsheetBatch(client, { cursor: "TP-100", limit: 10 }, syncImpl);
+
+  assert.deepEqual(scopedIds, ["TP-101", "TP-102"]);
+  assert.deepEqual(queries[0].params, ["TP-100"]);
+  assert.deepEqual(queries[1].params, ["TP-101", "TP-102"]);
+  assert.equal(result.done, true);
+  assert.equal(result.cursor, "TP-102");
+  assert.equal(result.selected_rows, 2);
+  assert.equal(result.synced_rows, 2);
+  assert.deepEqual(result.status, {
+    total_rows: 2,
+    synced_rows: 2,
+    pending_rows: 0,
+    failed_rows: 0,
+  });
+});
