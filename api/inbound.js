@@ -517,6 +517,28 @@ function operationalJson(res, status, data) {
   return json(res, status, { ok: true, data });
 }
 
+async function requeueGsheetRowsForTickets(client, ticketIds = []) {
+  const ids = [...new Set((Array.isArray(ticketIds) ? ticketIds : [ticketIds]).map(clean).filter(Boolean))];
+  if (!ids.length) return 0;
+  const placeholders = ids.map((_, index) => `$${index + 1}`).join(",");
+  const result = await client.query(
+    `INSERT INTO gsheet_sync_outbox (
+       ticket_po_id, ticket_id, sync_status, attempt_count, last_error,
+       created_at, updated_at, synced_at
+     )
+     SELECT p.ticket_po_id, p.ticket_id, 'PENDING', 0, NULL,
+       CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL
+     FROM ticket_pos p
+     WHERE p.ticket_id IN (${placeholders})
+     ON CONFLICT (ticket_po_id) DO UPDATE SET
+       ticket_id = excluded.ticket_id, sync_status = 'PENDING',
+       attempt_count = 0, last_error = NULL, synced_at = NULL,
+       updated_at = CURRENT_TIMESTAMP`,
+    ids,
+  );
+  return Number(result.rowCount || 0);
+}
+
 function cookieValue(req, name) {
   const prefix = `${name}=`;
   return String(req.headers.cookie || "")
@@ -1272,6 +1294,7 @@ async function bulkCompleteOperational(client, body, session) {
         note: "Developer bulk completion; actual qty kosong memakai request qty PO.",
       });
     }
+    await requeueGsheetRowsForTickets(client, ticketIds);
     await client.query("COMMIT");
     return {
       operational_date: operationalDate,
@@ -1522,15 +1545,23 @@ async function updateTicketStatus(client, body) {
   if (timeColumn) fields.push(`${timeColumn} = CURRENT_TIMESTAMP`);
   values.push(ticketId);
 
-  const result = await client.query(
-    `UPDATE tickets SET ${fields.join(", ")} WHERE ticket_id = $${values.length} RETURNING *`,
-    values,
-  );
-  if (!result.rowCount) throw new Error("Ticket tidak ditemukan.");
-  await appendEvent(client, ticketId, `STATUS_${status}`, body.actor, {
-    gate: clean(body.gate) || null,
-  });
-  return result.rows[0];
+  await client.query("BEGIN");
+  try {
+    const result = await client.query(
+      `UPDATE tickets SET ${fields.join(", ")} WHERE ticket_id = $${values.length} RETURNING *`,
+      values,
+    );
+    if (!result.rowCount) throw new Error("Ticket tidak ditemukan.");
+    await appendEvent(client, ticketId, `STATUS_${status}`, body.actor, {
+      gate: clean(body.gate) || null,
+    });
+    await requeueGsheetRowsForTickets(client, [ticketId]);
+    await client.query("COMMIT");
+    return result.rows[0];
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  }
 }
 
 async function updateTicketPos(client, body, action) {
@@ -1632,10 +1663,12 @@ async function updateTicketPos(client, body, action) {
       if (status) { values.push(status); fields.push(`status = $${values.length}`); }
       if (clean(body.gate)) { values.push(clean(body.gate)); fields.push(`gate = $${values.length}`); }
       if (status === "CALLED") { fields.push("called_at = COALESCE(called_at, CURRENT_TIMESTAMP)", "last_call_at = CURRENT_TIMESTAMP", "call_count = call_count + 1"); }
+      if (status === "UNLOADING") fields.push("start_unloading_at = COALESCE(start_unloading_at, CURRENT_TIMESTAMP)");
       if (status === "WAITING GR") fields.push("done_unloading_at = COALESCE(done_unloading_at, CURRENT_TIMESTAMP)");
       if (status === "COMPLETED") fields.push("done_unloading_at = CURRENT_TIMESTAMP");
       await client.query(`UPDATE tickets SET ${fields.join(", ")} WHERE ticket_id = $1`, values);
     }
+    await requeueGsheetRowsForTickets(client, [ticketId]);
     const rows = await listOperationalRows(client, ticketId);
     await client.query("COMMIT");
     const allDoneGr = rows.length > 0 && rows.every((row) => String(row.gr_status).toUpperCase() === "DONE GR");
@@ -1796,4 +1829,6 @@ module.exports._test = {
   GSHEET_OUTPUT_HEADERS,
   isGsheetBackfillAuthorized,
   syncPendingGsheetRows,
+  updateTicketPos,
+  updateTicketStatus,
 };

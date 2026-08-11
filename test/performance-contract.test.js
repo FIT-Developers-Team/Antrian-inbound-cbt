@@ -347,6 +347,88 @@ test("Drop-Off has a dedicated navigation route", () => {
   assert.match(appSource, /domain\.mainQueueRows/);
 });
 
+test("Drop-Off start unloading persists its timestamp and requeues GSheet", async () => {
+  const { updateTicketPos } = require("../api/inbound.js")._test;
+  assert.equal(typeof updateTicketPos, "function");
+
+  const statements = [];
+  const client = {
+    async query(sql) {
+      const normalized = String(sql).replace(/\s+/g, " ").trim();
+      statements.push(normalized);
+      if (["BEGIN", "COMMIT", "ROLLBACK"].includes(normalized)) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (normalized.startsWith("UPDATE tickets SET")) {
+        return { rows: [], rowCount: 1 };
+      }
+      if (normalized.startsWith("INSERT INTO gsheet_sync_outbox")) {
+        return { rows: [], rowCount: 1 };
+      }
+      if (normalized.startsWith("SELECT t.ticket_id")) {
+        return {
+          rows: [{ ticket_id: "DROP-UNLOAD-1", status: "UNLOADING", gr_status: "PENDING" }],
+          rowCount: 1,
+        };
+      }
+      throw new Error(`Unexpected SQL in test: ${normalized}`);
+    },
+  };
+
+  await updateTicketPos(
+    client,
+    { ticket_id: "DROP-UNLOAD-1", status: "UNLOADING", gate: "Dock 01" },
+    "updatechecker",
+  );
+
+  assert.match(
+    statements.find((sql) => sql.startsWith("UPDATE tickets SET")) || "",
+    /start_unloading_at = COALESCE\(start_unloading_at, CURRENT_TIMESTAMP\)/,
+  );
+  const requeueSql = statements.find((sql) => sql.startsWith("INSERT INTO gsheet_sync_outbox")) || "";
+  assert.match(requeueSql, /ON CONFLICT \(ticket_po_id\) DO UPDATE SET/);
+  assert.match(requeueSql, /sync_status = 'PENDING'/);
+  assert.deepEqual(statements.filter((sql) => ["BEGIN", "COMMIT", "ROLLBACK"].includes(sql)), ["BEGIN", "COMMIT"]);
+});
+
+test("direct ticket status changes also requeue every GSheet PO row", async () => {
+  const { updateTicketStatus } = require("../api/inbound.js")._test;
+  assert.equal(typeof updateTicketStatus, "function");
+
+  const statements = [];
+  const client = {
+    async query(sql) {
+      const normalized = String(sql).replace(/\s+/g, " ").trim();
+      statements.push(normalized);
+      if (["BEGIN", "COMMIT", "ROLLBACK"].includes(normalized)) {
+        return { rows: [], rowCount: 0 };
+      }
+      if (normalized.startsWith("UPDATE tickets SET")) {
+        return { rows: [{ ticket_id: "DROP-DIRECT-1", status: "CALLED" }], rowCount: 1 };
+      }
+      if (normalized.startsWith("INSERT INTO ticket_events")) {
+        return { rows: [], rowCount: 1 };
+      }
+      if (normalized.startsWith("INSERT INTO gsheet_sync_outbox")) {
+        return { rows: [], rowCount: 1 };
+      }
+      throw new Error(`Unexpected SQL in test: ${normalized}`);
+    },
+  };
+
+  await updateTicketStatus(client, {
+    ticket_id: "DROP-DIRECT-1",
+    status: "CALLED",
+    actor: { role: "CHECKER", name: "QA" },
+  });
+
+  assert.match(
+    statements.find((sql) => sql.startsWith("INSERT INTO gsheet_sync_outbox")) || "",
+    /WHERE p\.ticket_id IN \(\$1\)/,
+  );
+  assert.deepEqual(statements.filter((sql) => ["BEGIN", "COMMIT", "ROLLBACK"].includes(sql)), ["BEGIN", "COMMIT"]);
+});
+
 test("bulk backend accepts an explicitly manual PO outside Superset master", async () => {
   const { createTicketsBulk } = require("../api/inbound.js")._test;
   let masterLookupCount = 0;
