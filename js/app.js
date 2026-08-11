@@ -13968,3 +13968,294 @@ if (window.__exportCsvV19) {
   pageMeta.ba_reject={title:"BA Reject",subtitle:"Buat, simpan, dan cetak berita acara penolakan barang"};["SPV","ADMIN","DEVELOPER"].forEach((role)=>{ROLE_ACCESS[role]=Array.isArray(ROLE_ACCESS[role])?ROLE_ACCESS[role]:[];if(!ROLE_ACCESS[role].includes("ba_reject"))ROLE_ACCESS[role].push("ba_reject");});
   const previousRender=renderPage;renderPage=function(page,toast=true){if(String(page||"")!=="ba_reject")return previousRender.call(this,page,toast);if(!isLoggedIn()||!canAccessPage("ba_reject"))return previousRender.call(this,getDefaultPageForRole(),toast);state.page="ba_reject";document.getElementById("page-title").textContent=pageMeta.ba_reject.title;document.getElementById("page-subtitle").textContent=pageMeta.ba_reject.subtitle;document.getElementById("page-root").innerHTML=window.pageBaRejectV20();applyRoleAccessUI();updateActiveNav("ba_reject");history.replaceState(null,"","#ba_reject");setTimeout(window.initBaRejectV20,0);if(toast)showToast("Buka menu BA Reject");};window.renderPage=renderPage;
 })();
+
+/* ==========================================================================
+ * V21 - DROP-OFF WORKSPACE
+ * DROP-OFF tetap memakai tabel ticket yang sama, tetapi seluruh proyeksi UI
+ * REG/VIP melewati satu seam domain agar antrean lintas hari tidak bercampur.
+ * ========================================================================== */
+(function installDropoffWorkspaceV21() {
+  if (window.__dropoffWorkspaceV21Installed) return;
+  window.__dropoffWorkspaceV21Installed = true;
+
+  const domain = window.DropoffDomain;
+  if (!domain) {
+    console.error("DropoffDomain tidak tersedia");
+    return;
+  }
+
+  function mainRowsV21(rows = []) {
+    return domain.mainQueueRows(rows);
+  }
+
+  function withMainDashboardV21(callback) {
+    if (!state.dashboard) return callback();
+    const keys = [
+      "queue",
+      "report_preview",
+      "history_queue",
+      "all_queue",
+      "priority",
+    ];
+    const saved = {};
+    keys.forEach((key) => {
+      saved[key] = state.dashboard[key];
+      if (Array.isArray(state.dashboard[key])) {
+        state.dashboard[key] = mainRowsV21(state.dashboard[key]);
+      }
+    });
+    try {
+      return callback();
+    } finally {
+      keys.forEach((key) => {
+        state.dashboard[key] = saved[key];
+      });
+    }
+  }
+
+  const checkerRowsBeforeV21 = window.getCheckerSectionRows;
+  if (typeof checkerRowsBeforeV21 === "function") {
+    window.getCheckerSectionRows = function getCheckerSectionRowsV21() {
+      return withMainDashboardV21(() =>
+        mainRowsV21(checkerRowsBeforeV21.apply(this, arguments)),
+      );
+    };
+    try { getCheckerSectionRows = window.getCheckerSectionRows; } catch (error) {}
+  }
+
+  const checkerCountsBeforeV21 = window.checkerSectionCounts;
+  if (typeof checkerCountsBeforeV21 === "function") {
+    window.checkerSectionCounts = function checkerSectionCountsV21() {
+      return withMainDashboardV21(() => checkerCountsBeforeV21.apply(this, arguments));
+    };
+    try { checkerSectionCounts = window.checkerSectionCounts; } catch (error) {}
+  }
+
+  const checkerActiveBeforeV21 = window.getCheckerActiveRows;
+  if (typeof checkerActiveBeforeV21 === "function") {
+    window.getCheckerActiveRows = function getCheckerActiveRowsV21() {
+      return withMainDashboardV21(() =>
+        mainRowsV21(checkerActiveBeforeV21.apply(this, arguments)),
+      );
+    };
+    try { getCheckerActiveRows = window.getCheckerActiveRows; } catch (error) {}
+  }
+
+  const monitorBeforeV21 = window.pageMonitor;
+  if (typeof monitorBeforeV21 === "function") {
+    window.pageMonitor = function pageMonitorWithoutDropoffV21() {
+      return withMainDashboardV21(() => monitorBeforeV21.apply(this, arguments));
+    };
+    try { pageMonitor = window.pageMonitor; } catch (error) {}
+  }
+
+  const reportBeforeV21 = window.pageLaporan;
+  if (typeof reportBeforeV21 === "function") {
+    window.pageLaporan = function pageLaporanWithoutDropoffV21() {
+      return withMainDashboardV21(() => reportBeforeV21.apply(this, arguments));
+    };
+    try { pageLaporan = window.pageLaporan; } catch (error) {}
+  }
+
+  const latestCallBeforeV21 = window.getLatestCallTicket;
+  if (typeof latestCallBeforeV21 === "function") {
+    window.getLatestCallTicket = function getLatestMainCallTicketV21(queue) {
+      const source = Array.isArray(queue) ? queue : state.dashboard?.queue || [];
+      return latestCallBeforeV21.call(this, mainRowsV21(source));
+    };
+    try { getLatestCallTicket = window.getLatestCallTicket; } catch (error) {}
+  }
+
+  function dropoffSourceRowsV21() {
+    const historyRows = state.dashboard?.history_queue;
+    const source = Array.isArray(historyRows) && historyRows.length
+      ? historyRows
+      : state.dashboard?.queue || [];
+    const now = Date.now();
+    return domain.sortDropoffs(source).filter((row) => {
+      if (!domain.isTerminal(row)) return true;
+      const end = parseInboundDateSafe(
+        row.completed_at || row.expired_at || row.updated_at || "",
+      );
+      return end && now - end.getTime() <= 48 * 60 * 60 * 1000;
+    });
+  }
+
+  function dropoffCanActV21() {
+    const role = normalizeRole(getAuthUser?.()?.role || "");
+    return ["SPV", "ADMIN", "CHECKER", "DEVELOPER"].includes(role);
+  }
+
+  function dropoffGateOptionsV21(selected = "") {
+    const current = String(selected || "").trim();
+    const gates = typeof getCibitungGateOptions === "function"
+      ? getCibitungGateOptions()
+      : state.options?.gate || [];
+    return `<option value="">Pilih Gate</option>${gates
+      .map((gate) => `<option value="${esc(gate)}" ${String(gate) === current ? "selected" : ""}>${esc(gate)}</option>`)
+      .join("")}`;
+  }
+
+  function dropoffStatusToneV21(status = "WAITING") {
+    const safe = String(status || "WAITING").toUpperCase();
+    if (safe === "COMPLETED") return "bg-success/15 text-success border-success/30";
+    if (safe === "EXPIRED") return "bg-error/15 text-error border-error/30";
+    if (safe === "UNLOADING") return "bg-warning/15 text-warning border-warning/30";
+    if (safe === "CALLED") return "bg-primary/15 text-primary border-primary/30";
+    return "bg-surface-container-high text-on-surface-variant border-outline-variant";
+  }
+
+  function dropoffCardV21(row = {}) {
+    const status = domain.statusOf(row);
+    const terminal = domain.isTerminal(row);
+    const canAct = dropoffCanActV21();
+    const ticketId = String(row.ticket_id || "");
+    const safeId = ticketId.replace(/[^A-Za-z0-9_-]/g, "_");
+    const nextLabel = status === "WAITING"
+      ? "Panggil Drop-Off"
+      : status === "CALLED"
+        ? "Mulai Bongkar"
+        : status === "UNLOADING"
+          ? "Selesai Bongkar"
+          : "";
+    const nextIcon = status === "WAITING"
+      ? "campaign"
+      : status === "CALLED"
+        ? "warehouse"
+        : "task_alt";
+    const age = terminal
+      ? `Selesai ${esc(row.completed_at || row.expired_at || row.updated_at || "-")}`
+      : `Aktif ${esc(domain.ageLabel(row))}`;
+    const action = !terminal && canAct
+      ? `<div class="mt-4 flex flex-col sm:flex-row gap-2">
+          ${status === "WAITING" ? `<select id="dropoff-gate-${safeId}" class="form-select sm:max-w-56">${dropoffGateOptionsV21(row.gate)}</select>` : ""}
+          <button type="button" onclick="advanceDropoffTicketV21('${esc(ticketId)}', this)" class="bg-primary-container text-on-primary-container rounded-xl px-4 py-3 font-bold inline-flex items-center justify-center gap-2 flex-1"><span class="material-symbols-outlined">${nextIcon}</span>${esc(nextLabel)}</button>
+        </div>`
+      : !terminal
+        ? `<div class="mt-4 rounded-xl bg-surface-container p-3 text-xs text-on-surface-variant">Mode lihat. Perubahan status dilakukan Checker, Admin, atau SPV.</div>`
+        : "";
+
+    return `<article class="dropoff-card-v21 rounded-2xl border border-outline-variant/50 bg-surface-container-lowest p-5 shadow-sm" data-dropoff-search="${esc([row.queue_no,row.plat_number,row.vendor_name,row.driver_name,status,row.gate].join(" ").toLowerCase())}">
+      <div class="flex items-start justify-between gap-3">
+        <div><div class="font-queue-id text-primary text-2xl">${esc(row.queue_no || "-")}</div><div class="mt-1 text-xs font-bold uppercase text-on-surface-variant">${esc(row.vendor_name || "-")}</div></div>
+        <span class="rounded-full border px-3 py-1 text-[10px] font-extrabold ${dropoffStatusToneV21(status)}">${esc(status)}</span>
+      </div>
+      <div class="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
+        <div class="rounded-xl bg-surface-container p-3"><span class="block text-[10px] uppercase font-bold text-on-surface-variant">Plat</span><b class="mt-1 block">${esc(row.plat_number || "-")}</b></div>
+        <div class="rounded-xl bg-surface-container p-3"><span class="block text-[10px] uppercase font-bold text-on-surface-variant">Driver</span><b class="mt-1 block truncate">${esc(row.driver_name || "-")}</b></div>
+        <div class="rounded-xl bg-surface-container p-3"><span class="block text-[10px] uppercase font-bold text-on-surface-variant">Gate</span><b class="mt-1 block">${esc(row.gate || "-")}</b></div>
+        <div class="rounded-xl bg-surface-container p-3"><span class="block text-[10px] uppercase font-bold text-on-surface-variant">Umur Tiket</span><b class="mt-1 block">${age}</b></div>
+      </div>
+      <div class="mt-3 text-xs text-on-surface-variant"><b>Operasional:</b> ${esc(row.operational_date || "-")} &middot; <b>Slot:</b> ${esc(row.slot || "-")} &middot; tanpa Checker PO / Done GR</div>
+      ${action}
+    </article>`;
+  }
+
+  window.filterDropoffCardsV21 = function filterDropoffCardsV21(input) {
+    const query = String(input?.value || "").trim().toLowerCase();
+    document.querySelectorAll(".dropoff-card-v21").forEach((card) => {
+      card.style.display = !query || String(card.dataset.dropoffSearch || "").includes(query) ? "" : "none";
+    });
+  };
+
+  window.advanceDropoffTicketV21 = async function advanceDropoffTicketV21(ticketId, button) {
+    if (!dropoffCanActV21()) return showToast("Role ini hanya dapat melihat Drop-Off.");
+    const row = dropoffSourceRowsV21().find((item) => String(item.ticket_id || "") === String(ticketId || ""));
+    if (!row) return showToast("Tiket Drop-Off tidak ditemukan. Refresh data.");
+
+    const status = domain.statusOf(row);
+    const nextStatus = { WAITING: "CALLED", CALLED: "UNLOADING", UNLOADING: "COMPLETED" }[status];
+    if (!nextStatus) return showToast(`Status ${status} sudah selesai.`);
+
+    const safeId = String(ticketId).replace(/[^A-Za-z0-9_-]/g, "_");
+    const gateInput = document.getElementById(`dropoff-gate-${safeId}`);
+    const currentGate = String(row.gate || "").trim() === "-" ? "" : String(row.gate || "").trim();
+    const selectedGate = String(gateInput ? gateInput.value : currentGate).trim();
+    if (status === "WAITING" && !selectedGate) return showToast("Pilih Gate terlebih dahulu.");
+    if (nextStatus === "COMPLETED" && !confirm(`Selesaikan bongkar ${row.queue_no || "Drop-Off"}?`)) return;
+
+    const actor = getAuthUser?.() || {};
+    const now = typeof formatDateTimeLocal === "function" ? formatDateTimeLocal(new Date()) : new Date().toISOString();
+    const payload = {
+      ticket_id: row.ticket_id,
+      queue_no: row.original_queue_no || row.queue_no,
+      vendor_name: row.vendor_name || "",
+      fleet_type: row.fleet_type || "DROP-OFF",
+      plat_number: row.plat_number || "",
+      gate: selectedGate,
+      operational_date: row.operational_date || "",
+      status: nextStatus,
+      unload_sla: "ON PROCESS",
+      updated_at: now,
+      actor_role: normalizeRole(actor.role || ""),
+      actor_name: actor.display_name || actor.username || "",
+      actor_username: actor.username || "",
+    };
+    if (nextStatus === "CALLED") payload.called_at = now;
+    if (nextStatus === "UNLOADING") payload.start_unloading_at = now;
+    if (nextStatus === "COMPLETED") {
+      payload.finish_unloading_at = now;
+      payload.completed_at = now;
+    }
+
+    const oldHtml = button?.innerHTML || "";
+    try {
+      if (button) {
+        button.disabled = true;
+        button.innerHTML = '<span class="material-symbols-outlined animate-spin">progress_activity</span>Menyimpan...';
+      }
+      const result = await updateCheckerToBackend(payload);
+      if (typeof applyBackendActionResult === "function") applyBackendActionResult(result);
+      showToast(`Drop-Off berubah menjadi ${nextStatus}.`);
+      await refreshDashboard();
+      renderPage("dropoff", false);
+    } catch (error) {
+      console.error(error);
+      showToast(`Update Drop-Off gagal: ${error.message}`);
+    } finally {
+      if (button && document.body.contains(button)) {
+        button.disabled = false;
+        button.innerHTML = oldHtml;
+      }
+    }
+  };
+
+  window.pageDropoffV21 = function pageDropoffV21() {
+    const rows = dropoffSourceRowsV21();
+    const summary = domain.summarizeDropoffs(rows);
+    return `<div class="max-w-[1500px] mx-auto space-y-5">
+      <section class="rounded-2xl bg-gradient-to-r from-[#4c1d95] via-[#6d28d9] to-primary text-white p-6 shadow-lg">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4"><div><div class="text-[11px] font-bold tracking-[.2em] uppercase opacity-80">Antrean terpisah</div><h2 class="mt-1 text-3xl font-extrabold">Drop-Off Workspace</h2><p class="mt-2 text-sm opacity-90">Tiket lintas hari tidak masuk sequence, KPI, Waiting List, Checker, atau monitor REG/VIP.</p></div><button type="button" onclick="refreshDashboard()" class="rounded-xl bg-white/15 border border-white/30 px-4 py-3 font-bold inline-flex items-center justify-center gap-2"><span class="material-symbols-outlined">refresh</span>Refresh</button></div>
+      </section>
+      <section class="grid grid-cols-2 md:grid-cols-5 gap-3">${miniMetric("Aktif", summary.active, "text-primary")}${miniMetric("Waiting", summary.waiting, "text-tertiary")}${miniMetric("Called", summary.called, "text-primary")}${miniMetric("Bongkar", summary.unloading, "text-warning")}${miniMetric("Selesai 48 Jam", summary.completed, "text-success")}</section>
+      <section class="glass-card rounded-2xl p-4 sm:p-6"><div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4"><div><h3 class="font-headline-md text-headline-md">Daftar Drop-Off</h3><p class="text-on-surface-variant">Tiket aktif selalu dibawa lintas hari sampai selesai. Riwayat selesai tampil selama 48 jam.</p></div><input oninput="filterDropoffCardsV21(this)" class="form-input md:max-w-sm" placeholder="Cari queue, plat, vendor, driver..." /></div><div class="grid grid-cols-1 xl:grid-cols-2 gap-4">${rows.map(dropoffCardV21).join("") || '<div class="xl:col-span-2 rounded-xl border border-dashed border-outline-variant p-10 text-center text-on-surface-variant">Belum ada tiket Drop-Off.</div>'}</div></section>
+    </div>`;
+  };
+
+  pageMeta.dropoff = {
+    title: "Drop-Off",
+    subtitle: "Antrean lintas hari terpisah dari REG dan VIP",
+  };
+  ["SPV", "ADMIN", "CHECKER", "SECURITY", "DEVELOPER"].forEach((role) => {
+    ROLE_ACCESS[role] = Array.isArray(ROLE_ACCESS[role]) ? ROLE_ACCESS[role] : [];
+    if (!ROLE_ACCESS[role].includes("dropoff")) ROLE_ACCESS[role].push("dropoff");
+  });
+
+  const renderBeforeV21 = renderPage;
+  renderPage = function renderPageWithDropoffV21(page, toast = true) {
+    if (String(page || "") !== "dropoff") return renderBeforeV21.call(this, page, toast);
+    if (!isLoggedIn() || !canAccessPage("dropoff")) {
+      return renderBeforeV21.call(this, getDefaultPageForRole(), toast);
+    }
+    state.page = "dropoff";
+    document.getElementById("page-title").textContent = pageMeta.dropoff.title;
+    document.getElementById("page-subtitle").textContent = pageMeta.dropoff.subtitle;
+    document.getElementById("page-root").innerHTML = window.pageDropoffV21();
+    applyRoleAccessUI();
+    updateActiveNav("dropoff");
+    history.replaceState(null, "", "#dropoff");
+    if (toast) showToast("Buka menu Drop-Off");
+  };
+  window.renderPage = renderPage;
+  applyRoleAccessUI?.();
+})();

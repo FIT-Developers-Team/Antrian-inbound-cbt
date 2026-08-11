@@ -235,7 +235,7 @@ test("realtime broadcast sends only an invalidation timestamp", async () => {
   }
 });
 
-test("bulk backend keeps queue sequences independent per slot", async () => {
+test("bulk backend keeps queue sequences independent per type and slot", async () => {
   const { createTicketsBulk } = require("../api/inbound.js")._test;
   const tickets = [];
   const transactionLog = [];
@@ -251,12 +251,19 @@ test("bulk backend keeps queue sequences independent per slot", async () => {
       }
       if (normalized.startsWith("SELECT queue_no FROM tickets")) {
         return {
-          rows: tickets.filter((ticket) => ticket.slot === params[0]).map((ticket) => ({ queue_no: ticket.queue_no })),
+          rows: tickets
+            .filter((ticket) => ticket.slot === params[0] && ticket.ticket_type === params[1])
+            .map((ticket) => ({ queue_no: ticket.queue_no })),
           rowCount: tickets.length,
         };
       }
       if (normalized.startsWith("INSERT INTO tickets")) {
-        tickets.push({ ticket_id: params[0], queue_no: params[1], slot: params[10] });
+        tickets.push({
+          ticket_id: params[0],
+          queue_no: params[1],
+          ticket_type: params[2],
+          slot: params[10],
+        });
         return { rows: [], rowCount: 1 };
       }
       if (
@@ -272,15 +279,72 @@ test("bulk backend keeps queue sequences independent per slot", async () => {
   const body = {
     tickets: [
       { ticket: { ticket_id: "T-1", ticket_type: "REG", slot: "1" }, pos: [{ po_number: "PO-1" }] },
-      { ticket: { ticket_id: "T-2", ticket_type: "REG", slot: "1" }, pos: [{ po_number: "PO-2" }] },
-      { ticket: { ticket_id: "T-3", ticket_type: "REG", slot: "2" }, pos: [{ po_number: "PO-3" }] },
+      { ticket: { ticket_id: "T-2", ticket_type: "DROP-OFF", slot: "1" }, pos: [{ po_number: "DROP-OFF" }] },
+      { ticket: { ticket_id: "T-3", ticket_type: "REG", slot: "1" }, pos: [{ po_number: "PO-2" }] },
+      { ticket: { ticket_id: "T-4", ticket_type: "VIP", slot: "1" }, pos: [{ po_number: "PO-3" }] },
+      { ticket: { ticket_id: "T-5", ticket_type: "REG", slot: "2" }, pos: [{ po_number: "PO-4" }] },
     ],
   };
 
   const result = await createTicketsBulk(client, body);
 
-  assert.deepEqual(result.created.map((ticket) => ticket.queue_no), ["REG 1-1", "REG 1-2", "REG 2-1"]);
+  assert.deepEqual(result.created.map((ticket) => ticket.queue_no), [
+    "REG 1-1",
+    "DROP-OFF 1-1",
+    "REG 1-2",
+    "VIP 1-1",
+    "REG 2-1",
+  ]);
   assert.deepEqual(transactionLog, ["BEGIN", "COMMIT"]);
+});
+
+test("Drop-Off domain separates long-running tickets from the main queue", () => {
+  const modulePath = path.join(__dirname, "..", "js", "dropoff_domain.js");
+  assert.equal(fs.existsSync(modulePath), true, "Drop-Off domain module must exist");
+  const domain = require(modulePath);
+  const rows = [
+    { ticket_id: "REG-1", ticket_type: "REG", status: "WAITING" },
+    { ticket_id: "VIP-1", ticket_type: "VIP", status: "CALLED" },
+    { ticket_id: "DROP-1", ticket_type: "DROP-OFF", status: "WAITING" },
+    { ticket_id: "DROP-2", fleet_type: "DROP OFF", status: "UNLOADING" },
+    { ticket_id: "DROP-3", queue_no: "DROP-OFF 2-7", status: "COMPLETED" },
+  ];
+
+  assert.deepEqual(domain.mainQueueRows(rows).map((row) => row.ticket_id), ["REG-1", "VIP-1"]);
+  assert.deepEqual(domain.dropoffRows(rows).map((row) => row.ticket_id), ["DROP-1", "DROP-2", "DROP-3"]);
+  assert.deepEqual(domain.summarizeDropoffs(rows), {
+    total: 3,
+    active: 2,
+    waiting: 1,
+    called: 0,
+    unloading: 1,
+    completed: 1,
+    expired: 0,
+  });
+  assert.equal(
+    domain.ageLabel(
+      {
+        created_at: "2026-08-09T02:00:00.000Z",
+        register_time: "2026-08-11T16:00:00.000Z",
+      },
+      new Date("2026-08-11T16:00:00.000Z"),
+    ),
+    "2 hari 14 jam",
+  );
+  assert.equal(
+    domain.ageLabel(
+      { created_at: "09/08/2026 09:00:00" },
+      new Date("2026-08-11T09:00:00+07:00"),
+    ),
+    "2 hari 0 jam",
+  );
+});
+
+test("Drop-Off has a dedicated navigation route", () => {
+  const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
+  assert.equal((html.match(/data-page="dropoff"/g) || []).length, 2);
+  assert.match(appSource, /installDropoffWorkspaceV21/);
+  assert.match(appSource, /domain\.mainQueueRows/);
 });
 
 test("bulk backend accepts an explicitly manual PO outside Superset master", async () => {

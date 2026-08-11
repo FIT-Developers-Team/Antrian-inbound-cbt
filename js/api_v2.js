@@ -1564,7 +1564,7 @@ async function ensureFullDataForDaftar() {
 async function refreshDashboard() {
   try {
     if (
-      ["checker", "laporan", "monitor", "antrian", "panggil"].includes(
+      ["checker", "laporan", "monitor", "antrian", "panggil", "dropoff"].includes(
         state.page,
       ) &&
       v2RawResponse

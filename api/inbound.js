@@ -1405,8 +1405,9 @@ async function createTicketRecord(client, body, operational = operationalWindowW
   // tetap berurutan tanpa mempercayai nomor prediksi browser.
   const existing = await client.query(
     `SELECT queue_no FROM tickets
-     WHERE slot = $1 AND created_at >= $2 AND created_at < $3`,
-    [slot, operational.start, operational.end],
+     WHERE slot = $1 AND ticket_type = $2
+       AND created_at >= $3 AND created_at < $4`,
+    [slot, ticketType, operational.start, operational.end],
   );
   const maxSequence = existing.rows.reduce((max, row) => {
     const match = clean(row.queue_no).match(/-\s*(\d+)\s*$/);
