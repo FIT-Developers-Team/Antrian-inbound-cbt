@@ -527,13 +527,13 @@ async function requeueGsheetRowsForTickets(client, ticketIds = []) {
        created_at, updated_at, synced_at
      )
      SELECT p.ticket_po_id, p.ticket_id, 'PENDING', 0, NULL,
-       CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NULL
+       now(), now(), NULL
      FROM ticket_pos p
      WHERE p.ticket_id IN (${placeholders})
      ON CONFLICT (ticket_po_id) DO UPDATE SET
        ticket_id = excluded.ticket_id, sync_status = 'PENDING',
        attempt_count = 0, last_error = NULL, synced_at = NULL,
-       updated_at = CURRENT_TIMESTAMP`,
+       updated_at = now()`,
     ids,
   );
   return Number(result.rowCount || 0);

@@ -388,6 +388,8 @@ test("Drop-Off start unloading persists its timestamp and requeues GSheet", asyn
   const requeueSql = statements.find((sql) => sql.startsWith("INSERT INTO gsheet_sync_outbox")) || "";
   assert.match(requeueSql, /ON CONFLICT \(ticket_po_id\) DO UPDATE SET/);
   assert.match(requeueSql, /sync_status = 'PENDING'/);
+  assert.match(requeueSql, /SELECT p\.ticket_po_id, p\.ticket_id, 'PENDING', 0, NULL, now\(\), now\(\), NULL/);
+  assert.doesNotMatch(requeueSql, /CURRENT_TIMESTAMP/);
   assert.deepEqual(statements.filter((sql) => ["BEGIN", "COMMIT", "ROLLBACK"].includes(sql)), ["BEGIN", "COMMIT"]);
 });
 
