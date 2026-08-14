@@ -1405,24 +1405,27 @@ function printSecurityTickets(rowsOverride = null, winOverride = null) {
 <meta charset="utf-8" />
 <title>Print Nomor Antrian</title>
 <style>
-  @page { size: A5 portrait; margin: 10mm; }
+  @page { size: 105mm 148mm; margin: 5mm; }
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: Arial, Helvetica, sans-serif; color: #111827; background: #fff; }
-  .ticket { border: 2px solid #111827; border-radius: 18px; padding: 18px; margin: 0 0 14px; page-break-inside: avoid; }
-  .ticket-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 1px solid #d1d5db; padding-bottom: 10px; }
-  .brand { font-weight: 900; font-size: 20px; letter-spacing: .02em; }
-  .sub { color: #6b7280; font-size: 12px; margin-top: 2px; text-transform: uppercase; letter-spacing: .12em; }
-  .status { border: 1px solid #f97316; color: #ea580c; background: #fff7ed; font-weight: 900; border-radius: 999px; padding: 7px 11px; font-size: 12px; }
-  .queue { text-align: center; font-family: "Courier New", monospace; font-size: 60px; line-height: 1; color: #1d4ed8; font-weight: 900; margin: 18px 0; letter-spacing: .04em; }
-  .main { display: grid; grid-template-columns: 1fr 145px; gap: 12px; align-items: start; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .grid div { border: 1px solid #d1d5db; border-radius: 10px; padding: 8px; min-height: 50px; }
-  b { display: block; font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 5px; }
-  span { font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
-  .qrbox { border: 1px solid #d1d5db; border-radius: 12px; padding: 8px; text-align: center; }
-  .qrbox img { width: 128px; height: 128px; object-fit: contain; display: block; margin: 0 auto 6px; }
-  .qrbox div { font-size: 9px; color: #374151; font-weight: 700; line-height: 1.25; }
-  @media print { .ticket { margin-bottom: 10mm; } }
+  html, body { width: 95mm; margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111827; background: #fff; }
+  .ticket { width: 95mm; height: 138mm; overflow: hidden; border: .45mm solid #111827; border-radius: 3mm; padding: 3.5mm; margin: 0; page-break-inside: avoid; break-inside: avoid; page-break-after: always; break-after: page; display: flex; flex-direction: column; }
+  .ticket:last-child { page-break-after: auto; break-after: auto; }
+  .ticket-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 2mm; border-bottom: .25mm solid #d1d5db; padding-bottom: 2mm; }
+  .brand { font-weight: 900; font-size: 13pt; letter-spacing: .02em; }
+  .sub { color: #6b7280; font-size: 6.5pt; margin-top: .5mm; text-transform: uppercase; letter-spacing: .1em; }
+  .status { border: .25mm solid #f97316; color: #ea580c; background: #fff7ed; font-weight: 900; border-radius: 99mm; padding: 1.2mm 2mm; font-size: 7pt; white-space: nowrap; }
+  .queue { text-align: center; font-family: "Courier New", monospace; font-size: 30pt; line-height: 1.08; color: #1d4ed8; font-weight: 900; margin: 3mm 0; letter-spacing: .02em; white-space: nowrap; }
+  .main { display: grid; grid-template-columns: minmax(0, 1fr) 28mm; gap: 2.5mm; align-items: start; flex: 1; min-height: 0; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5mm; align-content: start; }
+  .grid div { border: .25mm solid #d1d5db; border-radius: 1.5mm; padding: 1.4mm; min-height: 0; overflow: hidden; }
+  b { display: block; font-size: 5.8pt; color: #6b7280; text-transform: uppercase; letter-spacing: .06em; margin-bottom: .7mm; }
+  span { display: block; font-size: 7.2pt; line-height: 1.18; font-weight: 700; overflow-wrap: anywhere; }
+  .qrbox { border: .25mm solid #d1d5db; border-radius: 2mm; padding: 1.5mm; text-align: center; align-self: start; }
+  .qrbox img { width: 25mm; height: 25mm; object-fit: contain; display: block; margin: 0 auto 1mm; }
+  .qrbox div { font-size: 5.6pt; color: #374151; font-weight: 700; line-height: 1.2; }
+  @media screen { body { background: #e5e7eb; padding: 8mm 0; } .ticket { background: #fff; margin: 0 auto 8mm; box-shadow: 0 4mm 10mm rgba(15,23,42,.16); } }
+  @media print { html, body { width: auto; } }
 </style>
 </head>
 <body>${cards}<script>window.onload = () => { window.print(); setTimeout(() => window.close(), 700); };</script></body>

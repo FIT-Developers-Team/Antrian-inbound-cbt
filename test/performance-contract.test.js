@@ -347,6 +347,17 @@ test("Drop-Off has a dedicated navigation route", () => {
   assert.match(appSource, /domain\.mainQueueRows/);
 });
 
+test("security ticket print targets one physical A6 portrait page", () => {
+  const start = appSource.indexOf("function printSecurityTickets");
+  const end = appSource.indexOf("\nfunction pageDaftar", start);
+  const printSource = appSource.slice(start, end);
+
+  assert.match(printSource, /@page \{ size: 105mm 148mm; margin: 5mm; \}/);
+  assert.match(printSource, /width: 95mm; height: 138mm;/);
+  assert.match(printSource, /break-after: page;/);
+  assert.doesNotMatch(printSource, /size: A5/i);
+});
+
 test("Drop-Off start unloading persists its timestamp and requeues GSheet", async () => {
   const { updateTicketPos } = require("../api/inbound.js")._test;
   assert.equal(typeof updateTicketPos, "function");
