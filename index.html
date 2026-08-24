@@ -1,0 +1,276 @@
+<!doctype html>
+<html class="dark" lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Antrian Inbound CBT</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&family=JetBrains+Mono:wght@600;700&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" type="image/png" href="assets/login-logo.png" />
+    <link
+      rel="preload"
+      as="image"
+      href="assets/login-banner.webp"
+      type="image/webp"
+    />
+    <link
+      rel="preload"
+      as="image"
+      href="assets/login-logo.png"
+      type="image/png"
+    />
+    <link rel="stylesheet" href="style.css?v=18.0" />
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              background: "rgb(var(--background) / <alpha-value>)",
+              surface: "rgb(var(--surface) / <alpha-value>)",
+              "surface-container-lowest":
+                "rgb(var(--surface-container-lowest) / <alpha-value>)",
+              "surface-container-low":
+                "rgb(var(--surface-container-low) / <alpha-value>)",
+              "surface-container":
+                "rgb(var(--surface-container) / <alpha-value>)",
+              "surface-container-high":
+                "rgb(var(--surface-container-high) / <alpha-value>)",
+              "surface-container-highest":
+                "rgb(var(--surface-container-highest) / <alpha-value>)",
+              "on-surface": "rgb(var(--on-surface) / <alpha-value>)",
+              "on-surface-variant":
+                "rgb(var(--on-surface-variant) / <alpha-value>)",
+              primary: "rgb(var(--primary) / <alpha-value>)",
+              "primary-container":
+                "rgb(var(--primary-container) / <alpha-value>)",
+              "on-primary": "rgb(var(--on-primary) / <alpha-value>)",
+              "on-primary-container":
+                "rgb(var(--on-primary-container) / <alpha-value>)",
+              secondary: "rgb(var(--secondary) / <alpha-value>)",
+              "secondary-container":
+                "rgb(var(--secondary-container) / <alpha-value>)",
+              "on-secondary-container":
+                "rgb(var(--on-secondary-container) / <alpha-value>)",
+              tertiary: "rgb(var(--tertiary) / <alpha-value>)",
+              error: "rgb(var(--error) / <alpha-value>)",
+              "error-container": "rgb(var(--error-container) / <alpha-value>)",
+              "on-error-container":
+                "rgb(var(--on-error-container) / <alpha-value>)",
+              outline: "rgb(var(--outline) / <alpha-value>)",
+              "outline-variant": "rgb(var(--outline-variant) / <alpha-value>)",
+              success: "rgb(var(--success) / <alpha-value>)",
+              warning: "rgb(var(--warning) / <alpha-value>)",
+            },
+            fontFamily: {
+              "queue-id": ["JetBrains Mono"],
+              "body-md": ["Montserrat"],
+              "label-sm": ["Montserrat"],
+              "headline-md": ["Montserrat"],
+            },
+            spacing: {
+              "row-height-md": "56px",
+              "container-padding": "24px",
+              gutter: "16px",
+            },
+            fontSize: {
+              "label-sm": ["12px", { lineHeight: "16px", fontWeight: "700" }],
+              "queue-id": [
+                "20px",
+                {
+                  lineHeight: "24px",
+                  letterSpacing: ".05em",
+                  fontWeight: "700",
+                },
+              ],
+              "headline-md": [
+                "24px",
+                { lineHeight: "32px", fontWeight: "700" },
+              ],
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body
+    class="bg-background text-on-surface font-body-md overflow-hidden transition-colors duration-500"
+  >
+    <div class="relative z-10 flex h-screen overflow-hidden">
+      <aside
+        id="sidebar-panel"
+        class="bg-surface-container-lowest/80 border-r border-outline-variant w-64 h-screen flex-col py-4 gap-2 hidden md:flex transition-all duration-300"
+      >
+        <div class="px-6 mb-8">
+          <h1
+            class="font-headline-md text-2xl font-extrabold text-on-surface tracking-tight"
+          >
+            Inbound CBT
+          </h1>
+          <p
+            class="font-label-sm text-label-sm text-on-surface-variant opacity-70 uppercase tracking-widest"
+          >
+            Sistem Antrian
+          </p>
+        </div>
+
+        <nav id="side-nav" class="flex-1 flex flex-col gap-1">
+          <button data-page="spv_dashboard" class="nav-btn">
+            <span class="material-symbols-outlined">space_dashboard</span
+            ><span>Dashboard SPV</span>
+          </button>
+          <button data-page="daftar" class="nav-btn">
+            <span class="material-symbols-outlined">app_registration</span
+            ><span>Daftar</span>
+          </button>
+          <button data-page="checker" class="nav-btn">
+            <span class="material-symbols-outlined">fact_check</span
+            ><span>Checker</span>
+          </button>
+          <button data-page="panggil" class="nav-btn">
+            <span class="material-symbols-outlined">campaign</span
+            ><span>Panggil</span>
+          </button>
+          <button data-page="monitor" class="nav-btn">
+            <span class="material-symbols-outlined">dashboard</span
+            ><span>Waiting Monitor</span>
+          </button>
+          <button data-page="laporan" class="nav-btn">
+            <span class="material-symbols-outlined">assessment</span
+            ><span>Waiting List</span>
+          </button>
+          <button data-page="dropoff" class="nav-btn">
+            <span class="material-symbols-outlined">move_to_inbox</span
+            ><span>Drop-Off</span>
+          </button>
+          <button data-page="ba_reject" class="nav-btn">
+            <span class="material-symbols-outlined">description</span
+            ><span>BA Reject</span>
+          </button>
+        </nav>
+
+        <div
+          class="mt-auto flex flex-col gap-1 border-t border-outline-variant pt-4"
+        >
+          <button data-page="setting" class="nav-btn">
+            <span class="material-symbols-outlined">settings</span
+            ><span>Setting</span>
+          </button>
+          <button data-page="debug" class="nav-btn">
+            <span class="material-symbols-outlined">bug_report</span
+            ><span>Debug</span>
+          </button>
+        </div>
+      </aside>
+
+      <main class="flex-1 flex flex-col overflow-hidden">
+        <header
+          class="flex justify-between items-center w-full px-container-padding h-row-height-md bg-surface/50 border-b border-outline-variant z-20"
+        >
+          <div class="flex items-center gap-3 min-w-0">
+            <button
+              id="sidebar-toggle"
+              class="p-2 rounded-full hover:bg-surface-container-high transition-colors"
+              onclick="toggleSidebar()"
+              title="Hide / show menu"
+            >
+              <span class="material-symbols-outlined" id="sidebar-toggle-icon"
+                >menu_open</span
+              >
+            </button>
+            <span
+              id="page-title"
+              class="font-headline-md text-headline-md font-bold text-primary truncate"
+              >Daftar</span
+            >
+            <div class="hidden sm:block h-6 w-px bg-outline-variant"></div>
+            <span
+              id="page-subtitle"
+              class="hidden sm:inline font-label-sm text-label-sm bg-surface-container-high text-primary px-3 py-1 rounded-full border border-primary/20 truncate"
+              >Input security</span
+            >
+          </div>
+          <div class="flex items-center gap-3 sm:gap-6">
+            <span
+              id="api-pill"
+              class="hidden md:inline-flex items-center gap-2 text-[11px] px-3 py-1 rounded-full border border-outline-variant bg-surface-container/70 text-on-surface-variant"
+              ><span class="w-2 h-2 rounded-full bg-error"></span>API belum
+              diset</span
+            >
+            <span
+              id="live-clock"
+              class="hidden lg:block font-queue-id text-sm text-on-surface-variant"
+            ></span>
+            <button
+              class="p-2 rounded-full hover:bg-surface-container-high transition-colors"
+              onclick="toggleTheme()"
+              title="Toggle Theme"
+            >
+              <span class="material-symbols-outlined" id="theme-icon"
+                >dark_mode</span
+              >
+            </button>
+            <button
+              class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors"
+            >
+              notifications
+            </button>
+            <div
+              class="h-10 w-10 rounded-full bg-primary-container border-2 border-primary-container flex items-center justify-center"
+            >
+              <span class="material-symbols-outlined text-white"
+                >account_circle</span
+              >
+            </div>
+          </div>
+        </header>
+
+        <div
+          id="mobile-menu-bar"
+          class="md:hidden bg-surface-container-lowest/80 border-b border-outline-variant px-3 py-2 overflow-x-auto"
+        >
+          <div id="mobile-nav" class="flex gap-2 min-w-max">
+            <button data-page="spv_dashboard" class="mobile-nav-btn">
+              Dashboard SPV
+            </button>
+            <button data-page="daftar" class="mobile-nav-btn">Daftar</button>
+            <button data-page="checker" class="mobile-nav-btn">Checker</button>
+            <button data-page="panggil" class="mobile-nav-btn">Panggil</button>
+            <button data-page="monitor" class="mobile-nav-btn">
+              Waiting Monitor
+            </button>
+            <button data-page="laporan" class="mobile-nav-btn">
+              Waiting List
+            </button>
+            <button data-page="dropoff" class="mobile-nav-btn">Drop-Off</button>
+            <button data-page="ba_reject" class="mobile-nav-btn">BA Reject</button>
+            <button data-page="setting" class="mobile-nav-btn">Setting</button>
+            <button data-page="debug" class="mobile-nav-btn">Debug</button>
+          </div>
+        </div>
+
+        <section
+          id="page-root"
+          class="flex-1 overflow-y-auto p-container-padding space-y-gutter"
+        ></section>
+      </main>
+    </div>
+
+    <div
+      class="fixed bottom-10 left-1/2 -translate-x-1/2 bg-on-surface text-surface px-6 py-3 rounded-full font-bold shadow-2xl opacity-0 transition-all transform translate-y-10 pointer-events-none z-50 flex items-center gap-3"
+      id="toast"
+    >
+      <span class="material-symbols-outlined">check_circle</span
+      ><span id="toast-message">Berhasil</span>
+    </div>
+
+  <script src="js/supabase_backend.js?v=1.0"></script>
+  <script src="js/dropoff_domain.js?v=21.0"></script>
+<script src="js/app.js?v=21.0"></script>
+<script src="js/realtime_client.js?v=1.0"></script>
+<script src="js/api_v2.js?v=21.0"></script>
+  </body>
+</html>
