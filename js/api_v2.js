@@ -61,10 +61,10 @@ function parseInboundDateSafe(value) {
 const API_URL_V2 =
   "https://script.google.com/macros/s/AKfycbyjby6UR8H0H397xkHbpx9F57BhPKeTCndn3Ic3aKpqvEeQnIGYUmwBMa9JzPBhIoeD/exec";
 
-// Operational queue and PO master now live in MotherDuck through the same
-// Vercel project. Keeping the URL relative makes Preview and Production use
-// their own API without exposing any database credentials to the browser.
-const MOTHERDUCK_API_URL = "/api/inbound";
+// Operational queue and PO master now live behind a Supabase Edge Function.
+// The URL is public configuration; privileged database credentials remain in
+// Supabase Edge Function secrets and are never shipped to the browser.
+const MOTHERDUCK_API_URL = window.INBOUND_BACKEND_URL;
 
 const columns = [
   "Timestamp",
@@ -113,6 +113,7 @@ const LOCAL_TICKETS_KEY = "inbound_cbt_manual_tickets_v2";
 let v2RawResponse = null;
 let v2PoIndex = null;
 let securitySubmitBusy = false;
+let fullDataLoadBusy = false;
 
 function hasApiV2() {
   return API_URL_V2 && !API_URL_V2.includes("PASTE_GAS_WEB_APP_URL_HERE");
@@ -187,7 +188,9 @@ function motherDuckApiUrl(action, params = {}) {
 async function motherDuckApiGet(action, params = {}) {
   const response = await fetch(motherDuckApiUrl(action, params), {
     method: "GET",
-    credentials: "same-origin",
+    headers: {
+      Authorization: `Bearer ${window.getInboundSessionToken?.() || ""}`,
+    },
   });
   const json = await response.json();
   if (!response.ok || json.ok === false) {
@@ -199,8 +202,10 @@ async function motherDuckApiGet(action, params = {}) {
 async function motherDuckApiPost(action, payload = {}) {
   const response = await fetch(motherDuckApiUrl(action), {
     method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${window.getInboundSessionToken?.() || ""}`,
+    },
     body: JSON.stringify(payload),
   });
   const json = await response.json();
@@ -1544,9 +1549,11 @@ async function initApi() {
 
 async function ensureFullDataForDaftar() {
   if (!hasApiV2()) return;
+  if (fullDataLoadBusy) return;
   const tableRows = getTableV2Rows(v2RawResponse || {});
   if (tableRows.length) return;
 
+  fullDataLoadBusy = true;
   try {
     updateApiPill("loading", "Load Data V2...");
     v2RawResponse = await fetchV2Data();
@@ -1558,6 +1565,8 @@ async function ensureFullDataForDaftar() {
     console.error(err);
     updateApiPill("error", "API error");
     showToast("Load Data V2 gagal: " + err.message);
+  } finally {
+    fullDataLoadBusy = false;
   }
 }
 

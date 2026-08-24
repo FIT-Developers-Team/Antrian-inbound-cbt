@@ -276,9 +276,8 @@ async function submitLogin(e) {
   const password = String(form.password?.value || "");
 
   try {
-    const response = await fetch("/api/inbound?action=login", {
+    const response = await fetch(`${window.INBOUND_BACKEND_URL}?action=login`, {
       method: "POST",
-      credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password }),
     });
@@ -286,6 +285,7 @@ async function submitLogin(e) {
     const found = result?.data?.user;
     if (!response.ok || !found) throw new Error(result?.message || "Username / password salah.");
 
+    window.setInboundSessionToken?.(result?.data?.token || "");
     setAuthUser(found);
     applyRoleAccessUI();
     showToast("Login sebagai " + normalizeRole(found.role));
@@ -305,8 +305,12 @@ async function submitLogin(e) {
 
 function logoutUser() {
   const user = getAuthUser();
-  fetch("/api/inbound?action=logout", { method: "POST", credentials: "same-origin" }).catch(() => {});
+  fetch(`${window.INBOUND_BACKEND_URL}?action=logout`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${window.getInboundSessionToken?.() || ""}` },
+  }).catch(() => {});
   window.stopInboundRealtime?.();
+  window.clearInboundSessionToken?.();
   clearAuthUser();
   stopCallMonitorRuntime?.();
   applyTvModeStyles?.(false);
