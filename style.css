@@ -2793,3 +2793,52 @@ body.security-lobby-qr-open-v152 {
 .wm-command-v19 .wm19-breakdown { padding:8px 16px 16px; }.wm-command-v19 .wm19-break-row { display:grid; grid-template-columns:100px 1fr 35px; gap:8px; align-items:center; margin:11px 0; color:var(--wm19-muted); font-size:10px; font-weight:700; }.wm-command-v19 .wm19-mini { height:8px; overflow:hidden; border-radius:99px; background:rgb(var(--outline-variant) / .22); }.wm-command-v19 .wm19-mini i { display:block; height:100%; border-radius:99px; background:linear-gradient(90deg,rgb(var(--primary) / .55),rgb(var(--primary-container))); }.wm-command-v19 .wm19-break-row b { color:rgb(var(--on-surface)); text-align:right; }.wm-command-v19 .wm19-insight { margin-top:14px; padding:11px; border-left:3px solid rgb(var(--secondary-container)); border-radius:5px; background:rgb(var(--secondary-container) / .08); color:rgb(var(--on-surface)); font-size:11px; line-height:1.45; }
 .wm-command-v19 .wm19-table-card { margin-top:14px; overflow:hidden; }.wm-command-v19 .wm19-table-wrap { overflow-x:auto; }.wm-command-v19 .wm19-table { width:100%; border-collapse:collapse; }.wm-command-v19 .wm19-table th { padding:10px 13px; background:rgb(var(--surface-container) / .65); color:var(--wm19-muted); font-size:10px; text-align:left; letter-spacing:.04em; white-space:nowrap; }.wm-command-v19 .wm19-table td { padding:11px 13px; border-top:1px solid rgb(var(--outline-variant) / .24); color:rgb(var(--on-surface-variant)); font-size:11px; white-space:nowrap; }.wm-command-v19 .wm19-table tr:hover { background:rgb(var(--primary) / .04); }.wm-command-v19 .wm19-status { display:inline-flex; padding:4px 7px; border-radius:999px; font-size:9px; font-weight:800; }.wm-command-v19 .wm19-foot { padding:12px 16px; border-top:1px solid rgb(var(--outline-variant) / .25); color:var(--wm19-muted); font-size:10px; }
 @media (max-width:1100px) { .wm-command-v19 .wm19-kpis { grid-template-columns:repeat(3,minmax(0,1fr)); }.wm-command-v19 .wm19-grid { grid-template-columns:1fr; } }.wm-command-v19 .wm19-empty { padding:30px 16px; color:var(--wm19-muted); font-size:12px; text-align:center; }
+
+/* V22 — Waiting Monitor hierarchy: gate visibility + queue-first workspace. */
+.wm-command-v19 .wm19-gate-panel { margin-bottom:14px; overflow:hidden; }
+.wm-command-v19 .wm19-gate-head { align-items:center; }
+.wm-command-v19 .wm19-gate-summary { display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:8px; font-size:10px; color:var(--wm19-muted); }
+.wm-command-v19 .wm19-gate-summary span,.wm-command-v19 .wm19-gate-summary b { display:inline-flex; align-items:center; gap:6px; padding:6px 9px; border-radius:999px; background:var(--wm19-soft); white-space:nowrap; }
+.wm-command-v19 .wm19-gate-summary i { width:7px; height:7px; border-radius:50%; }
+.wm-command-v19 .wm19-gate-summary i.is-unloading { background:rgb(var(--primary)); box-shadow:0 0 0 3px rgb(var(--primary) / .12); }
+.wm-command-v19 .wm19-gate-summary i.is-called { background:rgb(var(--warning)); box-shadow:0 0 0 3px rgb(var(--warning) / .12); }
+.wm-command-v19 .wm19-gate-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:9px; padding:14px; }
+.wm-command-v19 .wm19-gate-card { position:relative; min-width:0; min-height:116px; padding:12px; border:1px solid var(--wm19-border); border-radius:12px; background:rgb(var(--surface-container-lowest) / .7); color:rgb(var(--on-surface)); text-align:left; overflow:hidden; }
+button.wm19-gate-card { width:100%; font:inherit; cursor:pointer; transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease; }
+button.wm19-gate-card:hover { transform:translateY(-2px); box-shadow:0 9px 22px rgb(15 23 42 / .11); }
+button.wm19-gate-card:focus-visible { outline:3px solid rgb(var(--primary) / .28); outline-offset:2px; }
+.wm-command-v19 .wm19-gate-card::before { content:""; position:absolute; inset:0 auto 0 0; width:4px; background:rgb(var(--outline-variant)); }
+.wm-command-v19 .wm19-gate-card.is-called { border-color:rgb(var(--warning) / .32); background:linear-gradient(145deg,rgb(var(--warning) / .09),rgb(var(--surface-container-lowest) / .9)); }
+.wm-command-v19 .wm19-gate-card.is-called::before { background:rgb(var(--warning)); }
+.wm-command-v19 .wm19-gate-card.is-unloading { border-color:rgb(var(--primary) / .35); background:linear-gradient(145deg,rgb(var(--primary) / .12),rgb(var(--surface-container-lowest) / .92)); }
+.wm-command-v19 .wm19-gate-card.is-unloading::before { background:rgb(var(--primary)); }
+.wm-command-v19 .wm19-gate-top { display:flex; align-items:center; justify-content:space-between; gap:6px; }
+.wm-command-v19 .wm19-gate-top b { font-family:JetBrains Mono,monospace; font-size:13px; }
+.wm-command-v19 .wm19-gate-top span { padding:4px 6px; border-radius:999px; background:rgb(var(--outline-variant) / .22); color:var(--wm19-muted); font-size:8px; font-weight:900; letter-spacing:.04em; }
+.wm-command-v19 .is-called .wm19-gate-top span { background:rgb(var(--warning) / .14); color:rgb(var(--warning)); }
+.wm-command-v19 .is-unloading .wm19-gate-top span { background:rgb(var(--primary) / .14); color:rgb(var(--primary)); }
+.wm-command-v19 .wm19-gate-card > small { display:block; margin-top:3px; color:var(--wm19-muted); font-size:8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wm-command-v19 .wm19-gate-card > strong { display:block; margin-top:11px; color:rgb(var(--primary)); font-family:JetBrains Mono,monospace; font-size:15px; }
+.wm-command-v19 .wm19-gate-vehicle { display:flex; justify-content:space-between; gap:7px; margin-top:5px; font-size:9px; }
+.wm-command-v19 .wm19-gate-vehicle b { font-family:JetBrains Mono,monospace; }
+.wm-command-v19 .wm19-gate-vehicle span { min-width:0; color:var(--wm19-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wm-command-v19 .wm19-gate-bottom { display:flex; justify-content:space-between; gap:6px; margin-top:8px; font-size:9px; }
+.wm-command-v19 .wm19-gate-bottom em { color:var(--wm19-muted); font-style:normal; font-weight:700; }
+.wm-command-v19 .wm19-gate-bottom span { color:rgb(var(--primary)); font-weight:800; white-space:nowrap; }
+.wm-command-v19 .wm19-gate-empty-label { margin-top:24px; color:var(--wm19-muted); font-size:10px; }
+.wm-command-v19 .wm19-layout { display:grid; grid-template-columns:minmax(0,2.15fr) minmax(290px,.8fr); gap:14px; align-items:start; }
+.wm-command-v19 .wm19-main,.wm-command-v19 .wm19-side { min-width:0; }
+.wm-command-v19 .wm19-side { display:grid; gap:14px; }
+.wm-command-v19 .wm19-table-card { margin-top:0; }
+.wm-command-v19 .wm19-table-wrap { max-height:680px; overflow:auto; scrollbar-gutter:stable; }
+.wm-command-v19 .wm19-table { min-width:880px; }
+.wm-command-v19 .wm19-table thead { position:sticky; top:0; z-index:2; box-shadow:0 1px 0 rgb(var(--outline-variant) / .45); }
+.wm-command-v19 .wm19-table th { padding:13px 14px; background:rgb(var(--surface-container)); }
+.wm-command-v19 .wm19-table td { padding:14px; font-size:11px; }
+.wm-command-v19 .wm19-table tbody tr:nth-child(even) { background:rgb(var(--surface-container) / .18); }
+.wm-command-v19 .wm19-flow { padding-bottom:16px; }
+.wm-command-v19 .wm19-legend { grid-template-columns:repeat(2,minmax(0,1fr)); row-gap:10px; }
+@media (max-width:1280px) { .wm-command-v19 .wm19-layout { grid-template-columns:1fr; }.wm-command-v19 .wm19-side { grid-template-columns:repeat(3,minmax(0,1fr)); }.wm-command-v19 .wm19-gate-grid { grid-template-columns:repeat(4,minmax(0,1fr)); } }
+@media (max-width:900px) { .wm-command-v19 .wm19-gate-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }.wm-command-v19 .wm19-side { grid-template-columns:1fr; }.wm-command-v19 .wm19-table-wrap { max-height:600px; } }
+@media (max-width:640px) { .wm-command-v19 .wm19-hero,.wm-command-v19 .wm19-gate-head { align-items:flex-start; flex-direction:column; }.wm-command-v19 .wm19-kpis { grid-template-columns:repeat(2,minmax(0,1fr)); }.wm-command-v19 .wm19-filter { flex-wrap:wrap; }.wm-command-v19 .wm19-filter input { min-width:0; width:calc(100% - 36px); }.wm-command-v19 .wm19-result { width:100%; margin-left:32px; }.wm-command-v19 .wm19-gate-summary { justify-content:flex-start; }.wm-command-v19 .wm19-gate-grid { grid-template-columns:repeat(2,minmax(0,1fr)); padding:10px; }.wm-command-v19 .wm19-gate-card { min-height:110px; } }
+@media (max-width:420px) { .wm-command-v19 .wm19-gate-grid { grid-template-columns:1fr; } }

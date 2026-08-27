@@ -12,6 +12,10 @@ const appSource = fs.readFileSync(
   path.join(__dirname, "..", "js", "app.js"),
   "utf8",
 );
+const styleSource = fs.readFileSync(
+  path.join(__dirname, "..", "style.css"),
+  "utf8",
+);
 const backendSource = fs.readFileSync(
   path.join(__dirname, "..", "api", "inbound.js"),
   "utf8",
@@ -76,6 +80,19 @@ test("Daftar exposes explicit manual vendor and PO choices", () => {
     /function commitPendingManualSecurityInputs[\s\S]*commitPendingManualSecurityInputs\(form\);/,
   );
   assert.match(appSource, /if \(!currentVendorIsMaster \|\| !getPoMeta\(po\)\) return true;/);
+});
+
+test("Waiting Monitor keeps gate visibility and makes the full queue the primary workspace", () => {
+  assert.match(appSource, /function gatePanelV22\(rows\)/);
+  assert.match(appSource, /Visibilitas Gate Bongkar/);
+  assert.match(appSource, /Klik gate aktif untuk memfilter Queue Operasional/);
+  assert.match(appSource, /wm19-layout[\s\S]*tableV19\(rows\)[\s\S]*riskListV19\(rows\)[\s\S]*flowV19\(rows\)/);
+  assert.doesNotMatch(
+    extractFunction(appSource, "function tableV19", "\n  window.wmFilterV19"),
+    /slice\(0, 12\)/,
+  );
+  assert.match(styleSource, /\.wm19-table-wrap \{ max-height:680px; overflow:auto;/);
+  assert.match(styleSource, /\.wm19-gate-grid \{ display:grid; grid-template-columns:repeat\(5/);
 });
 
 test("auto sync polls no faster than every ten seconds", () => {
