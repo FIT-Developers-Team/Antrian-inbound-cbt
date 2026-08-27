@@ -13913,7 +13913,13 @@ if (window.__exportCsvV19) {
       : typeof getCibitungGateOptions === "function"
         ? getCibitungGateOptions()
         : [];
-    const gates = [...new Set(configured.map((gate) => String(gate || "").trim()).filter(Boolean))];
+    const gates = [
+      ...new Set(
+        configured
+          .map((gate) => String(gate || "").trim())
+          .filter((gate) => gate && !gate.toUpperCase().startsWith("STL-")),
+      ),
+    ];
     const activeRows = rows.filter((row) => ["CALLED", "UNLOADING"].includes(safeStatus(row)));
     const assignments = gates.map((gate) => {
       const tickets = activeRows.filter((row) =>

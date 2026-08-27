@@ -86,6 +86,7 @@ test("Waiting Monitor keeps gate visibility and makes the full queue the primary
   assert.match(appSource, /function gatePanelV22\(rows\)/);
   assert.match(appSource, /Visibilitas Gate Bongkar/);
   assert.match(appSource, /Klik gate aktif untuk memfilter Queue Operasional/);
+  assert.match(appSource, /!gate\.toUpperCase\(\)\.startsWith\("STL-"\)/);
   assert.match(appSource, /wm19-layout[\s\S]*tableV19\(rows\)[\s\S]*riskListV19\(rows\)[\s\S]*flowV19\(rows\)/);
   assert.doesNotMatch(
     extractFunction(appSource, "function tableV19", "\n  window.wmFilterV19"),
