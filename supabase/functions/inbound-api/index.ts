@@ -56,7 +56,11 @@ function configuredUsers(): ConfiguredUser[] {
   const raw = Deno.env.get("INBOUND_AUTH_USERS") || "[]";
   const users = JSON.parse(raw);
   if (!Array.isArray(users)) throw new Error("INBOUND_AUTH_USERS harus berupa JSON array.");
-  return users;
+  const commercialRaw = Deno.env.get("INBOUND_COMMERCIAL_USER") || "";
+  if (!commercialRaw) return users;
+  const commercial = JSON.parse(commercialRaw);
+  const commercialUsers = Array.isArray(commercial) ? commercial : [commercial];
+  return [...users, ...commercialUsers];
 }
 
 function authenticate(body: Record<string, unknown>): Session | null {

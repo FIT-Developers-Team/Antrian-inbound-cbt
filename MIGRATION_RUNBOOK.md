@@ -21,6 +21,7 @@
 ## Required server-side secrets
 
 - `INBOUND_AUTH_USERS`
+- `INBOUND_COMMERCIAL_USER` (akun read-only terpisah agar rotasi tidak menimpa akun operasional)
 - `INBOUND_AUTH_SECRET`
 - `SYNC_SECRET`
 - `SUPERSET_BASE_URL`

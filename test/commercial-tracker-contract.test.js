@@ -53,4 +53,6 @@ test("Supabase grants COMERCIAL only read actions", () => {
   assert.ok(writeBlock, "write authorization block must exist");
   assert.match(readBlock[0], /"COMERCIAL"/);
   assert.doesNotMatch(writeBlock[0], /"COMERCIAL"/);
+  assert.match(source, /Deno\.env\.get\("INBOUND_COMMERCIAL_USER"\)/);
+  assert.match(source, /return \[\.\.\.users, \.\.\.commercialUsers\]/);
 });
