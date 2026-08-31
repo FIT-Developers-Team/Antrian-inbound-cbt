@@ -35,6 +35,9 @@ test("COMERCIAL reuses the QR driver dataset and tracking helpers", () => {
   assert.match(section, /checker_progress/);
   assert.match(section, /gr_progress/);
   assert.match(section, /po_rows/);
+  assert.match(section, /id="commercial-date-filter" type="date"/);
+  assert.match(section, /operationalDateOf\(row\) !== view\.date/);
+  assert.match(section, /timeZone: "Asia\/Jakarta"/);
 });
 
 test("Supabase grants COMERCIAL only read actions", () => {

@@ -7459,10 +7459,15 @@ function securityFormMatchesRowsForPrint(rows = []) {
   if (window.__commercialTrackerV23Installed) return;
   window.__commercialTrackerV23Installed = true;
 
+  const todayWib = () => new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+  }).format(new Date());
+
   const view = {
     query: "",
     status: "ACTIVE",
     type: "ALL",
+    date: todayWib(),
     selectedKey: "",
   };
 
@@ -7479,6 +7484,16 @@ function securityFormMatchesRowsForPrint(rows = []) {
   const poRowsOf = (row) => Array.isArray(row?.po_rows) ? row.po_rows : [];
   const poTextOf = (row) => [row?.po_number, ...poRowsOf(row).map((po) => po?.po_number)].filter(Boolean).join(" ");
   const trackerRows = () => Array.isArray(state.dashboard?.queue) ? state.dashboard.queue : [];
+
+  function operationalDateOf(row) {
+    const direct = cleanText(row?.operational_date);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(direct)) return direct;
+    const raw = row?.register_time || row?.created_at || row?.updated_at;
+    if (!raw) return "";
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) return cleanText(raw).slice(0, 10);
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(date);
+  }
 
   function slaOf(row) {
     try {
@@ -7561,6 +7576,7 @@ function securityFormMatchesRowsForPrint(rows = []) {
         const type = typeOf(row);
         if (view.type === "ALL" && type === "DROP-OFF") return false;
         if (view.type !== "ALL" && type !== view.type) return false;
+        if (view.date && operationalDateOf(row) !== view.date) return false;
         const status = statusOf(row);
         if (view.status === "ACTIVE" && isTerminal(row)) return false;
         if (view.status === "GR" && !["WAITING GR", "DONE GR"].includes(status)) return false;
@@ -7679,6 +7695,15 @@ function securityFormMatchesRowsForPrint(rows = []) {
     view.query = cleanText(document.getElementById("commercial-search")?.value);
     view.status = cleanText(document.getElementById("commercial-status-filter")?.value || "ACTIVE").toUpperCase();
     view.type = cleanText(document.getElementById("commercial-type-filter")?.value || "ALL").toUpperCase();
+    view.date = cleanText(document.getElementById("commercial-date-filter")?.value);
+    view.selectedKey = "";
+    refreshView();
+  };
+
+  window.clearCommercialDateFilter = function clearCommercialDateFilterV23() {
+    view.date = "";
+    const input = document.getElementById("commercial-date-filter");
+    if (input) input.value = "";
     view.selectedKey = "";
     refreshView();
   };
@@ -7711,7 +7736,7 @@ function securityFormMatchesRowsForPrint(rows = []) {
     return `<div class="commercial-tracker">
       <section class="commercial-hero"><div><div class="commercial-eyebrow">INBOUND CBT / READ ONLY</div><h2>COMERCIAL Ticket Tracker</h2><p>Cari vendor atau PO dan pantau status yang sama dengan hasil scan QR driver.</p></div><button type="button" onclick="refreshDashboard()"><span class="material-symbols-outlined">refresh</span>Refresh Data</button></section>
       <section id="commercial-metrics" class="commercial-metrics">${metricsHtml()}</section>
-      <section class="commercial-toolbar"><label class="commercial-search"><span class="material-symbols-outlined">search</span><input id="commercial-search" value="${esc(view.query)}" oninput="applyCommercialFilters()" placeholder="Cari PO, vendor, queue, plat, atau Ticket ID" autocomplete="off" /></label><label><span>Status</span><select id="commercial-status-filter" onchange="applyCommercialFilters()"><option value="ACTIVE" ${view.status === "ACTIVE" ? "selected" : ""}>Tiket Aktif</option><option value="ALL" ${view.status === "ALL" ? "selected" : ""}>Semua Status</option><option value="WAITING" ${view.status === "WAITING" ? "selected" : ""}>Waiting</option><option value="CALLED" ${view.status === "CALLED" ? "selected" : ""}>Dipanggil</option><option value="UNLOADING" ${view.status === "UNLOADING" ? "selected" : ""}>Bongkar</option><option value="GR" ${view.status === "GR" ? "selected" : ""}>Proses GR</option><option value="COMPLETED" ${view.status === "COMPLETED" ? "selected" : ""}>Selesai</option></select></label><label><span>Jenis Tiket</span><select id="commercial-type-filter" onchange="applyCommercialFilters()"><option value="ALL" ${view.type === "ALL" ? "selected" : ""}>REG + VIP</option><option value="REG" ${view.type === "REG" ? "selected" : ""}>REG</option><option value="VIP" ${view.type === "VIP" ? "selected" : ""}>VIP</option><option value="DROP-OFF" ${view.type === "DROP-OFF" ? "selected" : ""}>Drop-Off</option></select></label></section>
+      <section class="commercial-toolbar"><label class="commercial-search"><span class="material-symbols-outlined">search</span><input id="commercial-search" value="${esc(view.query)}" oninput="applyCommercialFilters()" placeholder="Cari PO, vendor, queue, plat, atau Ticket ID" autocomplete="off" /></label><label><span>Tanggal Tiket</span><div class="commercial-date-control"><input id="commercial-date-filter" type="date" value="${esc(view.date)}" onchange="applyCommercialFilters()" /><button type="button" onclick="clearCommercialDateFilter()" title="Tampilkan semua tanggal">Semua</button></div></label><label><span>Status</span><select id="commercial-status-filter" onchange="applyCommercialFilters()"><option value="ACTIVE" ${view.status === "ACTIVE" ? "selected" : ""}>Tiket Aktif</option><option value="ALL" ${view.status === "ALL" ? "selected" : ""}>Semua Status</option><option value="WAITING" ${view.status === "WAITING" ? "selected" : ""}>Waiting</option><option value="CALLED" ${view.status === "CALLED" ? "selected" : ""}>Dipanggil</option><option value="UNLOADING" ${view.status === "UNLOADING" ? "selected" : ""}>Bongkar</option><option value="GR" ${view.status === "GR" ? "selected" : ""}>Proses GR</option><option value="COMPLETED" ${view.status === "COMPLETED" ? "selected" : ""}>Selesai</option></select></label><label><span>Jenis Tiket</span><select id="commercial-type-filter" onchange="applyCommercialFilters()"><option value="ALL" ${view.type === "ALL" ? "selected" : ""}>REG + VIP</option><option value="REG" ${view.type === "REG" ? "selected" : ""}>REG</option><option value="VIP" ${view.type === "VIP" ? "selected" : ""}>VIP</option><option value="DROP-OFF" ${view.type === "DROP-OFF" ? "selected" : ""}>Drop-Off</option></select></label></section>
       <section class="commercial-workspace"><div id="commercial-list-panel" class="commercial-list-panel">${listHtml(rows)}</div><div id="commercial-detail-panel">${detailHtml(selectedRow(rows))}</div></section>
     </div>`;
   };
