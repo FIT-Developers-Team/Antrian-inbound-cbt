@@ -22,7 +22,7 @@
       href="assets/login-logo.png"
       type="image/png"
     />
-    <link rel="stylesheet" href="style.css?v=18.0" />
+    <link rel="stylesheet" href="style.css?v=23.0" />
     <script>
       tailwind.config = {
         darkMode: "class",
@@ -138,6 +138,10 @@
             <span class="material-symbols-outlined">dashboard</span
             ><span>Waiting Monitor</span>
           </button>
+          <button data-page="commercial" class="nav-btn">
+            <span class="material-symbols-outlined">manage_search</span
+            ><span>COMERCIAL</span>
+          </button>
           <button data-page="laporan" class="nav-btn">
             <span class="material-symbols-outlined">assessment</span
             ><span>Waiting List</span>
@@ -242,6 +246,9 @@
             <button data-page="monitor" class="mobile-nav-btn">
               Waiting Monitor
             </button>
+            <button data-page="commercial" class="mobile-nav-btn">
+              COMERCIAL
+            </button>
             <button data-page="laporan" class="mobile-nav-btn">
               Waiting List
             </button>
@@ -269,7 +276,7 @@
 
   <script src="js/supabase_backend.js?v=1.0"></script>
   <script src="js/dropoff_domain.js?v=21.0"></script>
-<script src="js/app.js?v=21.0"></script>
+<script src="js/app.js?v=23.0"></script>
 <script src="js/realtime_client.js?v=1.0"></script>
 <script src="js/api_v2.js?v=21.0"></script>
   </body>

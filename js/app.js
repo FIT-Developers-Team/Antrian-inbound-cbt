@@ -115,6 +115,10 @@ const pageMeta = {
     title: "Waiting List Monitoring",
     subtitle: "Report Security + Checker, SLA by fleet type",
   },
+  commercial: {
+    title: "COMERCIAL",
+    subtitle: "Tracking tiket inbound untuk vendor dan PO",
+  },
   laporan: {
     title: "Waiting List",
     subtitle: "List input security, update gate/status dari checker",
@@ -251,7 +255,7 @@ function loginPage() {
       <form id="login-form" onsubmit="submitLogin(event)" class="space-y-4">
         <label class="flex flex-col gap-2">
           <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Username</span>
-          <input name="username" class="form-input" placeholder="spv / admin / checker / security" autocomplete="username" required />
+          <input name="username" class="form-input" placeholder="Username operasional" autocomplete="username" required />
         </label>
         <label class="flex flex-col gap-2">
           <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Password</span>
@@ -5011,6 +5015,10 @@ function renderPage(page, toast = true) {
     antrian: pageAntrian,
     panggil: pagePanggil,
     monitor: pageMonitor,
+    commercial:
+      typeof window.pageCommercial === "function"
+        ? window.pageCommercial
+        : pageDebug,
     laporan: pageLaporan,
     setting: pageSetting,
     debug: pageDebug,
@@ -7441,6 +7449,284 @@ function securityFormMatchesRowsForPrint(rows = []) {
       applyRoleAccessUI?.();
     }, 250);
   });
+})();
+
+/* ==========================================================================
+ * V23 — COMERCIAL TICKET TRACKER
+ * Read-only master/detail yang memakai row dan helper SLA sama dengan QR driver.
+ * ========================================================================== */
+(function installCommercialTrackerV23() {
+  if (window.__commercialTrackerV23Installed) return;
+  window.__commercialTrackerV23Installed = true;
+
+  const view = {
+    query: "",
+    status: "ACTIVE",
+    type: "ALL",
+    selectedKey: "",
+  };
+
+  const cleanText = (value) => String(value ?? "").trim();
+  const statusOf = (row) => cleanText(row?.status || "WAITING").toUpperCase();
+  const typeOf = (row) => {
+    const raw = cleanText(row?.ticket_type || row?.fleet_type).toUpperCase();
+    if (raw.includes("DROP")) return "DROP-OFF";
+    if (raw.includes("VIP")) return "VIP";
+    return "REG";
+  };
+  const isTerminal = (row) => ["COMPLETED", "EXPIRED", "CANCELLED"].includes(statusOf(row));
+  const keyOf = (row) => cleanText(row?.ticket_id || `${row?.queue_no || ""}|${row?.plat_number || ""}`);
+  const poRowsOf = (row) => Array.isArray(row?.po_rows) ? row.po_rows : [];
+  const poTextOf = (row) => [row?.po_number, ...poRowsOf(row).map((po) => po?.po_number)].filter(Boolean).join(" ");
+  const trackerRows = () => Array.isArray(state.dashboard?.queue) ? state.dashboard.queue : [];
+
+  function slaOf(row) {
+    try {
+      return typeof getInboundSlaInfo === "function"
+        ? getInboundSlaInfo(row) || {}
+        : {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function slaTone(row) {
+    const sla = slaOf(row);
+    const status = cleanText(sla.status).toUpperCase();
+    const delta = Number(sla.delta_minutes);
+    if (["SLA MISS", "LATE"].includes(status) || (Number.isFinite(delta) && delta < 0)) return "danger";
+    if (!isTerminal(row) && Number.isFinite(delta) && delta <= 60) return "warning";
+    return "good";
+  }
+
+  function slaLabel(row) {
+    const sla = slaOf(row);
+    return cleanText(sla.label || sla.status || (isTerminal(row) ? "Selesai" : "On track"));
+  }
+
+  function statusLabel(status) {
+    return {
+      WAITING: "WAITING",
+      CALLED: "DIPANGGIL",
+      UNLOADING: "BONGKAR",
+      "WAITING GR": "WAITING GR",
+      "DONE GR": "DONE GR",
+      COMPLETED: "SELESAI",
+      EXPIRED: "EXPIRED",
+    }[status] || status;
+  }
+
+  function waitingLabel(row) {
+    try {
+      return typeof driverWaitingLabel === "function" ? driverWaitingLabel(row) : "-";
+    } catch (error) {
+      return "-";
+    }
+  }
+
+  function progressPercent(value) {
+    const match = cleanText(value).match(/^(\d+)\s*\/\s*(\d+)$/);
+    if (!match || Number(match[2]) <= 0) return 0;
+    return Math.max(0, Math.min(100, Math.round((Number(match[1]) / Number(match[2])) * 100)));
+  }
+
+  function targetSlaLabel(row) {
+    try {
+      const estimate = typeof getUnloadingEstimateInfo === "function"
+        ? getUnloadingEstimateInfo(row) || {}
+        : {};
+      return cleanText(estimate.estimateText || row.sla_finished_at || row.sla_target_at || "-");
+    } catch (error) {
+      return cleanText(row.sla_finished_at || row.sla_target_at || "-");
+    }
+  }
+
+  function dateTimeLabel(value) {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return cleanText(value);
+    return new Intl.DateTimeFormat("id-ID", {
+      timeZone: "Asia/Jakarta",
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date).replace(".", ":");
+  }
+
+  function filteredRows() {
+    const query = view.query.toLowerCase();
+    return trackerRows()
+      .filter((row) => {
+        const type = typeOf(row);
+        if (view.type === "ALL" && type === "DROP-OFF") return false;
+        if (view.type !== "ALL" && type !== view.type) return false;
+        const status = statusOf(row);
+        if (view.status === "ACTIVE" && isTerminal(row)) return false;
+        if (view.status === "GR" && !["WAITING GR", "DONE GR"].includes(status)) return false;
+        if (!["ALL", "ACTIVE", "GR"].includes(view.status) && status !== view.status) return false;
+        if (!query) return true;
+        return [
+          row.ticket_id,
+          row.queue_no,
+          row.vendor_name,
+          row.plat_number,
+          row.driver_name,
+          poTextOf(row),
+        ].some((value) => cleanText(value).toLowerCase().includes(query));
+      })
+      .sort((a, b) => {
+        const toneRank = { danger: 0, warning: 1, good: 2 };
+        const tone = toneRank[slaTone(a)] - toneRank[slaTone(b)];
+        if (tone) return tone;
+        if (isTerminal(a) !== isTerminal(b)) return isTerminal(a) ? 1 : -1;
+        return new Date(a.created_at || a.register_time || 0) - new Date(b.created_at || b.register_time || 0);
+      });
+  }
+
+  function selectedRow(rows = filteredRows()) {
+    const selected = rows.find((row) => keyOf(row) === view.selectedKey);
+    if (selected) return selected;
+    view.selectedKey = rows[0] ? keyOf(rows[0]) : "";
+    return rows[0] || null;
+  }
+
+  function metricCard(label, value, note, tone, icon) {
+    return `<article class="commercial-metric ${tone}"><span class="material-symbols-outlined">${icon}</span><div><small>${esc(label)}</small><b>${Number(value || 0).toLocaleString("id-ID")}</b><em>${esc(note)}</em></div></article>`;
+  }
+
+  function metricsHtml() {
+    const rows = trackerRows().filter((row) => typeOf(row) !== "DROP-OFF");
+    const active = rows.filter((row) => !isTerminal(row));
+    const completedToday = rows.filter((row) => statusOf(row) === "COMPLETED").length;
+    return [
+      metricCard("Aktif", active.length, "REG dan VIP", "blue", "schedule"),
+      metricCard("Waiting", active.filter((row) => statusOf(row) === "WAITING").length, "Menunggu panggil", "amber", "hourglass_top"),
+      metricCard("Bongkar", active.filter((row) => statusOf(row) === "UNLOADING").length, "Gate berjalan", "purple", "local_shipping"),
+      metricCard("Proses GR", active.filter((row) => ["WAITING GR", "DONE GR"].includes(statusOf(row))).length, "Checker selesai", "cyan", "inventory_2"),
+      metricCard("SLA Berisiko", active.filter((row) => ["danger", "warning"].includes(slaTone(row))).length, "Perlu perhatian", "red", "warning"),
+      metricCard("Selesai", completedToday, "Data tersedia", "green", "check_circle"),
+    ].join("");
+  }
+
+  function listHtml(rows) {
+    const visible = rows.slice(0, 100);
+    const selected = selectedRow(rows);
+    return `<div class="commercial-list-head"><div><b>Hasil Pencarian</b><small>${rows.length.toLocaleString("id-ID")} tiket ditemukan</small></div><span>${visible.length}${rows.length > visible.length ? "+" : ""} tampil</span></div>
+      <div class="commercial-ticket-list" role="list" aria-label="Daftar tiket inbound">
+        ${visible.map((row) => {
+          const key = keyOf(row);
+          const poCount = Number(row.ticket_po_count || poRowsOf(row).length || (row.po_number ? 1 : 0));
+          return `<button type="button" role="listitem" class="commercial-ticket ${selected && keyOf(selected) === key ? "selected" : ""}" data-commercial-key="${esc(key)}" onclick="selectCommercialTicket(this.dataset.commercialKey)">
+            <div class="commercial-ticket-top"><span class="commercial-queue">${esc(row.queue_no || "-")}</span><span class="commercial-status status-${statusOf(row).replace(/\s+/g, "-").toLowerCase()}">${esc(statusLabel(statusOf(row)))}</span></div>
+            <strong>${esc(row.vendor_name || "-")}</strong>
+            <div class="commercial-ticket-meta"><span>${esc(row.plat_number || "-")}</span><span>${poCount} PO</span><span>Gate ${esc(row.gate || "-")}</span></div>
+            <div class="commercial-ticket-foot"><span>Checker ${esc(row.checker_progress || "0/0")} · GR ${esc(row.gr_progress || "0/0")}</span><b class="sla-${slaTone(row)}">${esc(slaLabel(row))}</b></div>
+          </button>`;
+        }).join("") || `<div class="commercial-empty">Tiket tidak ditemukan. Ubah kata pencarian atau filter.</div>`}
+      </div>`;
+  }
+
+  function timelineHtml(row) {
+    const status = statusOf(row);
+    const rank = { WAITING: 0, CALLED: 1, UNLOADING: 2, "WAITING GR": 3, "DONE GR": 3, COMPLETED: 4 }[status] ?? 0;
+    const steps = [
+      ["REGISTER", row.register_time || row.created_at],
+      ["CALLED", row.called_at],
+      ["BONGKAR", row.start_unloading_at],
+      ["GR", row.done_gr_at || row.po_updated_at],
+      ["COMPLETED", row.completed_at || row.finish_unloading_at],
+    ];
+    return `<div class="commercial-timeline" aria-label="Timeline proses tiket">${steps.map(([label, time], index) => `<div class="commercial-step ${index < rank || time ? "done" : index === rank ? "current" : ""}"><i><span class="material-symbols-outlined">${index < rank || time ? "check" : index === rank ? "radio_button_checked" : "circle"}</span></i><b>${label}</b><small>${dateTimeLabel(time)}</small></div>`).join("")}</div>`;
+  }
+
+  function poTableHtml(row) {
+    const poRows = poRowsOf(row);
+    const rows = poRows.length ? poRows : row.po_number ? [row] : [];
+    return `<details class="commercial-po" open><summary><span><span class="material-symbols-outlined">receipt_long</span>Daftar PO</span><b>${rows.length}</b></summary><div class="commercial-po-scroll"><table><thead><tr><th>PO Number</th><th>Qty</th><th>SKU</th><th>Checker</th><th>GR</th></tr></thead><tbody>${rows.map((po) => `<tr><td>${esc(po.po_number || "-")}</td><td>${esc(po.total_po_qty ?? po.po_qty ?? "-")}</td><td>${esc(po.count_po_sku ?? po.ticket_total_sku ?? "-")}</td><td>${esc(po.checker_status || "-")}</td><td>${esc(po.gr_status || "-")}</td></tr>`).join("") || `<tr><td colspan="5">Tidak ada detail PO.</td></tr>`}</tbody></table></div></details>`;
+  }
+
+  function detailHtml(row) {
+    if (!row) return `<div class="commercial-detail commercial-empty">Pilih tiket untuk melihat detail tracking.</div>`;
+    const sla = slaOf(row);
+    let trackUrl = "";
+    try { trackUrl = makeDriverTrackUrl(row); } catch (error) {}
+    const target = targetSlaLabel(row);
+    const checkerProgress = cleanText(row.checker_progress || "0/0");
+    const grProgress = cleanText(row.gr_progress || "0/0");
+    return `<article class="commercial-detail" data-commercial-detail>
+      <header class="commercial-detail-head"><div><div class="commercial-detail-title"><span>${esc(row.queue_no || "-")}</span><span class="commercial-status status-${statusOf(row).replace(/\s+/g, "-").toLowerCase()}">${esc(statusLabel(statusOf(row)))}</span></div><p>${esc(row.vendor_name || "-")} · ${esc(row.plat_number || "-")} · Gate ${esc(row.gate || "-")}</p></div><span class="commercial-live"><i></i>LIVE DATA</span></header>
+      <section class="commercial-detail-kpis"><div><small>Target SLA</small><b>${esc(dateTimeLabel(target))}</b></div><div><small>Kondisi SLA</small><b class="sla-${slaTone(row)}">${esc(slaLabel(row))}</b></div><div><small>Jam Menunggu</small><b>${esc(waitingLabel(row))}</b></div></section>
+      <section class="commercial-progress"><div><span><b>Checker</b><em>${esc(checkerProgress)}</em></span><progress max="100" value="${progressPercent(checkerProgress)}"></progress></div><div><span><b>GR</b><em>${esc(grProgress)}</em></span><progress max="100" value="${progressPercent(grProgress)}"></progress></div></section>
+      <section class="commercial-section"><h3>Timeline Proses</h3>${timelineHtml(row)}</section>
+      <section class="commercial-section"><h3>Detail Tiket</h3><div class="commercial-info-grid"><div><small>Driver</small><b>${esc(row.driver_name || "-")}</b></div><div><small>Vendor</small><b>${esc(row.vendor_name || "-")}</b></div><div><small>Plat</small><b>${esc(row.plat_number || "-")}</b></div><div><small>Fleet</small><b>${esc(row.fleet_type || "-")}</b></div><div><small>Jenis Tiket</small><b>${esc(typeOf(row))}</b></div><div><small>Last Update</small><b>${esc(dateTimeLabel(row.updated_at || row.row_updated_at))}</b></div></div></section>
+      ${poTableHtml(row)}
+      <div class="commercial-actions"><button type="button" onclick="copyCommercialTrackingLink('${esc(trackUrl)}')"><span class="material-symbols-outlined">content_copy</span>Salin Link Tracking</button><button type="button" onclick="openCommercialDriverView('${esc(trackUrl)}')"><span class="material-symbols-outlined">open_in_new</span>Buka Tampilan Driver</button></div>
+    </article>`;
+  }
+
+  function refreshView() {
+    const rows = filteredRows();
+    const metrics = document.getElementById("commercial-metrics");
+    const list = document.getElementById("commercial-list-panel");
+    const detail = document.getElementById("commercial-detail-panel");
+    if (metrics) metrics.innerHTML = metricsHtml();
+    if (list) list.innerHTML = listHtml(rows);
+    if (detail) detail.innerHTML = detailHtml(selectedRow(rows));
+  }
+
+  window.applyCommercialFilters = function applyCommercialFiltersV23() {
+    view.query = cleanText(document.getElementById("commercial-search")?.value);
+    view.status = cleanText(document.getElementById("commercial-status-filter")?.value || "ACTIVE").toUpperCase();
+    view.type = cleanText(document.getElementById("commercial-type-filter")?.value || "ALL").toUpperCase();
+    view.selectedKey = "";
+    refreshView();
+  };
+
+  window.selectCommercialTicket = function selectCommercialTicketV23(key) {
+    view.selectedKey = cleanText(key);
+    refreshView();
+    if (window.matchMedia("(max-width: 900px)").matches) {
+      document.querySelector("[data-commercial-detail]")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
+  window.copyCommercialTrackingLink = async function copyCommercialTrackingLinkV23(url) {
+    if (!url) return showToast("Link tracking belum tersedia.");
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast("Link tracking driver disalin.");
+    } catch (error) {
+      showToast("Browser tidak mengizinkan copy otomatis.");
+    }
+  };
+
+  window.openCommercialDriverView = function openCommercialDriverViewV23(url) {
+    if (!url) return showToast("Link tracking belum tersedia.");
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  window.pageCommercial = function pageCommercialV23() {
+    const rows = filteredRows();
+    return `<div class="commercial-tracker">
+      <section class="commercial-hero"><div><div class="commercial-eyebrow">INBOUND CBT / READ ONLY</div><h2>COMERCIAL Ticket Tracker</h2><p>Cari vendor atau PO dan pantau status yang sama dengan hasil scan QR driver.</p></div><button type="button" onclick="refreshDashboard()"><span class="material-symbols-outlined">refresh</span>Refresh Data</button></section>
+      <section id="commercial-metrics" class="commercial-metrics">${metricsHtml()}</section>
+      <section class="commercial-toolbar"><label class="commercial-search"><span class="material-symbols-outlined">search</span><input id="commercial-search" value="${esc(view.query)}" oninput="applyCommercialFilters()" placeholder="Cari PO, vendor, queue, plat, atau Ticket ID" autocomplete="off" /></label><label><span>Status</span><select id="commercial-status-filter" onchange="applyCommercialFilters()"><option value="ACTIVE" ${view.status === "ACTIVE" ? "selected" : ""}>Tiket Aktif</option><option value="ALL" ${view.status === "ALL" ? "selected" : ""}>Semua Status</option><option value="WAITING" ${view.status === "WAITING" ? "selected" : ""}>Waiting</option><option value="CALLED" ${view.status === "CALLED" ? "selected" : ""}>Dipanggil</option><option value="UNLOADING" ${view.status === "UNLOADING" ? "selected" : ""}>Bongkar</option><option value="GR" ${view.status === "GR" ? "selected" : ""}>Proses GR</option><option value="COMPLETED" ${view.status === "COMPLETED" ? "selected" : ""}>Selesai</option></select></label><label><span>Jenis Tiket</span><select id="commercial-type-filter" onchange="applyCommercialFilters()"><option value="ALL" ${view.type === "ALL" ? "selected" : ""}>REG + VIP</option><option value="REG" ${view.type === "REG" ? "selected" : ""}>REG</option><option value="VIP" ${view.type === "VIP" ? "selected" : ""}>VIP</option><option value="DROP-OFF" ${view.type === "DROP-OFF" ? "selected" : ""}>Drop-Off</option></select></label></section>
+      <section class="commercial-workspace"><div id="commercial-list-panel" class="commercial-list-panel">${listHtml(rows)}</div><div id="commercial-detail-panel">${detailHtml(selectedRow(rows))}</div></section>
+    </div>`;
+  };
+
+  pageMeta.commercial = {
+    title: "COMERCIAL",
+    subtitle: "Tracking vendor, PO, dan status tiket inbound",
+  };
+  ROLE_ACCESS.COMERCIAL = ["commercial"];
+  ROLE_DEFAULT_PAGE.COMERCIAL = "commercial";
+  ["SPV", "ADMIN", "DEVELOPER"].forEach((role) => {
+    ROLE_ACCESS[role] = Array.isArray(ROLE_ACCESS[role]) ? ROLE_ACCESS[role] : [];
+    if (!ROLE_ACCESS[role].includes("commercial")) ROLE_ACCESS[role].push("commercial");
+  });
+  applyRoleAccessUI?.();
 })();
 
 /* V19 — bulk Actual Qty and complete, filter-aware Waiting List export. */
@@ -11525,6 +11811,16 @@ window.initShader = function initShaderDisabled() {
           .toLowerCase(),
     );
 
+    // Akun COMERCIAL divalidasi sepenuhnya oleh Supabase. Username tim dapat
+    // ditambah lewat secret tanpa harus menaruh daftar akun di browser.
+    if (!master && normalizeRole(stored.role) === "COMERCIAL") {
+      return {
+        ...stored,
+        role: "COMERCIAL",
+        display_name: stored.display_name || stored.username,
+      };
+    }
+
     if (!master) {
       clearAuthUser();
       return null;
@@ -14337,5 +14633,16 @@ if (window.__exportCsvV19) {
     if (toast) showToast("Buka menu Drop-Off");
   };
   window.renderPage = renderPage;
+  applyRoleAccessUI?.();
+})();
+
+/* V23 final role binding runs after modules that rebuild ROLE_ACCESS. */
+(function bindCommercialRoleV23() {
+  ROLE_ACCESS.COMERCIAL = ["commercial"];
+  ROLE_DEFAULT_PAGE.COMERCIAL = "commercial";
+  ["SPV", "ADMIN", "DEVELOPER"].forEach((role) => {
+    ROLE_ACCESS[role] = Array.isArray(ROLE_ACCESS[role]) ? ROLE_ACCESS[role] : [];
+    if (!ROLE_ACCESS[role].includes("commercial")) ROLE_ACCESS[role].push("commercial");
+  });
   applyRoleAccessUI?.();
 })();

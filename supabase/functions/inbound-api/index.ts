@@ -79,7 +79,10 @@ function canUseAction(session: Session | null, action: string): boolean {
   const role = session.role;
   if (["delete_tickets_by_date", "delete_single_ticket"].includes(action)) return ["ADMIN", "DEVELOPER"].includes(role);
   if (action === "bulk_complete_operational") return role === "DEVELOPER";
-  if (["state", "state_delta", "realtime_config", "tickets", "export_rows", "create_ticket", "create_tickets_bulk"].includes(action)) {
+  if (["state", "state_delta", "realtime_config", "tickets", "export_rows"].includes(action)) {
+    return ["SECURITY", "CHECKER", "SPV", "ADMIN", "DEVELOPER", "COMERCIAL"].includes(role);
+  }
+  if (["create_ticket", "create_tickets_bulk"].includes(action)) {
     return ["SECURITY", "CHECKER", "SPV", "ADMIN", "DEVELOPER"].includes(role);
   }
   if (["superset_freshness", "ba_list", "ba_detail", "product_lookup", "create_ba"].includes(action)) {
