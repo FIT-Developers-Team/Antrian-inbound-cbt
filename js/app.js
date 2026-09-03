@@ -115,6 +115,10 @@ const pageMeta = {
     title: "Waiting List Monitoring",
     subtitle: "Report Security + Checker, SLA by fleet type",
   },
+  commercial: {
+    title: "COMERCIAL",
+    subtitle: "Tracking tiket inbound untuk vendor dan PO",
+  },
   laporan: {
     title: "Waiting List",
     subtitle: "List input security, update gate/status dari checker",
@@ -251,7 +255,7 @@ function loginPage() {
       <form id="login-form" onsubmit="submitLogin(event)" class="space-y-4">
         <label class="flex flex-col gap-2">
           <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Username</span>
-          <input name="username" class="form-input" placeholder="spv / admin / checker / security" autocomplete="username" required />
+          <input name="username" class="form-input" placeholder="Username operasional" autocomplete="username" required />
         </label>
         <label class="flex flex-col gap-2">
           <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Password</span>
@@ -276,26 +280,26 @@ async function submitLogin(e) {
   const password = String(form.password?.value || "");
 
   try {
-    const response = await fetch("/api/inbound?action=login", {
+    const response = await fetch(`${window.INBOUND_BACKEND_URL}?action=login`, {
       method: "POST",
-      credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password }),
     });
     const result = await response.json();
     const found = result?.data?.user;
-    if (!response.ok || !found)
-      throw new Error(result?.message || "Username / password salah.");
+    if (!response.ok || !found) throw new Error(result?.message || "Username / password salah.");
 
+    window.setInboundSessionToken?.(result?.data?.token || "");
     setAuthUser(found);
     applyRoleAccessUI();
     showToast("Login sebagai " + normalizeRole(found.role));
     const nextPage = getDefaultPageForRole(found.role);
     state.page = nextPage;
+    // Tinggalkan layar login segera setelah autentikasi berhasil. Initial API
+    // load dapat terkena cold start MotherDuck dan tidak boleh menahan transisi UI.
+    renderPage(nextPage, false);
     if (typeof initApi === "function") {
       await initApi();
-    } else {
-      renderPage(nextPage, false);
     }
   } catch (error) {
     showToast(error.message || "Username / password salah.");
@@ -305,10 +309,12 @@ async function submitLogin(e) {
 
 function logoutUser() {
   const user = getAuthUser();
-  fetch("/api/inbound?action=logout", {
+  fetch(`${window.INBOUND_BACKEND_URL}?action=logout`, {
     method: "POST",
-    credentials: "same-origin",
+    headers: { Authorization: `Bearer ${window.getInboundSessionToken?.() || ""}` },
   }).catch(() => {});
+  window.stopInboundRealtime?.();
+  window.clearInboundSessionToken?.();
   clearAuthUser();
   stopCallMonitorRuntime?.();
   applyTvModeStyles?.(false);
@@ -469,14 +475,51 @@ function renderPoLookupSummary(lookup) {
     )
     .join("");
 
+  const manualMetrics = found
+    .filter((item) => item.is_manual_po === true)
+    .map((item) => {
+      const po = String(item.po_number || item.po_input || "").trim();
+      const encoded = encodeURIComponent(po);
+      return `<div class="mt-3 rounded-lg border border-warning/35 bg-warning/5 p-3" data-manual-po-metrics="${esc(po)}">
+        <div class="font-bold text-on-surface">Data PO manual · ${esc(po)}</div>
+        <div class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <label class="flex flex-col gap-1"><span class="font-bold">Total Qty PO</span><input type="number" min="1" step="1" inputmode="numeric" class="form-input" value="${esc(item.total_po_qty || "")}" placeholder="Wajib diisi" oninput="updateManualPoMetricV24(decodeURIComponent('${encoded}'),'total_po_qty',this.value)" /></label>
+          <label class="flex flex-col gap-1"><span class="font-bold">Total SKU PO</span><input type="number" min="1" step="1" inputmode="numeric" class="form-input" value="${esc(item.count_po_sku || "")}" placeholder="Wajib diisi" oninput="updateManualPoMetricV24(decodeURIComponent('${encoded}'),'count_po_sku',this.value)" /></label>
+        </div>
+        <div class="mt-1 text-[11px] text-warning">Wajib diisi karena PO tidak ditemukan di master.</div>
+      </div>`;
+    })
+    .join("");
+
   return `<div id="po-lookup-summary" class="mt-3 rounded-lg border border-outline-variant/40 bg-surface-container/35 p-3 text-[12px] text-on-surface-variant">
     <div class="font-bold text-on-surface mb-2">PO terdeteksi: ${num(found.length)} valid${missing.length ? `, ${num(missing.length)} tidak ketemu` : ""}${vendorMismatch.length ? `, ${num(vendorMismatch.length)} beda vendor` : ""}</div>
     <div>${chips || `<span class="text-on-surface-variant">Belum ada PO valid.</span>`}</div>
     ${missing.length ? `<div class="mt-2"><span class="font-bold text-error">Missing:</span> ${missingChips}</div>` : ""}
     ${vendorMismatch.length ? `<div class="mt-2"><span class="font-bold text-warning">Beda vendor:</span> ${mismatchChips}</div>` : ""}
+    ${manualMetrics}
     <div class="mt-2">Submit: 1 plat = 1 mobil/antrian. Banyak PO dengan vendor sama di 1 plat akan digabung di 1 baris Output form.</div>
   </div>`;
 }
+
+window.updateManualPoMetricV24 = function updateManualPoMetricV24(poNumber, field, value) {
+  const po = String(poNumber || "").trim();
+  if (!po || !["total_po_qty", "count_po_sku"].includes(field)) return;
+  window.__manualPoMetricsV24 = window.__manualPoMetricsV24 || {};
+  const current = window.__manualPoMetricsV24[po] || {};
+  current[field] = String(value ?? "").trim();
+  window.__manualPoMetricsV24[po] = current;
+  const lookup = state.poLookup;
+  const item = lookup?.items?.find((row) => String(row.po_number || row.po_input || "").trim() === po);
+  if (item) item[field] = Number(value || 0);
+  if (lookup?.summary) {
+    lookup.summary.total_po_qty = (lookup.items || []).reduce((sum, row) => sum + Number(row.total_po_qty || 0), 0);
+    lookup.summary.count_po_sku = (lookup.items || []).reduce((sum, row) => sum + Number(row.count_po_sku || 0), 0);
+    const total = document.getElementById("security-total-qty");
+    const sku = document.getElementById("security-count-sku");
+    if (total) total.textContent = num(lookup.summary.total_po_qty);
+    if (sku) sku.textContent = num(lookup.summary.count_po_sku);
+  }
+};
 
 function splitPlateParts(value = "") {
   const cleaned = normalizePlateValue(value);
@@ -845,39 +888,60 @@ function decodeDriverTicketPayload(value = "") {
 
 function getDriverTicketPayloadFromUrl() {
   const params = new URLSearchParams(location.search);
+  const ticketId = String(params.get("driver_ticket_id") || "").trim();
+  if (ticketId) return { ticket_id: ticketId };
   const raw = params.get("driver_ticket") || params.get("ticket") || "";
   return decodeDriverTicketPayload(raw);
 }
 
 function isDriverTrackMode() {
   const params = new URLSearchParams(location.search);
-  return params.has("driver_ticket") || params.has("ticket");
+  return (
+    params.has("driver_ticket_id") ||
+    params.has("driver_ticket") ||
+    params.has("ticket")
+  );
 }
 
 function makeDriverTrackUrl(row = {}) {
-  const payload = {
-    ticket_id: row.ticket_id || "",
-    queue_no: row.queue_no || "",
-    vendor_name: row.vendor_name || "",
-    po_number: row.po_number || "",
-    plat_number: row.plat_number || "",
-    driver_name: row.driver_name || "",
-    fleet_type: row.fleet_type || "",
-    gate: row.gate || "-",
-    status: row.status || "WAITING",
-    register_time:
-      row.register_time || row.created_at || formatDateTimeLocal(new Date()),
-    created_at:
-      row.created_at || row.register_time || formatDateTimeLocal(new Date()),
-  };
+  const ticketId = String(row.ticket_id || "").trim();
+  const isPreview =
+    !ticketId ||
+    ticketId.includes("-PREVIEW-") ||
+    String(row.source || "").toUpperCase() === "SECURITY_PRINT_PREVIEW";
+  const payload = isPreview
+    ? {
+        ticket_id: ticketId,
+        queue_no: row.queue_no || "",
+        vendor_name: row.vendor_name || "",
+        po_number: row.po_number || "",
+        plat_number: row.plat_number || "",
+        driver_name: row.driver_name || "",
+        fleet_type: row.fleet_type || "",
+        gate: row.gate || "-",
+        status: row.status || "WAITING",
+        register_time:
+          row.register_time || row.created_at || formatDateTimeLocal(new Date()),
+        created_at:
+          row.created_at || row.register_time || formatDateTimeLocal(new Date()),
+      }
+    : {
+        ticket_id: ticketId,
+        queue_no: row.queue_no || "",
+        plat_number: row.plat_number || "",
+      };
   const url = new URL(location.origin + location.pathname);
-  url.searchParams.set("driver_ticket", encodeDriverTicketPayload(payload));
+  if (isPreview) {
+    url.searchParams.set("driver_ticket", encodeDriverTicketPayload(payload));
+  } else {
+    url.searchParams.set("driver_ticket_id", ticketId);
+  }
   return url.toString();
 }
 
 function qrImageUrl(text = "") {
   return (
-    "https://quickchart.io/qr?size=180&margin=1&text=" +
+    "https://quickchart.io/qr?size=400&margin=4&ecLevel=M&dark=000000&light=ffffff&text=" +
     encodeURIComponent(text)
   );
 }
@@ -913,6 +977,9 @@ function getDriverTicketEffectiveRow() {
 
 function driverWaitingLabel(row = {}) {
   const st = String(row.status || "").toUpperCase();
+  if (st === "CANCELLED") return "Dibatalkan";
+  if (["COMPLETED", "DONE GR"].includes(st)) return "Selesai";
+  if (window.InboundTicketContracts?.isDoneGrTerminal(row)) return "Selesai";
   if (st.includes("EXPIRED")) {
     const start = row.register_time || row.created_at;
     const end = row.expired_at || row.updated_at;
@@ -1094,7 +1161,11 @@ function buildSecurityPreviewRowsForPrint() {
 
   const lookup = lookupPo(true);
   if (!lookup || !lookup.all_found) {
-    showToast("PO wajib valid dan sesuai Vendor Name sebelum print.");
+    showToast(
+      lookup?.summary?.manual_metrics_valid === false
+        ? "Total Qty dan Total SKU wajib diisi untuk setiap PO manual sebelum print."
+        : "PO wajib valid dan sesuai Vendor Name sebelum print.",
+    );
     return [];
   }
 
@@ -1385,8 +1456,7 @@ function printSecurityTickets(rowsOverride = null, winOverride = null) {
             <div><b>PO</b><span>${esc(r.po_number || "-")}</span></div>
             <div><b>Plat</b><span>${esc(r.plat_number || "-")}</span></div>
             <div><b>Driver</b><span>${esc(r.driver_name || "-")}</span></div>
-<div><b>No. WhatsApp</b><span>${esc(r.phone_number || "-")}</span></div>
-<div><b>Fleet</b><span>${esc(r.fleet_type || "-")}</span></div>
+            <div><b>Fleet</b><span>${esc(r.fleet_type || "-")}</span></div>
             <div><b>Slot</b><span>${esc(r.slot || "-")}</span></div>
             <div><b>Total Qty</b><span>${esc(num(r.total_po_qty || 0))}</span></div>
             <div><b>Count SKU</b><span>${esc(num(r.count_po_sku || 0))}</span></div>
@@ -1396,6 +1466,7 @@ function printSecurityTickets(rowsOverride = null, winOverride = null) {
           <div class="qrbox">
             <img src="${esc(qrUrl)}" alt="QR Driver Status" />
             <div>Scan untuk lihat status antrian & jam menunggu</div>
+            <div class="driver-contact"><b>No. Telp Driver</b><span>${esc(String(r.phone_number || "").trim() || String(r.driver_phone || "").trim() || "-")}</span></div>
           </div>
         </div>
       </div>`;
@@ -1408,24 +1479,29 @@ function printSecurityTickets(rowsOverride = null, winOverride = null) {
 <meta charset="utf-8" />
 <title>Print Nomor Antrian</title>
 <style>
-  @page { size: A5 portrait; margin: 10mm; }
+  @page { size: 105mm 148mm; margin: 5mm; }
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: Arial, Helvetica, sans-serif; color: #111827; background: #fff; }
-  .ticket { border: 2px solid #111827; border-radius: 18px; padding: 18px; margin: 0 0 14px; page-break-inside: avoid; }
-  .ticket-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 1px solid #d1d5db; padding-bottom: 10px; }
-  .brand { font-weight: 900; font-size: 20px; letter-spacing: .02em; }
-  .sub { color: #6b7280; font-size: 12px; margin-top: 2px; text-transform: uppercase; letter-spacing: .12em; }
-  .status { border: 1px solid #f97316; color: #ea580c; background: #fff7ed; font-weight: 900; border-radius: 999px; padding: 7px 11px; font-size: 12px; }
-  .queue { text-align: center; font-family: "Courier New", monospace; font-size: 60px; line-height: 1; color: #1d4ed8; font-weight: 900; margin: 18px 0; letter-spacing: .04em; }
-  .main { display: grid; grid-template-columns: 1fr 145px; gap: 12px; align-items: start; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .grid div { border: 1px solid #d1d5db; border-radius: 10px; padding: 8px; min-height: 50px; }
-  b { display: block; font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 5px; }
-  span { font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
-  .qrbox { border: 1px solid #d1d5db; border-radius: 12px; padding: 8px; text-align: center; }
-  .qrbox img { width: 128px; height: 128px; object-fit: contain; display: block; margin: 0 auto 6px; }
-  .qrbox div { font-size: 9px; color: #374151; font-weight: 700; line-height: 1.25; }
-  @media print { .ticket { margin-bottom: 10mm; } }
+  html, body { width: 95mm; margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111827; background: #fff; }
+  .ticket { width: 95mm; height: 138mm; overflow: hidden; border: .45mm solid #111827; border-radius: 3mm; padding: 3.5mm; margin: 0; page-break-inside: avoid; break-inside: avoid; page-break-after: always; break-after: page; display: flex; flex-direction: column; }
+  .ticket:last-child { page-break-after: auto; break-after: auto; }
+  .ticket-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 2mm; border-bottom: .25mm solid #d1d5db; padding-bottom: 2mm; }
+  .brand { font-weight: 900; font-size: 13pt; letter-spacing: .02em; }
+  .sub { color: #6b7280; font-size: 6.5pt; margin-top: .5mm; text-transform: uppercase; letter-spacing: .1em; }
+  .status { border: .25mm solid #f97316; color: #ea580c; background: #fff7ed; font-weight: 900; border-radius: 99mm; padding: 1.2mm 2mm; font-size: 7pt; white-space: nowrap; }
+  .queue { text-align: center; font-family: "Courier New", monospace; font-size: 30pt; line-height: 1.08; color: #1d4ed8; font-weight: 900; margin: 3mm 0; letter-spacing: .02em; white-space: nowrap; }
+  .main { display: grid; grid-template-columns: minmax(0, 1fr) 37mm; gap: 2mm; align-items: start; flex: 1; min-height: 0; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5mm; align-content: start; }
+  .grid div { border: .25mm solid #d1d5db; border-radius: 1.5mm; padding: 1.4mm; min-height: 0; overflow: hidden; }
+  b { display: block; font-size: 5.8pt; color: #6b7280; text-transform: uppercase; letter-spacing: .06em; margin-bottom: .7mm; }
+  span { display: block; font-size: 7.2pt; line-height: 1.18; font-weight: 700; overflow-wrap: anywhere; }
+  .qrbox { border: .25mm solid #d1d5db; border-radius: 2mm; padding: 1mm; text-align: center; align-self: start; }
+  .qrbox img { width: 34mm; height: 34mm; object-fit: contain; image-rendering: pixelated; display: block; margin: 0 auto 1mm; }
+  .qrbox div { font-size: 5.6pt; color: #374151; font-weight: 700; line-height: 1.2; }
+  .qrbox .driver-contact { margin-top: 2mm; padding-top: 2mm; border-top: .25mm solid #d1d5db; }
+  .driver-contact span { font-size: 8pt; color: #111827; }
+  @media screen { body { background: #e5e7eb; padding: 8mm 0; } .ticket { background: #fff; margin: 0 auto 8mm; box-shadow: 0 4mm 10mm rgba(15,23,42,.16); } }
+  @media print { html, body { width: auto; } }
 </style>
 </head>
 <body>${cards}<script>window.onload = () => { window.print(); setTimeout(() => window.close(), 700); };</script></body>
@@ -1696,7 +1772,7 @@ function setCheckerSubmitButtonState(stateName = "ready", label = "") {
 function getCheckerActiveRows() {
   return (state.dashboard?.queue || []).filter((r) => {
     const st = String(r.status || "").toUpperCase();
-    return !st.includes("COMPLETED") && !st.includes("EXPIRED");
+    return !st.includes("COMPLETED") && !st.includes("EXPIRED") && !st.includes("CANCELLED");
   });
 }
 
@@ -1938,6 +2014,9 @@ function queueWaitingStartValue(row = {}) {
 }
 
 function queueWaitingText(row = {}) {
+  const status = String(row.status || "").trim().toUpperCase();
+  if (["COMPLETED", "DONE GR"].includes(status)) return "Selesai";
+  if (window.InboundTicketContracts?.isDoneGrTerminal(row)) return "Selesai";
   return liveWaitingText(queueWaitingStartValue(row), row.completed_at);
 }
 
@@ -2563,7 +2642,7 @@ function getMonitorSummary(rows = []) {
   ).length;
   const active = rows.filter((r) => {
     const st = String(r.status || "").toUpperCase();
-    return !st.includes("COMPLETED") && !st.includes("EXPIRED");
+    return !st.includes("COMPLETED") && !st.includes("EXPIRED") && !st.includes("CANCELLED");
   }).length;
 
   return {
@@ -3575,12 +3654,10 @@ function pageSetting() {
 
 function pageDebug() {
   const debugUser = typeof getAuthUser === "function" ? getAuthUser() : null;
-  const isDeveloper =
-    String(debugUser?.role || "").toUpperCase() === "DEVELOPER";
-  const operationalDate =
-    typeof getOperationalDateKey === "function"
-      ? getOperationalDateKey(new Date())
-      : new Date().toISOString().slice(0, 10);
+  const isDeveloper = String(debugUser?.role || "").toUpperCase() === "DEVELOPER";
+  const operationalDate = typeof getOperationalDateKey === "function"
+    ? getOperationalDateKey(new Date())
+    : new Date().toISOString().slice(0, 10);
   return `<div class="glass-card rounded-xl p-6">
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4"><div><h3 class="font-headline-md text-headline-md">Debug API</h3><p class="text-on-surface-variant">Cek schema, sample row, dan hasil agregasi.</p></div><button onclick="loadDebug()" class="bg-primary-container text-on-primary-container px-5 py-3 rounded-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined">bug_report</span>Run Debug</button></div>
     <section class="mb-5 rounded-xl border border-primary/25 bg-primary-container/5 p-4">
@@ -3588,9 +3665,7 @@ function pageDebug() {
       <div id="superset-freshness-output"><p class="text-sm text-on-surface-variant">Klik cek data live untuk melihat received time dan sync terakhir.</p></div>
     </section>
     <pre id="debug-output" class="bg-surface-container-high/60 border border-outline-variant rounded-lg p-4 text-xs overflow-auto max-h-[650px]">${esc(JSON.stringify(state.debug || { info: "Klik Run Debug" }, null, 2))}</pre>
-    ${
-      isDeveloper
-        ? `<div class="mt-6 border border-error/30 rounded-lg p-4 bg-error-container/10">
+    ${isDeveloper ? `<div class="mt-6 border border-error/30 rounded-lg p-4 bg-error-container/10">
       <h4 class="font-bold text-error mb-1">Hapus satu ticket salah input</h4>
       <p class="text-sm text-on-surface-variant mb-3">Khusus Developer. Ticket, detail PO, dan event dihapus permanen hanya bila <b>Queue No + Plat + tanggal operasional</b> cocok persis. Tidak memengaruhi ticket lain.</p>
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:items-end">
@@ -3600,9 +3675,7 @@ function pageDebug() {
       </div>
       <button id="single-ticket-delete-button" onclick="deleteSingleTicket()" class="mt-3 bg-error text-on-error px-5 py-3 rounded-lg font-bold">Hapus satu ticket ini</button>
       <p id="single-ticket-delete-result" class="text-sm mt-3"></p>
-    </div>`
-        : ""
-    }
+    </div>` : ""}
     <div class="mt-6 border border-error/30 rounded-lg p-4 bg-error-container/10">
       <h4 class="font-bold text-error mb-1">Hapus data operasional per tanggal</h4>
       <p class="text-sm text-on-surface-variant mb-3">Khusus Developer. Menghapus ticket, detail PO, dan event pada tanggal yang dipilih secara permanen.</p>
@@ -3612,20 +3685,16 @@ function pageDebug() {
       </div>
       <p id="cleanup-operational-result" class="text-sm mt-3"></p>
     </div>
-    ${
-      isDeveloper
-        ? `<div class="mt-5 border border-warning/40 rounded-lg p-4 bg-warning-container/10">
+    ${isDeveloper ? `<div class="mt-5 border border-warning/40 rounded-lg p-4 bg-warning-container/10">
       <h4 class="font-bold text-warning mb-1">Clear task otomatis</h4>
-      <p class="text-sm text-on-surface-variant mb-3">Khusus akun Developer. Semua tiket aktif akan diproses sampai <b>COMPLETED</b>: panggil, bongkar/checking, Done GR, lalu Handover GRN. Actual Qty yang masih kosong diisi sesuai Qty PO. Riwayat ticket tetap tersimpan.</p>
+      <p class="text-sm text-on-surface-variant mb-3">Khusus akun Developer. Semua tiket aktif akan diproses sampai <b>COMPLETED</b>: panggil, bongkar/checking, lalu Done GR. Actual Qty yang masih kosong diisi sesuai Qty PO. Riwayat ticket tetap tersimpan.</p>
       <div class="flex flex-col sm:flex-row gap-3 sm:items-end">
         <label class="flex flex-col gap-1"><span class="text-xs font-bold uppercase">Tanggal operasional</span><input id="bulk-complete-operational-date" type="date" value="${esc(operationalDate)}" class="form-input" /></label>
         <button id="bulk-complete-operational-button" onclick="bulkCompleteOperationalTasks()" class="bg-warning text-on-warning px-5 py-3 rounded-lg font-bold">Clear semua tiket aktif</button>
       </div>
       <label class="mt-3 inline-flex items-start gap-2 text-sm text-on-surface-variant cursor-pointer"><input id="bulk-complete-all-dates" type="checkbox" checked class="mt-1" /><span><b class="text-on-surface">Clear semua tanggal aktif</b><br/>Centang ini untuk termasuk tiket gantung dari hari operasional sebelumnya. Lepas centang bila hanya ingin tanggal di atas.</span></label>
       <p id="bulk-complete-operational-result" class="text-sm mt-3"></p>
-    </div>`
-        : ""
-    }
+    </div>` : ""}
   </div>`;
 }
 
@@ -3930,12 +3999,16 @@ function vendorMatchesFilter(vendor, filter) {
 
 function handleVendorFilterInput(input) {
   const currentVendor = getVendorValue() || String(input?.value || "").trim();
+  const currentVendorIsMaster = isMasterVendorValue(currentVendor);
   const selected = getSelectedPoNumbers();
 
   if (selected.length) {
-    const kept = selected.filter((po) =>
-      vendorMatchesFilter(getPoVendor(po), currentVendor),
-    );
+    const kept = selected.filter((po) => {
+      // Vendor manual boleh dipasangkan dengan PO manual maupun PO master.
+      // PO manual juga tidak mempunyai metadata vendor untuk dibandingkan.
+      if (!currentVendorIsMaster || !getPoMeta(po)) return true;
+      return vendorMatchesFilter(getPoVendor(po), currentVendor);
+    });
     if (kept.length !== selected.length) {
       setSelectedPoNumbers(kept, true);
       showToast("PO yang beda vendor otomatis dilepas.");
@@ -4128,18 +4201,33 @@ function getVendorValue() {
   ).trim();
 }
 
+function isMasterVendorValue(value = "") {
+  const key = normalizeKey(value);
+  return Boolean(
+    key &&
+      (state.options.vendor_name || []).some(
+        (vendor) => normalizeKey(vendor) === key,
+      ),
+  );
+}
+
 function setVendorValue(value = "", trigger = true) {
   const safeValue = String(value || "").trim();
+  const isManual = Boolean(safeValue && !isMasterVendorValue(safeValue));
   const hidden = document.getElementById("vendor-name-value");
   const search = document.getElementById("vendor-search-input");
   const label = document.getElementById("vendor-selected-label");
 
-  if (hidden) hidden.value = safeValue;
+  if (hidden) {
+    hidden.value = safeValue;
+    hidden.dataset.manualVendor = isManual ? "true" : "false";
+  }
   if (search) search.value = "";
   if (label) {
     label.innerHTML = safeValue
       ? `<span class="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/25 text-primary px-2 py-1 text-[11px] font-extrabold max-w-full">
           <span class="break-words">${esc(safeValue)}</span>
+          ${isManual ? '<span class="rounded bg-warning/15 text-warning px-1.5 py-0.5 text-[9px]">MANUAL</span>' : ""}
           <button type="button" class="w-5 h-5 rounded-full bg-primary/10 hover:bg-primary/20 leading-none shrink-0" onclick="event.stopPropagation(); clearVendorChoice()" title="Hapus vendor">×</button>
         </span>`
       : `<span class="text-[12px] text-on-surface-variant px-1">Belum ada vendor dipilih</span>`;
@@ -4224,7 +4312,7 @@ function vendorCustomSelectInput(value = "") {
         <div id="vendor-dropdown-list"></div>
       </div>
     </div>
-    <span class="form-help">Pilih vendor dari dropdown custom. Setelah vendor dipilih, PO Number otomatis filter sesuai vendor.</span>
+    <span class="form-help">Pilih hasil master. Jika tidak ditemukan, ketik nama lengkap lalu pilih <b>Gunakan vendor manual</b>.</span>
   </label>`;
 }
 
@@ -4246,15 +4334,23 @@ function filterVendorDropdown() {
 
   const options = getFilteredVendorOptions();
   const q = getVendorSearchText();
+  const exactMaster = isMasterVendorValue(q);
+  const manualAction =
+    q && !exactMaster
+      ? `<button type="button" onclick="commitManualVendor(event)" class="w-full mb-2 px-3 py-3 rounded-lg bg-warning/10 border border-warning/30 hover:bg-warning/20 text-left touch-manipulation">
+          <span class="block text-[10px] text-warning font-extrabold uppercase">Vendor tidak ada di master?</span>
+          <span class="block mt-1 font-bold text-[12px] sm:text-[13px] text-on-surface break-words">Gunakan manual: ${esc(q)}</span>
+        </button>`
+      : "";
 
   if (!options.length) {
-    list.innerHTML = `<div class="px-3 py-3 text-[12px] text-on-surface-variant">${
+    list.innerHTML = `${manualAction}<div class="px-3 py-3 text-[12px] text-on-surface-variant">${
       q ? "Vendor tidak ditemukan." : "Vendor belum tersedia dari Data V2."
     }</div>`;
     return;
   }
 
-  list.innerHTML = options
+  list.innerHTML = manualAction + options
     .map((vendor) => {
       const poCount = (state.options.po_number || []).filter((po) =>
         vendorMatchesFilter(getPoVendor(po), vendor),
@@ -4267,6 +4363,18 @@ function filterVendorDropdown() {
       </button>`;
     })
     .join("");
+}
+
+function commitManualVendor(event = null) {
+  event?.preventDefault?.();
+  event?.stopPropagation?.();
+  const vendor = getVendorSearchText().replace(/\s+/g, " ").trim().slice(0, 180);
+  if (!vendor) return showToast("Ketik Vendor Name manual terlebih dahulu.");
+  setVendorValue(vendor, true);
+  document.getElementById("vendor-dropdown")?.classList.add("hidden");
+  showToast(`Vendor manual digunakan: ${vendor}`);
+  const poSearch = document.getElementById("po-search-input");
+  if (poSearch && !isMobileTouchFormDevice()) poSearch.focus();
 }
 
 function selectVendorChoice(encoded) {
@@ -4294,6 +4402,7 @@ function handleVendorSearchKeydown(event) {
     event.preventDefault();
     const first = getFilteredVendorOptions()[0];
     if (first) selectVendorChoice(poEncode(first));
+    else commitManualVendor(event);
   } else if (event.key === "Escape") {
     document.getElementById("vendor-dropdown")?.classList.add("hidden");
   }
@@ -4326,7 +4435,7 @@ function poMultiSelectInput(value = "") {
         onclick="handleCustomSearchContainerClick(event, 'po-search-input', 'po')">
         <div id="po-selected-chips" class="contents">${chipHtml}</div>
         <input id="po-search-input" type="text" class="min-w-[150px] sm:min-w-[220px] flex-1 bg-transparent border-0 outline-none focus:ring-0 p-1 text-on-surface placeholder:text-on-surface-variant/70 text-sm sm:text-base" placeholder="Cari PO sesuai vendor..." autocomplete="off" onfocus="openPoDropdown()" onblur="closePoDropdownSoon()" oninput="handlePoSearchInput(this)" onkeydown="handlePoSearchKeydown(event)" />
-        <button type="button" class="thin-tab rounded-md px-3 py-2 text-[11px] font-extrabold shrink-0" onclick="event.stopPropagation(); addPoFromSearch()">Tambah</button>
+        <button type="button" class="thin-tab rounded-md px-3 py-2 text-[11px] font-extrabold shrink-0" onclick="event.stopPropagation(); addPoFromSearch()">Tambah / Manual</button>
       </div>
       <div id="po-dropdown"
         onpointerdown="window.__poDropdownInteracting=true; setTimeout(()=>window.__poDropdownInteracting=false,500)"
@@ -4335,7 +4444,7 @@ function poMultiSelectInput(value = "") {
         <div id="po-dropdown-list"></div>
       </div>
     </div>
-    <span class="form-help">PO list otomatis mengikuti Vendor Name. Jika 1 plat memilih banyak PO vendor sama, tetap jadi 1 antrian/mobil.</span>
+    <span class="form-help">PO list mengikuti Vendor Name. Jika PO tidak ada, ketik nomor lengkap lalu tekan <b>Tambah / Manual</b> atau Enter.</span>
   </label>`;
 }
 
@@ -4806,6 +4915,7 @@ function getTicketStartUnloadingTimeV7(row = {}) {
 }
 
 function getTicketWaitingEndV7(row = {}) {
+  if (window.InboundTicketContracts?.isCancelled(row)) return row.cancelled_at || row.po_cancelled_at || row.updated_at || "";
   const status = String(row.status || "")
     .trim()
     .toUpperCase();
@@ -4855,11 +4965,19 @@ function formatWaitingClockV7(startValue, endValue = "") {
 }
 
 function ticketWaitingMarkupV7(row = {}, extraClass = "") {
+  if (window.InboundTicketContracts?.isCancelled(row)) return `<span class="${extraClass} text-error">Dibatalkan</span>`;
   const start = getTicketRegisterTimeV7(row);
   const end = getTicketWaitingEndV7(row);
   const status = String(row.status || "")
     .trim()
     .toUpperCase();
+
+  if (
+    ["COMPLETED", "DONE GR"].includes(status) ||
+    window.InboundTicketContracts?.isDoneGrTerminal(row)
+  ) {
+    return `<span class="${extraClass} text-success">Selesai</span>`;
+  }
 
   return `<span
     class="live-waiting-cell ${extraClass}"
@@ -4904,7 +5022,8 @@ function refreshLiveWaitingCells() {
     const created = el.dataset.created || "";
     const completed = el.dataset.completed || "";
 
-    el.textContent = formatWaitingClockV7(created, completed);
+    const terminal = ["COMPLETED", "DONE GR"].includes(status);
+    el.textContent = status === "CANCELLED" ? "Dibatalkan" : terminal ? "Selesai" : formatWaitingClockV7(created, completed);
 
     el.classList.remove(
       "text-tertiary",
@@ -4918,7 +5037,7 @@ function refreshLiveWaitingCells() {
       el.classList.add("text-on-surface-variant");
     } else if (status === "EXPIRED") {
       el.classList.add("text-error");
-    } else if (completed) {
+    } else if (terminal || completed) {
       el.classList.add("text-success");
     } else {
       el.classList.add("text-tertiary");
@@ -4977,6 +5096,10 @@ function renderPage(page, toast = true) {
     antrian: pageAntrian,
     panggil: pagePanggil,
     monitor: pageMonitor,
+    commercial:
+      typeof window.pageCommercial === "function"
+        ? window.pageCommercial
+        : pageDebug,
     laporan: pageLaporan,
     setting: pageSetting,
     debug: pageDebug,
@@ -6179,6 +6302,11 @@ function vehicleRowInput(vehicle = {}, index = 0) {
           <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">6 Digit No KTP Driver</span>
           <input data-vehicle-field="ktp_6_digit" class="form-input" placeholder="Optional. Contoh: 123456" maxlength="6" inputmode="numeric" value="${esc(vehicle.ktp_6_digit || "")}" oninput="this.value=this.value.replace(/\\D/g,'').slice(0,6); syncVehicleMultiInput();" />
         </label>
+        <label class="flex flex-col gap-2">
+          <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Jumlah TKBM</span>
+          <input data-vehicle-field="tkbm_count" type="number" min="0" max="2147483647" step="1" inputmode="numeric" class="form-input" value="${esc(vehicle.tkbm_count ?? 0)}" placeholder="Contoh: 3" required oninput="syncVehicleMultiInput();" />
+          <span class="text-[11px] text-on-surface-variant">Jumlah orang yang dibawa driver untuk mobil ini. Isi 0 jika tidak membawa TKBM.</span>
+        </label>
       </div>
     </div>
   </div>`;
@@ -6285,6 +6413,9 @@ function collectVehicleRows() {
         row.querySelector('[data-vehicle-plate-part="suffix"]')?.value || "";
       const rawPhone =
         row.querySelector('[data-vehicle-field="phone_number"]')?.value || "";
+      const tkbmResult = window.InboundTicketContracts?.normalizeTkbm(
+        row.querySelector('[data-vehicle-field="tkbm_count"]')?.value || "",
+      ) || { valid: false, count: 0 };
       const normalizedPhones =
         typeof parseAndNormalizePhones === "function"
           ? parseAndNormalizePhones(rawPhone)
@@ -6303,6 +6434,8 @@ function collectVehicleRows() {
         ktp_6_digit: String(
           row.querySelector('[data-vehicle-field="ktp_6_digit"]')?.value || "",
         ).trim(),
+        tkbm_count: tkbmResult.count,
+        tkbm_valid: tkbmResult.valid,
       };
     })
     .filter(
@@ -6311,7 +6444,8 @@ function collectVehicleRows() {
         v.plat_number ||
         v.driver_name ||
         v.phone_number ||
-        v.ktp_6_digit,
+        v.ktp_6_digit ||
+        v.tkbm_count > 0,
     );
 }
 
@@ -6365,6 +6499,7 @@ function validateVehicleRows() {
     const driverEl = row.querySelector('[data-vehicle-field="driver_name"]');
     const phoneEl = row.querySelector('[data-vehicle-field="phone_number"]');
     const ktpEl = row.querySelector('[data-vehicle-field="ktp_6_digit"]');
+    const tkbmEl = row.querySelector('[data-vehicle-field="tkbm_count"]');
     const prefixEl = row.querySelector('[data-vehicle-plate-part="prefix"]');
     const numberEl = row.querySelector('[data-vehicle-plate-part="number"]');
     const suffixEl = row.querySelector('[data-vehicle-plate-part="suffix"]');
@@ -6384,6 +6519,9 @@ function validateVehicleRows() {
     const driverOk = !!String(driverEl?.value || "").trim();
     const phoneOk = !!phone;
     const ktpOk = !ktp || /^\d{6}$/.test(ktp);
+    const tkbmResult = window.InboundTicketContracts?.normalizeTkbm(
+      tkbmEl?.value || "",
+    ) || { valid: false };
 
     if (plate) plateSet.add(plate);
     if (fleetEl) fleetEl.classList.toggle("invalid", !fleetOk);
@@ -6393,8 +6531,9 @@ function validateVehicleRows() {
     if (driverEl) driverEl.classList.toggle("invalid", !driverOk);
     if (phoneEl) phoneEl.classList.toggle("invalid", !phoneOk);
     if (ktpEl) ktpEl.classList.toggle("invalid", !ktpOk);
+    if (tkbmEl) tkbmEl.classList.toggle("invalid", !tkbmResult.valid);
 
-    if (!fleetOk || !plateOk || !driverOk || !phoneOk || !ktpOk) ok = false;
+    if (!fleetOk || !plateOk || !driverOk || !phoneOk || !ktpOk || !tkbmResult.valid) ok = false;
   });
 
   if (!vehicles.length) ok = false;
@@ -6469,7 +6608,7 @@ function validateSecurityForm(form) {
   }
   if (!vehicleOk) {
     showToast(
-      "Data kendaraan wajib lengkap: fleet type, plat valid, driver, dan nomor WhatsApp. Plat tidak boleh duplicate.",
+      "Data kendaraan wajib lengkap: fleet type, plat valid, driver, WhatsApp, dan jumlah TKBM (bilangan bulat, isi 0 jika tidak ada). Plat tidak boleh duplicate.",
     );
     return false;
   }
@@ -7409,15 +7548,309 @@ function securityFormMatchesRowsForPrint(rows = []) {
   });
 })();
 
+/* ==========================================================================
+ * V23 — COMERCIAL TICKET TRACKER
+ * Read-only master/detail yang memakai row dan helper SLA sama dengan QR driver.
+ * ========================================================================== */
+(function installCommercialTrackerV23() {
+  if (window.__commercialTrackerV23Installed) return;
+  window.__commercialTrackerV23Installed = true;
+
+  const todayWib = () => new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jakarta",
+  }).format(new Date());
+
+  const view = {
+    query: "",
+    status: "ACTIVE",
+    type: "ALL",
+    date: todayWib(),
+    selectedKey: "",
+  };
+
+  const cleanText = (value) => String(value ?? "").trim();
+  const statusOf = (row) => cleanText(row?.status || "WAITING").toUpperCase();
+  const typeOf = (row) => {
+    const raw = cleanText(row?.ticket_type || row?.fleet_type).toUpperCase();
+    if (raw.includes("DROP")) return "DROP-OFF";
+    if (raw.includes("VIP")) return "VIP";
+    return "REG";
+  };
+  const isTerminal = (row) =>
+    ["COMPLETED", "EXPIRED", "CANCELLED", "DONE GR"].includes(statusOf(row)) ||
+    Boolean(window.InboundTicketContracts?.isDoneGrTerminal(row));
+  const keyOf = (row) => cleanText(row?.ticket_id || `${row?.queue_no || ""}|${row?.plat_number || ""}`);
+  const poRowsOf = (row) => Array.isArray(row?.po_rows) ? row.po_rows : [];
+  const poTextOf = (row) => [row?.po_number, ...poRowsOf(row).map((po) => po?.po_number)].filter(Boolean).join(" ");
+  const trackerRows = () => Array.isArray(state.dashboard?.queue) ? state.dashboard.queue : [];
+
+  function operationalDateOf(row) {
+    const direct = cleanText(row?.operational_date);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(direct)) return direct;
+    const raw = row?.register_time || row?.created_at || row?.updated_at;
+    if (!raw) return "";
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) return cleanText(raw).slice(0, 10);
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(date);
+  }
+
+  function slaOf(row) {
+    try {
+      return typeof getInboundSlaInfo === "function"
+        ? getInboundSlaInfo(row) || {}
+        : {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function slaTone(row) {
+    const sla = slaOf(row);
+    const status = cleanText(sla.status).toUpperCase();
+    const delta = Number(sla.delta_minutes);
+    if (["SLA MISS", "LATE"].includes(status) || (Number.isFinite(delta) && delta < 0)) return "danger";
+    if (!isTerminal(row) && Number.isFinite(delta) && delta <= 60) return "warning";
+    return "good";
+  }
+
+  function slaLabel(row) {
+    const sla = slaOf(row);
+    return cleanText(sla.label || sla.status || (isTerminal(row) ? "Selesai" : "On track"));
+  }
+
+  function statusLabel(status) {
+    return {
+      WAITING: "WAITING",
+      CALLED: "DIPANGGIL",
+      UNLOADING: "BONGKAR",
+      "WAITING GR": "WAITING GR",
+      "DONE GR": "DONE GR",
+      COMPLETED: "SELESAI",
+      EXPIRED: "EXPIRED",
+    }[status] || status;
+  }
+
+  function waitingLabel(row) {
+    try {
+      return typeof driverWaitingLabel === "function" ? driverWaitingLabel(row) : "-";
+    } catch (error) {
+      return "-";
+    }
+  }
+
+  function progressPercent(value) {
+    const match = cleanText(value).match(/^(\d+)\s*\/\s*(\d+)$/);
+    if (!match || Number(match[2]) <= 0) return 0;
+    return Math.max(0, Math.min(100, Math.round((Number(match[1]) / Number(match[2])) * 100)));
+  }
+
+  function targetSlaLabel(row) {
+    try {
+      const estimate = typeof getUnloadingEstimateInfo === "function"
+        ? getUnloadingEstimateInfo(row) || {}
+        : {};
+      return estimate.target_at || estimate.estimateText || row.sla_finished_at || row.sla_target_at || "-";
+    } catch (error) {
+      return cleanText(row.sla_finished_at || row.sla_target_at || "-");
+    }
+  }
+
+  function dateTimeLabel(value) {
+    if (!value) return "-";
+    return window.InboundTicketContracts?.formatWibDateTime(value) || cleanText(value);
+  }
+
+  function filteredRows() {
+    const query = view.query.toLowerCase();
+    return trackerRows()
+      .filter((row) => {
+        const type = typeOf(row);
+        if (view.type === "ALL" && type === "DROP-OFF") return false;
+        if (view.type !== "ALL" && type !== view.type) return false;
+        if (view.date && operationalDateOf(row) !== view.date) return false;
+        const status = statusOf(row);
+        if (view.status === "ACTIVE" && isTerminal(row)) return false;
+        if (view.status === "GR" && !["WAITING GR", "DONE GR"].includes(status)) return false;
+        if (!["ALL", "ACTIVE", "GR"].includes(view.status) && status !== view.status) return false;
+        if (!query) return true;
+        return [
+          row.ticket_id,
+          row.queue_no,
+          row.vendor_name,
+          row.plat_number,
+          row.driver_name,
+          poTextOf(row),
+        ].some((value) => cleanText(value).toLowerCase().includes(query));
+      })
+      .sort((a, b) => {
+        const toneRank = { danger: 0, warning: 1, good: 2 };
+        const tone = toneRank[slaTone(a)] - toneRank[slaTone(b)];
+        if (tone) return tone;
+        if (isTerminal(a) !== isTerminal(b)) return isTerminal(a) ? 1 : -1;
+        return new Date(a.created_at || a.register_time || 0) - new Date(b.created_at || b.register_time || 0);
+      });
+  }
+
+  function selectedRow(rows = filteredRows()) {
+    const selected = rows.find((row) => keyOf(row) === view.selectedKey);
+    if (selected) return selected;
+    view.selectedKey = rows[0] ? keyOf(rows[0]) : "";
+    return rows[0] || null;
+  }
+
+  function metricCard(label, value, note, tone, icon) {
+    return `<article class="commercial-metric ${tone}"><span class="material-symbols-outlined">${icon}</span><div><small>${esc(label)}</small><b>${Number(value || 0).toLocaleString("id-ID")}</b><em>${esc(note)}</em></div></article>`;
+  }
+
+  function metricsHtml() {
+    const rows = trackerRows().filter((row) => typeOf(row) !== "DROP-OFF");
+    const active = rows.filter((row) => !isTerminal(row));
+    const completedToday = rows.filter((row) => statusOf(row) === "COMPLETED").length;
+    return [
+      metricCard("Aktif", active.length, "REG dan VIP", "blue", "schedule"),
+      metricCard("Waiting", active.filter((row) => statusOf(row) === "WAITING").length, "Menunggu panggil", "amber", "hourglass_top"),
+      metricCard("Bongkar", active.filter((row) => statusOf(row) === "UNLOADING").length, "Gate berjalan", "purple", "local_shipping"),
+      metricCard("Proses GR", active.filter((row) => ["WAITING GR", "DONE GR"].includes(statusOf(row))).length, "Checker selesai", "cyan", "inventory_2"),
+      metricCard("SLA Berisiko", active.filter((row) => ["danger", "warning"].includes(slaTone(row))).length, "Perlu perhatian", "red", "warning"),
+      metricCard("Selesai", completedToday, "Data tersedia", "green", "check_circle"),
+    ].join("");
+  }
+
+  function listHtml(rows) {
+    const visible = rows.slice(0, 100);
+    const selected = selectedRow(rows);
+    return `<div class="commercial-list-head"><div><b>Hasil Pencarian</b><small>${rows.length.toLocaleString("id-ID")} tiket ditemukan</small></div><span>${visible.length}${rows.length > visible.length ? "+" : ""} tampil</span></div>
+      <div class="commercial-ticket-list" role="list" aria-label="Daftar tiket inbound">
+        ${visible.map((row) => {
+          const key = keyOf(row);
+          const poCount = Number(row.ticket_po_count || poRowsOf(row).length || (row.po_number ? 1 : 0));
+          return `<button type="button" role="listitem" class="commercial-ticket ${selected && keyOf(selected) === key ? "selected" : ""}" data-commercial-key="${esc(key)}" onclick="selectCommercialTicket(this.dataset.commercialKey)">
+            <div class="commercial-ticket-top"><span class="commercial-queue">${esc(row.queue_no || "-")}</span><span class="commercial-status status-${statusOf(row).replace(/\s+/g, "-").toLowerCase()}">${esc(statusLabel(statusOf(row)))}</span></div>
+            <strong>${esc(row.vendor_name || "-")}</strong>
+            <div class="commercial-ticket-meta"><span>${esc(row.plat_number || "-")}</span><span>${poCount} PO</span><span>Gate ${esc(row.gate || "-")}</span></div>
+            <div class="commercial-ticket-foot"><span>Checker ${esc(row.checker_progress || "0/0")} · GR ${esc(row.gr_progress || "0/0")}</span><b class="sla-${slaTone(row)}">${esc(slaLabel(row))}</b></div>
+          </button>`;
+        }).join("") || `<div class="commercial-empty">Tiket tidak ditemukan. Ubah kata pencarian atau filter.</div>`}
+      </div>`;
+  }
+
+  function timelineHtml(row) {
+    const status = statusOf(row);
+    const rank = { WAITING: 0, CALLED: 1, UNLOADING: 2, "WAITING GR": 3, "DONE GR": 4, COMPLETED: 4 }[status] ?? 0;
+    const steps = [
+      ["REGISTER", row.register_time || row.created_at],
+      ["CALLED", row.called_at],
+      ["BONGKAR", row.start_unloading_at],
+      ["DONE GR", row.done_gr_at || row.ticket_done_gr_at || row.po_updated_at],
+    ];
+    return `<div class="commercial-timeline" aria-label="Timeline proses tiket">${steps.map(([label, time], index) => `<div class="commercial-step ${index < rank || time ? "done" : index === rank ? "current" : ""}"><i><span class="material-symbols-outlined">${index < rank || time ? "check" : index === rank ? "radio_button_checked" : "circle"}</span></i><b>${label}</b><small>${dateTimeLabel(time)}</small></div>`).join("")}</div>`;
+  }
+
+  function poTableHtml(row) {
+    const poRows = poRowsOf(row);
+    const rows = poRows.length ? poRows : row.po_number ? [row] : [];
+    return `<details class="commercial-po" open><summary><span><span class="material-symbols-outlined">receipt_long</span>Daftar PO</span><b>${rows.length}</b></summary><div class="commercial-po-scroll"><table><thead><tr><th>PO Number</th><th>Qty</th><th>SKU</th><th>Checker</th><th>GR</th></tr></thead><tbody>${rows.map((po) => `<tr><td>${esc(po.po_number || "-")}</td><td>${esc(po.total_po_qty ?? po.po_qty ?? "-")}</td><td>${esc(po.count_po_sku ?? po.ticket_total_sku ?? "-")}</td><td>${esc(po.checker_status || "-")}</td><td>${esc(po.gr_status || "-")}</td></tr>`).join("") || `<tr><td colspan="5">Tidak ada detail PO.</td></tr>`}</tbody></table></div></details>`;
+  }
+
+  function detailHtml(row) {
+    if (!row) return `<div class="commercial-detail commercial-empty">Pilih tiket untuk melihat detail tracking.</div>`;
+    const sla = slaOf(row);
+    let trackUrl = "";
+    try { trackUrl = makeDriverTrackUrl(row); } catch (error) {}
+    const target = targetSlaLabel(row);
+    const checkerProgress = cleanText(row.checker_progress || "0/0");
+    const grProgress = cleanText(row.gr_progress || "0/0");
+    return `<article class="commercial-detail" data-commercial-detail>
+      <header class="commercial-detail-head"><div><div class="commercial-detail-title"><span>${esc(row.queue_no || "-")}</span><span class="commercial-status status-${statusOf(row).replace(/\s+/g, "-").toLowerCase()}">${esc(statusLabel(statusOf(row)))}</span></div><p>${esc(row.vendor_name || "-")} · ${esc(row.plat_number || "-")} · Gate ${esc(row.gate || "-")}</p></div><span class="commercial-live"><i></i>LIVE DATA</span></header>
+      <section class="commercial-detail-kpis"><div><small>Target SLA</small><b>${esc(dateTimeLabel(target))}</b></div><div><small>Kondisi SLA</small><b class="sla-${slaTone(row)}">${esc(slaLabel(row))}</b></div><div><small>Jam Menunggu</small><b>${esc(waitingLabel(row))}</b></div></section>
+      <section class="commercial-progress"><div><span><b>Checker</b><em>${esc(checkerProgress)}</em></span><progress max="100" value="${progressPercent(checkerProgress)}"></progress></div><div><span><b>GR</b><em>${esc(grProgress)}</em></span><progress max="100" value="${progressPercent(grProgress)}"></progress></div></section>
+      <section class="commercial-section"><h3>Timeline Proses</h3>${timelineHtml(row)}</section>
+      <section class="commercial-section"><h3>Detail Tiket</h3><div class="commercial-info-grid"><div><small>Driver</small><b>${esc(row.driver_name || "-")}</b></div><div><small>Vendor</small><b>${esc(row.vendor_name || "-")}</b></div><div><small>Plat</small><b>${esc(row.plat_number || "-")}</b></div><div><small>Fleet</small><b>${esc(row.fleet_type || "-")}</b></div><div><small>Jumlah TKBM</small><b>${esc(Number(row.tkbm_count || 0))}</b></div><div><small>Jenis Tiket</small><b>${esc(typeOf(row))}</b></div><div><small>Last Update</small><b>${esc(dateTimeLabel(row.updated_at || row.row_updated_at))}</b></div></div></section>
+      ${poTableHtml(row)}
+      <div class="commercial-actions"><button type="button" onclick="copyCommercialTrackingLink('${esc(trackUrl)}')"><span class="material-symbols-outlined">content_copy</span>Salin Link Tracking</button><button type="button" onclick="openCommercialDriverView('${esc(trackUrl)}')"><span class="material-symbols-outlined">open_in_new</span>Buka Tampilan Driver</button></div>
+    </article>`;
+  }
+
+  function refreshView() {
+    const rows = filteredRows();
+    const metrics = document.getElementById("commercial-metrics");
+    const list = document.getElementById("commercial-list-panel");
+    const detail = document.getElementById("commercial-detail-panel");
+    if (metrics) metrics.innerHTML = metricsHtml();
+    if (list) list.innerHTML = listHtml(rows);
+    if (detail) detail.innerHTML = detailHtml(selectedRow(rows));
+  }
+
+  window.applyCommercialFilters = function applyCommercialFiltersV23() {
+    view.query = cleanText(document.getElementById("commercial-search")?.value);
+    view.status = cleanText(document.getElementById("commercial-status-filter")?.value || "ACTIVE").toUpperCase();
+    view.type = cleanText(document.getElementById("commercial-type-filter")?.value || "ALL").toUpperCase();
+    view.date = cleanText(document.getElementById("commercial-date-filter")?.value);
+    view.selectedKey = "";
+    refreshView();
+  };
+
+  window.clearCommercialDateFilter = function clearCommercialDateFilterV23() {
+    view.date = "";
+    const input = document.getElementById("commercial-date-filter");
+    if (input) input.value = "";
+    view.selectedKey = "";
+    refreshView();
+  };
+
+  window.selectCommercialTicket = function selectCommercialTicketV23(key) {
+    view.selectedKey = cleanText(key);
+    refreshView();
+    if (window.matchMedia("(max-width: 900px)").matches) {
+      document.querySelector("[data-commercial-detail]")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
+  window.copyCommercialTrackingLink = async function copyCommercialTrackingLinkV23(url) {
+    if (!url) return showToast("Link tracking belum tersedia.");
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast("Link tracking driver disalin.");
+    } catch (error) {
+      showToast("Browser tidak mengizinkan copy otomatis.");
+    }
+  };
+
+  window.openCommercialDriverView = function openCommercialDriverViewV23(url) {
+    if (!url) return showToast("Link tracking belum tersedia.");
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  window.pageCommercial = function pageCommercialV23() {
+    const rows = filteredRows();
+    return `<div class="commercial-tracker">
+      <section class="commercial-hero"><div><div class="commercial-eyebrow">INBOUND CBT / READ ONLY</div><h2>COMERCIAL Ticket Tracker</h2><p>Cari vendor atau PO dan pantau status yang sama dengan hasil scan QR driver.</p></div><button type="button" onclick="refreshDashboard()"><span class="material-symbols-outlined">refresh</span>Refresh Data</button></section>
+      <section id="commercial-metrics" class="commercial-metrics">${metricsHtml()}</section>
+      <section class="commercial-toolbar"><label class="commercial-search"><span class="material-symbols-outlined">search</span><input id="commercial-search" value="${esc(view.query)}" oninput="applyCommercialFilters()" placeholder="Cari PO, vendor, queue, plat, atau Ticket ID" autocomplete="off" /></label><label><span>Tanggal Tiket</span><div class="commercial-date-control"><input id="commercial-date-filter" type="date" value="${esc(view.date)}" onchange="applyCommercialFilters()" /><button type="button" onclick="clearCommercialDateFilter()" title="Tampilkan semua tanggal">Semua</button></div></label><label><span>Status</span><select id="commercial-status-filter" onchange="applyCommercialFilters()"><option value="ACTIVE" ${view.status === "ACTIVE" ? "selected" : ""}>Tiket Aktif</option><option value="ALL" ${view.status === "ALL" ? "selected" : ""}>Semua Status</option><option value="WAITING" ${view.status === "WAITING" ? "selected" : ""}>Waiting</option><option value="CALLED" ${view.status === "CALLED" ? "selected" : ""}>Dipanggil</option><option value="UNLOADING" ${view.status === "UNLOADING" ? "selected" : ""}>Bongkar</option><option value="GR" ${view.status === "GR" ? "selected" : ""}>Proses GR</option><option value="COMPLETED" ${view.status === "COMPLETED" ? "selected" : ""}>Selesai</option></select></label><label><span>Jenis Tiket</span><select id="commercial-type-filter" onchange="applyCommercialFilters()"><option value="ALL" ${view.type === "ALL" ? "selected" : ""}>REG + VIP</option><option value="REG" ${view.type === "REG" ? "selected" : ""}>REG</option><option value="VIP" ${view.type === "VIP" ? "selected" : ""}>VIP</option><option value="DROP-OFF" ${view.type === "DROP-OFF" ? "selected" : ""}>Drop-Off</option></select></label></section>
+      <section class="commercial-workspace"><div id="commercial-list-panel" class="commercial-list-panel">${listHtml(rows)}</div><div id="commercial-detail-panel">${detailHtml(selectedRow(rows))}</div></section>
+    </div>`;
+  };
+
+  pageMeta.commercial = {
+    title: "COMERCIAL",
+    subtitle: "Tracking vendor, PO, dan status tiket inbound",
+  };
+  ROLE_ACCESS.COMERCIAL = ["commercial"];
+  ROLE_DEFAULT_PAGE.COMERCIAL = "commercial";
+  ["SPV", "ADMIN", "DEVELOPER"].forEach((role) => {
+    ROLE_ACCESS[role] = Array.isArray(ROLE_ACCESS[role]) ? ROLE_ACCESS[role] : [];
+    if (!ROLE_ACCESS[role].includes("commercial")) ROLE_ACCESS[role].push("commercial");
+  });
+  applyRoleAccessUI?.();
+})();
+
 /* V19 — bulk Actual Qty and complete, filter-aware Waiting List export. */
 (function installWaitingListV19() {
   if (window.__waitingListV19Installed) return;
   window.__waitingListV19Installed = true;
 
   window.doneGrBatchV19 = async function doneGrBatchV19() {
-    const inputs = [
-      ...document.querySelectorAll("[data-actual-qty-input-v18]"),
-    ];
+    const inputs = [...document.querySelectorAll("[data-actual-qty-input-v18]")];
     const byTicket = new Map();
     for (const input of inputs) {
       const quantity = Number(input.value || 0);
@@ -7427,21 +7860,13 @@ function securityFormMatchesRowsForPrint(rows = []) {
         (row.po_rows || []).some((po) => String(po.ticket_po_id) === poId),
       );
       if (!ticket || !poId) continue;
-      if (!byTicket.has(ticket.ticket_id))
-        byTicket.set(ticket.ticket_id, { ticket, items: [] });
-      byTicket
-        .get(ticket.ticket_id)
-        .items.push({ ticket_po_id: poId, actual_quantity: quantity });
+      if (!byTicket.has(ticket.ticket_id)) byTicket.set(ticket.ticket_id, { ticket, items: [] });
+      byTicket.get(ticket.ticket_id).items.push({ ticket_po_id: poId, actual_quantity: quantity });
     }
     if (!byTicket.size) {
-      return showToast(
-        "Isi Actual Qty lebih dari 0 pada PO yang ingin di-Done GR.",
-      );
+      return showToast("Isi Actual Qty lebih dari 0 pada PO yang ingin di-Done GR.");
     }
-    const total = [...byTicket.values()].reduce(
-      (sum, item) => sum + item.items.length,
-      0,
-    );
+    const total = [...byTicket.values()].reduce((sum, item) => sum + item.items.length, 0);
     if (!confirm(`Simpan Actual Qty dan Done GR untuk ${total} PO?`)) return;
     try {
       for (const { ticket, items } of byTicket.values()) {
@@ -7462,82 +7887,8 @@ function securityFormMatchesRowsForPrint(rows = []) {
   };
 
   const LEGACY_OUTPUT_HEADERS_V20 = [
-    "Timestamp",
-    "ticket_id",
-    "queue_no",
-    "ticket_type",
-    "slot",
-    "fleet_type",
-    "plat_number",
-    "driver_name",
-    "phone_number",
-    "ktp_6_digit",
-    "vendor_name",
-    "po_number",
-    "total_po_qty",
-    "actual_quantity",
-    "count_po_sku",
-    "status",
-    "gate",
-    "unload_sla",
-    "source",
-    "created_at",
-    "register_time",
-    "called_at",
-    "updated_at",
-    "completed_at",
-    "start_unloading_at",
-    "driver_waiting_duration",
-    "driver_waiting_minutes",
-    "unloading_duration",
-    "unloading_duration_minutes",
-    "sla_target_hours",
-    "sla_status",
-    "wa_call_status",
-    "wa_call_sent_at",
-    "wa_call_error",
-    "wa_call_provider",
-    "wa_call_target",
-    "call_count",
-    "last_call_attempt_at",
-    "expired_at",
-    "expired_reason",
-    "sla_finished_at",
-    "operational_date",
-    "data_source",
-    "last_call_at",
-    "waiting_gr_at",
-    "done_gr_at",
-    "handover_grn_at",
-    "wa_handover_status",
-    "wa_handover_sent_at",
-    "wa_handover_error",
-    "wa_handover_target",
-    "ticket_po_id",
-    "po_sequence",
-    "ticket_po_count",
-    "ticket_total_qty",
-    "ticket_total_sku",
-    "finish_unloading_at",
-    "checker_id",
-    "checker_name",
-    "checker_status",
-    "checker_started_at",
-    "checker_done_at",
-    "checker_started_by",
-    "checker_done_by",
-    "checker_duration",
-    "checker_duration_minutes",
-    "gr_status",
-    "done_gr_by",
-    "gr_wait_duration",
-    "gr_wait_minutes",
-    "inbound_sla_duration",
-    "inbound_sla_minutes",
-    "wa_ticket_status",
-    "wa_ticket_sent_at",
-    "wa_ticket_error",
-    "wa_ticket_target",
+    "cancelled_at", "cancelled_reason", "cancelled_by", "po_cancelled_at", "po_cancelled_reason", "po_cancelled_by",
+    "Timestamp", "ticket_id", "queue_no", "ticket_type", "slot", "fleet_type", "plat_number", "driver_name", "phone_number", "ktp_6_digit", "tkbm_count", "vendor_name", "po_number", "total_po_qty", "actual_quantity", "count_po_sku", "status", "gate", "unload_sla", "source", "created_at", "register_time", "called_at", "updated_at", "completed_at", "start_unloading_at", "driver_waiting_duration", "driver_waiting_minutes", "unloading_duration", "unloading_duration_minutes", "sla_target_hours", "sla_status", "wa_call_status", "wa_call_sent_at", "wa_call_error", "wa_call_provider", "wa_call_target", "call_count", "last_call_attempt_at", "expired_at", "expired_reason", "sla_finished_at", "operational_date", "data_source", "last_call_at", "waiting_gr_at", "done_gr_at", "handover_grn_at", "wa_handover_status", "wa_handover_sent_at", "wa_handover_error", "wa_handover_target", "ticket_po_id", "po_sequence", "ticket_po_count", "ticket_total_qty", "ticket_total_sku", "finish_unloading_at", "checker_id", "checker_name", "checker_status", "checker_started_at", "checker_done_at", "checker_started_by", "checker_done_by", "checker_duration", "checker_duration_minutes", "gr_status", "done_gr_by", "gr_wait_duration", "gr_wait_minutes", "inbound_sla_duration", "inbound_sla_minutes", "wa_ticket_status", "wa_ticket_sent_at", "wa_ticket_error", "wa_ticket_target",
   ];
 
   function durationExportV20(from, to) {
@@ -7546,10 +7897,7 @@ function securityFormMatchesRowsForPrint(rows = []) {
     if (!start || !end || end < start) return { text: "", minutes: "" };
     const minutes = Math.round((end - start) / 60000);
     const hours = String(Math.floor(minutes / 60)).padStart(2, "0");
-    return {
-      text: `${hours}:${String(minutes % 60).padStart(2, "0")}:00`,
-      minutes,
-    };
+    return { text: `${hours}:${String(minutes % 60).padStart(2, "0")}:00`, minutes };
   }
 
   function legacyOutputRowsV20(rows) {
@@ -7561,111 +7909,20 @@ function securityFormMatchesRowsForPrint(rows = []) {
     });
     return rows.map((row) => {
       const pos = byTicket.get(String(row.ticket_id || "")) || [row];
-      const poSequence = Math.max(
-        1,
-        pos.findIndex((item) => item.ticket_po_id === row.ticket_po_id) + 1,
-      );
-      const ticketQty = pos.reduce(
-        (sum, item) => sum + Number(item.total_po_qty || 0),
-        0,
-      );
-      const ticketSku = pos.reduce(
-        (sum, item) => sum + Number(item.count_po_sku || 0),
-        0,
-      );
-      const finish = row.finish_unloading_at || "";
-      const driverWaiting = durationExportV20(
-        row.created_at || row.register_time,
-        row.start_unloading_at || finish,
-      );
+      const poSequence = Math.max(1, pos.findIndex((item) => item.ticket_po_id === row.ticket_po_id) + 1);
+      const activePos = pos.filter((item) => !window.InboundTicketContracts.isCancelled(item));
+      const ticketQty = activePos.reduce((sum, item) => sum + Number(item.total_po_qty || 0), 0);
+      const ticketSku = activePos.reduce((sum, item) => sum + Number(item.count_po_sku || 0), 0);
+      const finish = row.cancelled_at || row.po_cancelled_at || row.finish_unloading_at || "";
+      const driverWaiting = durationExportV20(row.created_at || row.register_time, row.start_unloading_at || finish);
       const unloading = durationExportV20(row.start_unloading_at, finish);
-      const checker = durationExportV20(
-        row.checker_started_at,
-        row.checker_done_at,
-      );
+      const checker = durationExportV20(row.checker_started_at, row.checker_done_at);
       const grWait = durationExportV20(row.checker_done_at, row.done_gr_at);
-      const inboundSla = durationExportV20(
-        row.start_unloading_at,
-        finish || row.done_gr_at,
-      );
+      const inboundSla = durationExportV20(row.start_unloading_at, finish || row.done_gr_at);
       return {
-        Timestamp: row.created_at || row.register_time || "",
-        ticket_id: row.ticket_id || "",
-        queue_no: row.queue_no || "",
-        ticket_type: row.ticket_type || "",
-        slot: row.slot || "",
-        fleet_type: row.fleet_type || "",
-        plat_number: row.plat_number || "",
-        driver_name: row.driver_name || "",
-        phone_number: row.phone_number || "",
-        ktp_6_digit: row.ktp_6_digit || "",
-        vendor_name: row.po_vendor_name || row.vendor_name || "",
-        po_number: row.po_number || "",
-        total_po_qty: row.total_po_qty || 0,
-        actual_quantity: row.actual_quantity || 0,
-        count_po_sku: row.count_po_sku || 0,
-        status: row.status || "",
-        gate: row.gate || "",
-        unload_sla: row.unload_sla || "",
-        source: row.source || "MotherDuck",
-        created_at: row.created_at || "",
-        register_time: row.register_time || row.created_at || "",
-        called_at: row.called_at || "",
-        updated_at: row.updated_at || row.po_updated_at || "",
-        completed_at:
-          String(row.status || "").toUpperCase() === "COMPLETED" ? finish : "",
-        start_unloading_at: row.start_unloading_at || "",
-        driver_waiting_duration: driverWaiting.text,
-        driver_waiting_minutes: driverWaiting.minutes,
-        unloading_duration: unloading.text,
-        unloading_duration_minutes: unloading.minutes,
-        sla_target_hours: "",
-        sla_status: row.unload_sla || "",
-        wa_call_status: "",
-        wa_call_sent_at: "",
-        wa_call_error: "",
-        wa_call_provider: "",
-        wa_call_target: "",
-        call_count: row.call_count || 0,
-        last_call_attempt_at: row.last_call_at || "",
-        expired_at: row.expired_at || "",
-        expired_reason: row.expired_reason || "",
-        sla_finished_at: finish,
-        operational_date: row.operational_date || "",
-        data_source: "MotherDuck",
-        last_call_at: row.last_call_at || "",
-        waiting_gr_at: row.checker_done_at || "",
-        done_gr_at: row.done_gr_at || "",
-        handover_grn_at: row.handover_grn_at || "",
-        wa_handover_status: "",
-        wa_handover_sent_at: "",
-        wa_handover_error: "",
-        wa_handover_target: "",
-        ticket_po_id: row.ticket_po_id || "",
-        po_sequence: poSequence,
-        ticket_po_count: pos.length,
-        ticket_total_qty: ticketQty,
-        ticket_total_sku: ticketSku,
-        finish_unloading_at: finish,
-        checker_id: row.checker_id || "",
-        checker_name: row.checker_name || "",
-        checker_status: row.checker_status || "",
-        checker_started_at: row.checker_started_at || "",
-        checker_done_at: row.checker_done_at || "",
-        checker_started_by: "",
-        checker_done_by: "",
-        checker_duration: checker.text,
-        checker_duration_minutes: checker.minutes,
-        gr_status: row.gr_status || "",
-        done_gr_by: "",
-        gr_wait_duration: grWait.text,
-        gr_wait_minutes: grWait.minutes,
-        inbound_sla_duration: inboundSla.text,
-        inbound_sla_minutes: inboundSla.minutes,
-        wa_ticket_status: "",
-        wa_ticket_sent_at: "",
-        wa_ticket_error: "",
-        wa_ticket_target: "",
+        cancelled_at: row.cancelled_at || "", cancelled_reason: row.cancelled_reason || "", cancelled_by: row.cancelled_by || "",
+        po_cancelled_at: row.po_cancelled_at || "", po_cancelled_reason: row.po_cancelled_reason || "", po_cancelled_by: row.po_cancelled_by || "",
+        Timestamp: row.created_at || row.register_time || "", ticket_id: row.ticket_id || "", queue_no: row.queue_no || "", ticket_type: row.ticket_type || "", slot: row.slot || "", fleet_type: row.fleet_type || "", plat_number: row.plat_number || "", driver_name: row.driver_name || "", phone_number: row.phone_number || "", ktp_6_digit: row.ktp_6_digit || "", tkbm_count: Number(row.tkbm_count || 0), vendor_name: row.po_vendor_name || row.vendor_name || "", po_number: row.po_number || "", total_po_qty: row.total_po_qty || 0, actual_quantity: row.actual_quantity || 0, count_po_sku: row.count_po_sku || 0, status: row.status || "", gate: row.gate || "", unload_sla: row.unload_sla || "", source: row.source || "Supabase", created_at: row.created_at || "", register_time: row.register_time || row.created_at || "", called_at: row.called_at || "", updated_at: row.updated_at || row.po_updated_at || "", completed_at: String(row.status || "").toUpperCase() === "COMPLETED" ? finish : "", start_unloading_at: row.start_unloading_at || "", driver_waiting_duration: driverWaiting.text, driver_waiting_minutes: driverWaiting.minutes, unloading_duration: unloading.text, unloading_duration_minutes: unloading.minutes, sla_target_hours: window.InboundTicketContracts.getInboundSlaInfo(row).target_hours, sla_status: window.InboundTicketContracts.getInboundSlaInfo(row).status, wa_call_status: "", wa_call_sent_at: "", wa_call_error: "", wa_call_provider: "", wa_call_target: "", call_count: row.call_count || 0, last_call_attempt_at: row.last_call_at || "", expired_at: row.expired_at || "", expired_reason: row.expired_reason || "", sla_finished_at: finish, operational_date: row.operational_date || "", data_source: "Supabase", last_call_at: row.last_call_at || "", waiting_gr_at: row.checker_done_at || "", done_gr_at: row.done_gr_at || "", handover_grn_at: row.handover_grn_at || "", wa_handover_status: "", wa_handover_sent_at: "", wa_handover_error: "", wa_handover_target: "", ticket_po_id: row.ticket_po_id || "", po_sequence: poSequence, ticket_po_count: pos.length, ticket_total_qty: ticketQty, ticket_total_sku: ticketSku, finish_unloading_at: finish, checker_id: row.checker_id || "", checker_name: row.checker_name || "", checker_status: row.checker_status || "", checker_started_at: row.checker_started_at || "", checker_done_at: row.checker_done_at || "", checker_started_by: "", checker_done_by: "", checker_duration: checker.text, checker_duration_minutes: checker.minutes, gr_status: row.gr_status || "", done_gr_by: "", gr_wait_duration: grWait.text, gr_wait_minutes: grWait.minutes, inbound_sla_duration: inboundSla.text, inbound_sla_minutes: inboundSla.minutes, wa_ticket_status: "", wa_ticket_sent_at: "", wa_ticket_error: "", wa_ticket_target: "",
       };
     });
   }
@@ -7674,50 +7931,33 @@ function securityFormMatchesRowsForPrint(rows = []) {
     try {
       showToast("Menyiapkan CSV detail dari MotherDuck...");
       const allRows = await motherDuckApiGet("export_rows");
-      const visibleTickets =
-        window.__waitingListFilteredRowsV181 ||
-        state.dashboard?.report_preview ||
-        [];
-      const ticketIds = new Set(
-        visibleTickets
-          .map((ticket) => String(ticket.ticket_id || ""))
-          .filter(Boolean),
-      );
+      const visibleTickets = window.__waitingListFilteredRowsV181 || state.dashboard?.report_preview || [];
+      const ticketIds = new Set(visibleTickets.map((ticket) => String(ticket.ticket_id || "")).filter(Boolean));
       const selectedRows = ticketIds.size
         ? allRows.filter((row) => ticketIds.has(String(row.ticket_id || "")))
         : allRows;
-      if (!selectedRows.length)
-        return showToast("Tidak ada data sesuai filter.");
+      if (!selectedRows.length) return showToast("Tidak ada data sesuai filter.");
       const rows = legacyOutputRowsV20(selectedRows);
 
-      const escapeCsv = (value) =>
-        `"${String(value ?? "").replaceAll('"', '""')}"`;
+      const escapeCsv = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
       const csv = [
         LEGACY_OUTPUT_HEADERS_V20.map(escapeCsv).join(","),
-        ...rows.map((row) =>
-          LEGACY_OUTPUT_HEADERS_V20.map((key) => escapeCsv(row[key])).join(","),
-        ),
+        ...rows.map((row) => LEGACY_OUTPUT_HEADERS_V20.map((key) => escapeCsv(row[key])).join(",")),
       ].join("\r\n");
-      const url = URL.createObjectURL(
-        new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }),
-      );
+      const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
       const link = document.createElement("a");
       link.href = url;
       link.download = `waiting-list-detail-${new Date().toISOString().slice(0, 10)}.csv`;
       link.click();
       URL.revokeObjectURL(url);
-      showToast(
-        `${rows.length} baris PO dengan header detail berhasil diexport.`,
-      );
+      showToast(`${rows.length} baris PO dengan header detail berhasil diexport.`);
     } catch (error) {
       console.error(error);
       showToast(`Export CSV gagal: ${error.message}`);
     }
   };
   window.__exportCsvV19 = window.exportCsv;
-  try {
-    exportCsv = window.exportCsv;
-  } catch (error) {}
+  try { exportCsv = window.exportCsv; } catch (error) {}
 })();
 
 /* ==========================================================================
@@ -8247,11 +8487,6 @@ function securityFormMatchesRowsForPrint(rows = []) {
             ["ADMIN", "SPV", "DEVELOPER"].includes(role)
           )
             action = `<button onclick="advanceGrStatusFromKey('${key}','DONE GR',this)" class="bg-secondary-container text-on-secondary-container px-3 py-2 rounded-lg font-bold text-xs whitespace-nowrap">Done GR</button>`;
-          if (
-            st === "DONE GR" &&
-            ["SECURITY", "SPV", "DEVELOPER"].includes(role)
-          )
-            action = `<button onclick="advanceGrStatusFromKey('${key}','COMPLETED',this)" class="bg-success/15 border border-success/30 text-success px-3 py-2 rounded-lg font-bold text-xs whitespace-nowrap">Handover GRN</button>`;
           const terminal = st === "COMPLETED" || st === "EXPIRED";
           const wait =
             st === "EXPIRED"
@@ -8491,6 +8726,30 @@ function securityFormMatchesRowsForPrint(rows = []) {
 
   let explicitSubmitRunning = false;
 
+  function commitPendingManualSecurityInputs(form) {
+    if (!form) return;
+
+    // Mobile users often type a value and immediately tap Buat Nomor without
+    // pressing Enter or selecting the dropdown action. Preserve both raw texts
+    // before committing Vendor because changing Vendor refreshes the PO search.
+    const pendingVendor = String(
+      document.getElementById("vendor-search-input")?.value || "",
+    )
+      .replace(/\s+/g, " ")
+      .trim();
+    const pendingPo = String(
+      document.getElementById("po-search-input")?.value || "",
+    ).trim();
+    const committedVendor = String(form.vendor_name?.value || "").trim();
+
+    if (!committedVendor && pendingVendor) {
+      setVendorValue(pendingVendor.slice(0, 180), true);
+    }
+    if (pendingPo) {
+      addPoChoice(pendingPo);
+    }
+  }
+
   window.explicitSecuritySubmit = async function explicitSecuritySubmit(
     button,
   ) {
@@ -8502,6 +8761,8 @@ function securityFormMatchesRowsForPrint(rows = []) {
       showToast?.("Form Security tidak ditemukan.");
       return;
     }
+
+    commitPendingManualSecurityInputs(form);
 
     if (explicitSubmitRunning || window.securitySubmitBusy) {
       showToast?.("Submit sedang diproses, tunggu sebentar.");
@@ -10376,7 +10637,7 @@ window.initShader = function initShaderDisabled() {
   window.checkerStatusPill = function checkerStatusPillV15(status = "") {
     const value = String(status || "WAITING").toUpperCase();
     const cls =
-      value === "EXPIRED"
+      ["EXPIRED", "CANCELLED"].includes(value)
         ? "bg-error/10 text-error border-error/30"
         : value === "COMPLETED"
           ? "bg-success/10 text-success border-success/30"
@@ -10545,7 +10806,7 @@ window.initShader = function initShaderDisabled() {
         <div class="rounded-xl border border-primary/25 bg-primary/10 p-4"><div class="text-xs uppercase font-bold text-on-surface-variant">Master Checker</div><div class="text-3xl font-extrabold text-primary mt-2">${num(mp.length)}</div><div class="text-xs text-on-surface-variant mt-1">Nama aktif dari sheet <b>inbound mp</b></div></div>
         <div class="mt-4 rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4 text-sm text-on-surface-variant"><b class="text-on-surface">Cara kerja</b><br/>Buka card ticket → pilih nama checker → pilih PO → Start. Setelah selesai, pilih nama yang sama dan Done Checker.</div>`;
     }
-    return `<h3 class="font-headline-md text-headline-md mb-1">Data Selesai Checker</h3><p class="text-on-surface-variant">Admin wajib mengisi Actual Qty per PO sebelum Done GR. Handover GRN aktif setelah seluruh PO DONE GR.</p>`;
+    return `<h3 class="font-headline-md text-headline-md mb-1">Data Selesai Checker</h3><p class="text-on-surface-variant">Admin wajib mengisi Actual Qty per PO sebelum Done GR. DONE GR adalah tahap akhir proses tiket.</p>`;
   }
 
   window.pageChecker = function pageCheckerV15() {
@@ -10632,13 +10893,10 @@ window.initShader = function initShaderDisabled() {
     const checkerSearch = document.getElementById("checker-mp-search-v15");
     const checkerSelect = document.getElementById("checker-mp-select-v15");
     checkerSearch?.addEventListener("input", () => {
-      const keyword = String(checkerSearch.value || "")
-        .trim()
-        .toLowerCase();
+      const keyword = String(checkerSearch.value || "").trim().toLowerCase();
       [...checkerSelect.options].forEach((option, index) => {
         if (index === 0) return;
-        option.hidden =
-          !!keyword && !option.text.toLowerCase().includes(keyword);
+        option.hidden = !!keyword && !option.text.toLowerCase().includes(keyword);
       });
     });
     document.body.classList.add("mobile-checker-action-sheet-open");
@@ -10673,10 +10931,7 @@ window.initShader = function initShaderDisabled() {
     ]
       .filter((input) => {
         const status = String(
-          input
-            .closest(".checker-po-row-v15")
-            ?.querySelector("[data-checker-status]")?.dataset?.checkerStatus ||
-            "PENDING",
+          input.closest(".checker-po-row-v15")?.querySelector("[data-checker-status]")?.dataset?.checkerStatus || "PENDING",
         ).toUpperCase();
         return status === allowedStatus;
       })
@@ -10714,6 +10969,8 @@ window.initShader = function initShaderDisabled() {
           po.ticket_po_id || po.po_number || "",
         ).replace(/[^A-Za-z0-9_-]/g, "_")}`;
         const canEditActual =
+          !window.InboundTicketContracts.isCancelled(po) &&
+          !window.InboundTicketContracts.isCancelled(ticket) &&
           !dropOff &&
           ["ADMIN", "SPV", "DEVELOPER"].includes(role) &&
           String(po.checker_status || "").toUpperCase() === "DONE" &&
@@ -10751,8 +11008,8 @@ window.initShader = function initShaderDisabled() {
           <td>${esc(po.checker_done_at || "-")}</td>
           <td>${esc(po.gr_status || (dropOff ? "SKIPPED" : "PENDING"))}</td>
           <td>${esc(po.done_gr_at || "-")}</td>
-          <td>${esc(po.sla_status || po.unload_sla || "-")}</td>
-          <td>${actionMarkup}</td>
+          <td>${window.InboundTicketContracts.isCancelled(po) ? "CANCELLED" : esc(po.sla_status || po.unload_sla || "-")}</td>
+          <td>${actionMarkup} ${window.cancelActionMarkup(ticket, po)}</td>
         </tr>`;
       })
       .join("");
@@ -10772,24 +11029,17 @@ window.initShader = function initShaderDisabled() {
         rows
           .map((ticket, index) => {
             const status = String(ticket.status || "").toUpperCase();
-            const canHandover =
-              ["SECURITY", "SPV", "DEVELOPER"].includes(role) &&
-              !!ticket.finish_unloading_at &&
-              ticket.all_done_gr &&
-              status !== "COMPLETED";
             const wait =
               status === "EXPIRED"
                 ? "Expired"
-                : status === "COMPLETED"
+                : status === "COMPLETED" || ticket.all_done_gr
                   ? "Selesai"
                   : driverWaitingLabel(ticket);
             const sla = getInboundSlaInfo(ticket);
-            const action = canHandover
-              ? `<button type="button" onclick="handoverGrnTicketV15('${esc(ticket.ticket_id)}',this)" class="bg-success/15 border border-success/30 text-success rounded-lg px-3 py-2 text-xs font-bold whitespace-nowrap">Handover GRN</button>`
-              : status === "WAITING GR" &&
+            const action = window.cancelActionMarkup(ticket) + (status === "WAITING GR" &&
                   ["ADMIN", "SPV", "DEVELOPER"].includes(role)
                 ? `<span class="text-xs font-bold text-warning">GR ${ticket.gr_progress || "0/0"}</span>`
-                : "-";
+                : "");
             const detailId = `waiting-detail-${String(ticket.ticket_id).replace(/[^A-Za-z0-9_-]/g, "_")}`;
             return `<tr class="hover:bg-primary/5"><td class="px-4 py-3">${action}</td><td class="px-4 py-3"><button type="button" onclick="toggleWaitingDetailV16('${detailId}')" class="thin-tab rounded-lg px-3 py-2 text-xs font-bold">Detail PO</button></td><td class="px-4 py-3"><button onclick="printWaitingListTicket(${index})" class="thin-tab rounded-lg px-3 py-2 font-bold text-xs">Print</button></td><td class="px-4 py-3 text-sm whitespace-nowrap">${esc(ticket.created_at || "-")}</td><td class="px-4 py-3 font-queue-id text-primary">${esc(ticket.queue_no || "-")}</td><td class="px-4 py-3 min-w-[190px]">${esc(ticket.vendor_name || "-")}</td><td class="px-4 py-3">${esc(ticket.fleet_type || "-")}</td><td class="px-4 py-3 font-queue-id">${esc(ticket.plat_number || "-")}</td><td class="px-4 py-3">${ticket.po_rows?.length || 1}</td><td class="px-4 py-3">${esc(ticket.gate || "-")}</td><td class="px-4 py-3">${checkerStatusPill(status)}</td><td class="px-4 py-3 font-bold">${num(ticket.call_count || 0)}</td><td class="px-4 py-3 font-queue-id whitespace-nowrap">${esc(wait)}</td><td class="px-4 py-3">${num(ticket.total_po_qty || 0)}</td><td class="px-4 py-3 font-queue-id">${num(ticket.actual_quantity || 0)}</td><td class="px-4 py-3">${num(ticket.count_po_sku || 0)}</td><td class="px-4 py-3 whitespace-nowrap">${esc(ticket.checker_progress || "0/0")}</td><td class="px-4 py-3 whitespace-nowrap">${esc(ticket.gr_progress || "0/0")}</td><td class="px-4 py-3 whitespace-nowrap"><span class="inline-flex rounded-full border px-2 py-1 text-xs font-bold ${sla.badgeClass}">${esc(sla.status)}</span></td></tr>
           <tr id="${detailId}" class="hidden waiting-detail-row-v15"><td colspan="19" class="p-0"><div class="waiting-detail-panel-v15"><div class="flex flex-wrap gap-4 mb-4 text-xs"><span><b>Created:</b> ${esc(ticket.created_at || ticket.register_time || "-")}</span><span><b>Driver:</b> ${esc(ticket.driver_name || "-")} · ${esc(ticket.driver_phone || ticket.phone_number || "-")}</span><span><b>Ticket:</b> ${esc(ticket.ticket_type || "REG")} · Slot ${esc(ticket.slot || "-")} · Gate ${esc(ticket.gate || "-")}</span><span><b>Start Unloading:</b> ${esc(ticket.start_unloading_at || "-")}</span><span><b>Finish Unloading:</b> ${esc(ticket.finish_unloading_at || "-")}</span><span><b>Checker:</b> ${esc(ticket.checker_progress || "0/0")}</span><span><b>GR:</b> ${esc(ticket.gr_progress || "0/0")}</span><span><b>WA Ticket:</b> ${esc(ticket.wa_ticket_status || ticket.po_rows?.[0]?.wa_ticket_status || "-")}</span><span><b>WA Handover:</b> ${esc(ticket.wa_handover_status || ticket.po_rows?.[0]?.wa_handover_status || "-")}</span></div><div class="overflow-x-auto"><table class="po-detail-table-v15"><thead><tr><th>PO Number</th><th>PO Qty</th><th>Actual Qty</th><th>SKU</th><th>Checker</th><th>Status Checker</th><th>Start Checker</th><th>Done Checker</th><th>GR Status</th><th>Done GR</th><th>SLA</th><th>Action</th></tr></thead><tbody>${waitingPoDetailRowsV15(ticket, role)}</tbody></table></div></div></td></tr>`;
@@ -10803,7 +11053,7 @@ window.initShader = function initShaderDisabled() {
 
   window.pageLaporan = function pageLaporanV15() {
     const rows = state.dashboard?.report_preview || [];
-    return `<div class="glass-card rounded-xl p-4 sm:p-6"><div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6"><div><h3 class="font-headline-md text-headline-md">Waiting List</h3><p class="text-on-surface-variant">Satu kendaraan tampil satu baris. Admin wajib mengisi Actual Qty per PO sebelum Done GR. Handover GRN dilakukan setelah seluruh PO selesai Done GR.</p></div><div class="flex gap-2"><button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">refresh</span>Refresh</button><button onclick="exportCsv()" class="bg-primary-container text-on-primary-container px-5 py-3 rounded-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined">download</span>Export CSV</button></div></div>${reportTable(rows)}</div>`;
+    return `<div class="glass-card rounded-xl p-4 sm:p-6"><div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6"><div><h3 class="font-headline-md text-headline-md">Waiting List</h3><p class="text-on-surface-variant">Satu kendaraan tampil satu baris. Admin wajib mengisi Actual Qty per PO sebelum Done GR. DONE GR adalah tahap akhir proses tiket.</p></div><div class="flex gap-2"><button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">refresh</span>Refresh</button><button onclick="exportCsv()" class="bg-primary-container text-on-primary-container px-5 py-3 rounded-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined">download</span>Export CSV</button></div></div>${reportTable(rows)}</div>`;
   };
   pageLaporan = window.pageLaporan;
 
@@ -10887,6 +11137,7 @@ window.initShader = function initShaderDisabled() {
       doneGr: count("DONE GR"),
       completed: count("COMPLETED"),
       expired: count("EXPIRED"),
+      cancelled: count("CANCELLED"),
       miss: rows.filter((row) =>
         ["SLA MISS", "LATE"].includes(getInboundSlaInfo(row).status),
       ).length,
@@ -10950,8 +11201,7 @@ window.initShader = function initShaderDisabled() {
       ["Dipanggil", 1],
       ["Unloading", 2],
       [`Checker Barang ${row.checker_progress || "0/0"}`, 4],
-      [`Proses GR ${row.gr_progress || "0/0"}`, 6],
-      ["Handover Surat Jalan", 7],
+      [`Done GR ${row.gr_progress || "0/0"}`, 6],
     ];
     return `<div class="driver-timeline-v15">${items.map(([label, step]) => `<div class="driver-timeline-item-v15 ${current >= step ? "is-done" : current + 1 === step ? "is-active" : ""}"><span class="material-symbols-outlined">${current >= step ? "check_circle" : "radio_button_unchecked"}</span><span>${esc(label)}</span></div>`).join("")}</div>`;
   }
@@ -11670,6 +11920,16 @@ window.initShader = function initShaderDisabled() {
           .toLowerCase(),
     );
 
+    // Akun COMERCIAL divalidasi sepenuhnya oleh Supabase. Username tim dapat
+    // ditambah lewat secret tanpa harus menaruh daftar akun di browser.
+    if (!master && normalizeRole(stored.role) === "COMERCIAL") {
+      return {
+        ...stored,
+        role: "COMERCIAL",
+        display_name: stored.display_name || stored.username,
+      };
+    }
+
     if (!master) {
       clearAuthUser();
       return null;
@@ -12162,17 +12422,9 @@ window.initShader = function initShaderDisabled() {
         active: stateV16.unloadingStarted && !stateV16.unloadingFinished,
       },
       {
-        label: `Proses GR ${stateV16.grDone}/${stateV16.grTotal}`,
+        label: `Done GR ${stateV16.grDone}/${stateV16.grTotal}`,
         done: stateV16.allDoneGr,
         active: stateV16.grStarted && !stateV16.allDoneGr,
-      },
-      {
-        label: "Handover Surat Jalan",
-        done: stateV16.completed,
-        active:
-          stateV16.unloadingFinished &&
-          stateV16.allDoneGr &&
-          !stateV16.completed,
       },
     ];
 
@@ -12427,7 +12679,7 @@ window.initShader = function initShaderDisabled() {
     row = {},
   ) {
     const status = String(row.status || "").toUpperCase();
-    if (status.includes("EXPIRED")) return 0;
+    if (status.includes("EXPIRED") || status === "CANCELLED") return 0;
     const start = parseInboundDateSafe(row.start_unloading_at);
     if (!start) return 0;
     const end =
@@ -12578,6 +12830,18 @@ window.initShader = function initShaderDisabled() {
     ).trim();
     const vendorFilter = getSelectedVendorFilter();
     const registeredCount = getRegisteredPoSet().size;
+    const queryKey = normalizeKey(query);
+    const queryIsMaster = (state.options.po_number || []).some(
+      (po) => normalizeKey(po) === queryKey,
+    );
+    const queryIsRegistered = queryKey && getRegisteredPoSet().has(queryKey);
+    const manualAction =
+      query && !queryIsMaster && !queryIsRegistered
+        ? `<button type="button" onpointerdown="preventDropdownBlurSelect(event)" onclick="event.preventDefault(); event.stopPropagation(); addPoFromSearch(); closePoDropdownV162()" class="w-full mb-2 px-3 py-3 rounded-lg bg-warning/10 border border-warning/30 hover:bg-warning/20 text-left touch-manipulation">
+            <span class="block text-[10px] text-warning font-extrabold uppercase">PO tidak ada di master?</span>
+            <span class="block mt-1 font-queue-id text-[12px] sm:text-[13px] text-on-surface break-all">Gunakan PO manual: ${esc(query)}</span>
+          </button>`
+        : "";
 
     // Hapus pilihan yang sudah tidak ada di list aktif/vendor sekarang.
     const available = new Set(options.map((po) => normalizeKey(po)));
@@ -12593,11 +12857,11 @@ window.initShader = function initShaderDisabled() {
           ? "PO tidak ada untuk vendor/filter tersebut, atau PO sudah pernah daftar."
           : "Belum ada PO available untuk vendor ini."
         : "Pilih Vendor Name dulu supaya list PO terfilter.";
-      list.innerHTML = `<div class="px-3 py-3 text-[12px] text-on-surface-variant">${message}${registeredCount ? `<div class="mt-1 text-warning font-bold">${registeredCount} PO sudah terdaftar dan disembunyikan.</div>` : ""}</div>`;
+      list.innerHTML = `${manualAction}<div class="px-3 py-3 text-[12px] text-on-surface-variant">${message}${registeredCount ? `<div class="mt-1 text-warning font-bold">${registeredCount} PO sudah terdaftar dan disembunyikan.</div>` : ""}</div>`;
       return;
     }
 
-    list.innerHTML = `<div class="space-y-1 pb-14">
+    list.innerHTML = `${manualAction}<div class="space-y-1 pb-14">
       ${options
         .map((po) => {
           const meta = getPoMeta(po);
@@ -13237,7 +13501,7 @@ window.initShader = function initShaderDisabled() {
   function checkerFinishedInfoPanelV165() {
     return `<h3 class="font-headline-md text-headline-md mb-1">Proses Checker Selesai</h3>
       <p class="text-on-surface-variant mb-5">Ticket di sini sudah Finish Unloading, Done GR, Completed, atau Expired.</p>
-      <div class="rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4 text-sm text-on-surface-variant">Done GR dikerjakan Admin per PO dari Waiting List. Handover GRN dilakukan Security setelah semua PO Done GR.</div>`;
+      <div class="rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4 text-sm text-on-surface-variant">Done GR dikerjakan Admin per PO dari Waiting List dan menjadi tahap akhir tiket.</div>`;
   }
 
   window.pageChecker = function pageCheckerV165() {
@@ -13698,8 +13962,7 @@ window.initShader = function initShaderDisabled() {
       }
 
       const rowDate = operationalDateV181(row);
-      if (filters.dateFrom && rowDate && rowDate < filters.dateFrom)
-        return false;
+      if (filters.dateFrom && rowDate && rowDate < filters.dateFrom) return false;
       if (filters.dateTo && rowDate && rowDate > filters.dateTo) return false;
 
       if (
@@ -13713,12 +13976,10 @@ window.initShader = function initShaderDisabled() {
 
       if (filters.grStatus) {
         const poRows = Array.isArray(row.po_rows) ? row.po_rows : [];
-        const grStatuses = poRows.map((po) =>
-          String(po.gr_status || "PENDING").toUpperCase(),
-        );
+        const grStatuses = poRows.map((po) => String(po.gr_status || "PENDING").toUpperCase());
         const wanted = String(filters.grStatus).toUpperCase();
         if (wanted === "BELUM DONE GR") {
-          if (!grStatuses.some((status) => status !== "DONE GR")) return false;
+          if (!grStatuses.some((status) => !["DONE GR", "CANCELLED"].includes(status))) return false;
         } else if (!grStatuses.some((status) => status === wanted)) {
           return false;
         }
@@ -13859,10 +14120,8 @@ window.initShader = function initShaderDisabled() {
       "";
     f.operationalDate =
       document.getElementById("waiting-filter-date-v181")?.value || "";
-    f.dateFrom =
-      document.getElementById("waiting-filter-date-from-v181")?.value || "";
-    f.dateTo =
-      document.getElementById("waiting-filter-date-to-v181")?.value || "";
+    f.dateFrom = document.getElementById("waiting-filter-date-from-v181")?.value || "";
+    f.dateTo = document.getElementById("waiting-filter-date-to-v181")?.value || "";
     f.status =
       document.getElementById("waiting-filter-status-v181")?.value || "";
     f.grStatus = document.getElementById("waiting-filter-gr-v181")?.value || "";
@@ -13978,9 +14237,7 @@ window.initShader = function initShaderDisabled() {
 // V19 export must win over legacy exports registered earlier in this file.
 if (window.__exportCsvV19) {
   window.exportCsv = window.__exportCsvV19;
-  try {
-    exportCsv = window.exportCsv;
-  } catch (error) {}
+  try { exportCsv = window.exportCsv; } catch (error) {}
 }
 
 /* ==========================================================================
@@ -13991,46 +14248,28 @@ if (window.__exportCsvV19) {
   if (window.__waitingMonitorCommandCenterV19Installed) return;
   window.__waitingMonitorCommandCenterV19Installed = true;
 
-  const safeStatus = (row = {}) =>
-    String(row.status || "WAITING").toUpperCase();
-  const isTerminal = (status) => ["COMPLETED", "EXPIRED"].includes(status);
+  const safeStatus = (row = {}) => String(row.status || "WAITING").toUpperCase();
+  const isTerminal = (status) => ["DONE GR", "COMPLETED", "EXPIRED", "CANCELLED"].includes(status);
   const displayStatus = (status) =>
-    ({
-      UNLOADING: "BONGKAR",
-      "WAITING GR": "WAITING GR",
-      "DONE GR": "DONE GR",
-    })[status] || status;
+    ({ UNLOADING: "BONGKAR", "WAITING GR": "WAITING GR", "DONE GR": "DONE GR" }[status] || status);
   const statusStyle = (status) => {
-    if (status === "UNLOADING")
-      return "background:rgb(var(--primary) / .12);color:rgb(var(--primary));";
-    if (status === "WAITING GR" || status === "DONE GR")
-      return "background:rgb(var(--success) / .12);color:rgb(var(--success));";
-    if (status === "CALLED")
-      return "background:rgb(var(--warning) / .14);color:rgb(var(--warning));";
-    if (status === "EXPIRED")
-      return "background:rgb(var(--error) / .12);color:rgb(var(--error));";
+    if (status === "UNLOADING") return "background:rgb(var(--primary) / .12);color:rgb(var(--primary));";
+    if (status === "WAITING GR" || status === "DONE GR") return "background:rgb(var(--success) / .12);color:rgb(var(--success));";
+    if (status === "CALLED") return "background:rgb(var(--warning) / .14);color:rgb(var(--warning));";
+    if (status === "EXPIRED") return "background:rgb(var(--error) / .12);color:rgb(var(--error));";
     return "background:rgb(var(--outline-variant) / .22);color:rgb(var(--on-surface-variant));";
   };
-  const countStatus = (rows, status) =>
-    rows.filter((row) => safeStatus(row) === status).length;
-  const numV19 = (value) =>
-    new Intl.NumberFormat("id-ID").format(Number(value || 0));
+  const countStatus = (rows, status) => rows.filter((row) => safeStatus(row) === status).length;
+  const numV19 = (value) => new Intl.NumberFormat("id-ID").format(Number(value || 0));
   const rowWaiting = (row) => {
     const start = row.register_time || row.created_at || "";
-    const end = isTerminal(safeStatus(row))
-      ? row.completed_at || row.expired_at || row.updated_at || ""
-      : "";
-    return typeof liveWaitingText === "function"
-      ? liveWaitingText(start, end)
-      : "-";
+    const end = isTerminal(safeStatus(row)) ? (row.completed_at || row.cancelled_at || row.expired_at || row.updated_at || "") : "";
+    return typeof liveWaitingText === "function" ? liveWaitingText(start, end) : "-";
   };
   const riskSort = (a, b) => {
     const aSla = getInboundSlaInfo(a);
     const bSla = getInboundSlaInfo(b);
-    return (
-      Number(aSla.delta_minutes ?? 999999) -
-      Number(bSla.delta_minutes ?? 999999)
-    );
+    return Number(aSla.delta_minutes ?? 999999) - Number(bSla.delta_minutes ?? 999999);
   };
 
   function metricV19(label, value, note, tone = "") {
@@ -14047,7 +14286,67 @@ if (window.__exportCsvV19) {
     ];
     const active = rows.filter((row) => !isTerminal(safeStatus(row)));
     const total = Math.max(active.length, 1);
-    return `<article class="wm19-card"><header class="wm19-card-head"><div><h3>Alur Antrian Saat Ini</h3><p>Breakdown kendaraan aktif berdasarkan status operasional.</p></div><span class="wm19-chip">${numV19(active.length)} aktif</span></header><div class="wm19-flow"><div class="wm19-flow-top"><b>Distribusi queue live</b><span>Click filter untuk drill-down</span></div><div class="wm19-bar">${statuses.map(([status, , color]) => `<i style="width:${(countStatus(active, status) / total) * 100}%;background:${color}"></i>`).join("")}</div><div class="wm19-legend">${statuses.map(([status, label, color]) => `<span><i style="display:inline-block;width:7px;height:7px;margin-right:4px;border-radius:50%;background:${color}"></i>${label}<b>${numV19(countStatus(active, status))}</b></span>`).join("")}</div></div><div class="wm19-trend"><div class="wm19-flow-top"><b>Volume queue saat ini</b><span>Peak berdasarkan urutan slot</span></div><svg viewBox="0 0 600 114" aria-label="Visual trend queue"><line x1="0" y1="87" x2="600" y2="87" stroke="rgb(var(--outline-variant) / .45)"/><path d="M0,76 L85,66 L170,71 L255,42 L340,57 L425,28 L510,48 L600,35 L600,87 L0,87 Z" fill="rgb(var(--primary) / .10)"/><path d="M0,76 L85,66 L170,71 L255,42 L340,57 L425,28 L510,48 L600,35" fill="none" stroke="rgb(var(--primary-container))" stroke-width="3"/><circle cx="600" cy="35" r="4" fill="rgb(var(--surface))" stroke="rgb(var(--primary-container))" stroke-width="3"/><text class="wm19-axis" x="0" y="106">Awal shift</text><text class="wm19-axis" x="250" y="106">Tengah shift</text><text class="wm19-axis" x="530" y="106">Sekarang</text></svg></div></article>`;
+    return `<article class="wm19-card"><header class="wm19-card-head"><div><h3>Alur Antrian</h3><p>Distribusi kendaraan aktif berdasarkan status aktual.</p></div><span class="wm19-chip">${numV19(active.length)} aktif</span></header><div class="wm19-flow"><div class="wm19-flow-top"><b>Queue live</b><span>Realtime</span></div><div class="wm19-bar">${statuses.map(([status,,color]) => `<i style="width:${(countStatus(active, status) / total) * 100}%;background:${color}"></i>`).join("")}</div><div class="wm19-legend">${statuses.map(([status,label,color]) => `<span><i style="display:inline-block;width:7px;height:7px;margin-right:4px;border-radius:50%;background:${color}"></i>${label}<b>${numV19(countStatus(active,status))}</b></span>`).join("")}</div></div></article>`;
+  }
+
+  function gateListV22(row = {}) {
+    if (typeof parseGateList === "function") return parseGateList(row.gate || "");
+    return String(row.gate || "")
+      .split(",")
+      .map((gate) => gate.trim())
+      .filter(Boolean);
+  }
+
+  function gateLabelV22(gate = "") {
+    const text = String(gate || "");
+    const site = text.startsWith("STL-") ? "STL" : "CBT";
+    const number = text.match(/(\d{2})$/)?.[1] || text.match(/\d+/)?.[0] || "-";
+    return `${site} ${number}`;
+  }
+
+  function gatePanelV22(rows) {
+    const configured = Array.isArray(state.options?.gate) && state.options.gate.length
+      ? state.options.gate
+      : typeof getCibitungGateOptions === "function"
+        ? getCibitungGateOptions()
+        : [];
+    const gates = [
+      ...new Set(
+        configured
+          .map((gate) => String(gate || "").trim())
+          .filter((gate) => gate && !gate.toUpperCase().startsWith("STL-")),
+      ),
+    ];
+    const activeRows = rows.filter((row) => ["CALLED", "UNLOADING"].includes(safeStatus(row)));
+    const assignments = gates.map((gate) => {
+      const tickets = activeRows.filter((row) =>
+        gateListV22(row).some((item) => item.toUpperCase() === gate.toUpperCase()),
+      );
+      tickets.sort((a, b) => Number(safeStatus(b) === "UNLOADING") - Number(safeStatus(a) === "UNLOADING"));
+      return { gate, tickets };
+    });
+    const used = assignments.filter((item) => item.tickets.length).length;
+    const unloading = assignments.filter((item) => item.tickets.some((row) => safeStatus(row) === "UNLOADING")).length;
+    const called = assignments.filter((item) => item.tickets.length && !item.tickets.some((row) => safeStatus(row) === "UNLOADING")).length;
+    const cards = assignments.map(({ gate, tickets }) => {
+      if (!tickets.length) {
+        return `<article class="wm19-gate-card is-empty" aria-label="${esc(gate)} kosong"><div class="wm19-gate-top"><b>${esc(gateLabelV22(gate))}</b><span>KOSONG</span></div><small>${esc(gate)}</small><div class="wm19-gate-empty-label">Siap digunakan</div></article>`;
+      }
+      const first = tickets[0];
+      const status = tickets.some((row) => safeStatus(row) === "UNLOADING") ? "UNLOADING" : "CALLED";
+      const statusLabel = status === "UNLOADING" ? "BONGKAR" : "DIPANGGIL";
+      let timing = status === "UNLOADING" ? "Sedang bongkar" : "Menunggu masuk gate";
+      if (status === "UNLOADING") {
+        const estimate = getUnloadingEstimateInfo(first);
+        if (estimate.diffMinutes !== null) {
+          timing = estimate.diffMinutes >= 0
+            ? `Sisa ${formatMinutesCompact(estimate.diffMinutes)}`
+            : `Lewat ${formatMinutesCompact(Math.abs(estimate.diffMinutes))}`;
+        }
+      }
+      return `<button type="button" class="wm19-gate-card ${status === "UNLOADING" ? "is-unloading" : "is-called"}" data-gate="${esc(gate)}" onclick="wmFilterGateV22(this.dataset.gate)" aria-label="Filter Queue Operasional untuk ${esc(gate)}"><div class="wm19-gate-top"><b>${esc(gateLabelV22(gate))}</b><span>${statusLabel}</span></div><small>${esc(gate)}</small><strong>${esc(first.queue_no || "-")}</strong><div class="wm19-gate-vehicle"><b>${esc(first.plat_number || "-")}</b><span>${esc(first.driver_name || first.vendor_name || "-")}</span></div><div class="wm19-gate-bottom"><em>${esc(timing)}</em>${tickets.length > 1 ? `<span>+${tickets.length - 1} unit</span>` : ""}</div></button>`;
+    }).join("");
+    return `<article class="wm19-card wm19-gate-panel"><header class="wm19-card-head wm19-gate-head"><div><h3>Visibilitas Gate Bongkar</h3><p>Klik gate aktif untuk memfilter Queue Operasional. Tiket Drop-Off tetap terpisah.</p></div><div class="wm19-gate-summary"><span><i class="is-unloading"></i>${numV19(unloading)} bongkar</span><span><i class="is-called"></i>${numV19(called)} dipanggil</span><b>${numV19(used)}/${numV19(gates.length)} digunakan</b></div></header><div class="wm19-gate-grid">${cards || `<div class="wm19-empty">Konfigurasi gate belum tersedia.</div>`}</div></article>`;
   }
 
   function riskListV19(rows) {
@@ -14055,418 +14354,540 @@ if (window.__exportCsvV19) {
       .filter((row) => {
         const status = safeStatus(row);
         const sla = getInboundSlaInfo(row);
-        return (
-          !isTerminal(status) &&
-          (sla.status === "SLA MISS" || Number(sla.delta_minutes) <= 60)
-        );
+        return !isTerminal(status) && (sla.status === "SLA MISS" || Number(sla.delta_minutes) <= 60);
       })
       .sort(riskSort)
       .slice(0, 4);
-    return `<article class="wm19-card"><header class="wm19-card-head"><div><h3>Prioritas SLA</h3><p>Unit yang perlu diproses lebih dulu.</p></div><span class="wm19-chip danger">${numV19(riskRows.length)} berisiko</span></header><div class="wm19-risk-list">${
-      riskRows.length
-        ? riskRows
-            .map((row) => {
-              const sla = getInboundSlaInfo(row);
-              const delta = Number(sla.delta_minutes);
-              const label =
-                delta < 0
-                  ? `+${formatMinutesCompact(Math.abs(delta))}`
-                  : formatMinutesCompact(delta);
-              return `<div class="wm19-risk-row"><div class="wm19-queue">${esc(row.queue_no || "-")}</div><div><b>${esc(row.vendor_name || "-")}</b><small>${esc(displayStatus(safeStatus(row)))} · ${esc(row.plat_number || "-")} · ${esc(row.checker_progress || `${row.ticket_po_count || 0} PO`)}</small></div><div class="wm19-risk-sla">${esc(label)}<small>${delta < 0 ? "LEWAT SLA" : "TERSISA"}</small></div></div>`;
-            })
-            .join("")
-        : `<div class="wm19-empty">Belum ada kendaraan dalam zona risiko SLA.</div>`
-    }</div></article>`;
+    return `<article class="wm19-card"><header class="wm19-card-head"><div><h3>Prioritas SLA</h3><p>Unit yang perlu diproses lebih dulu.</p></div><span class="wm19-chip danger">${numV19(riskRows.length)} berisiko</span></header><div class="wm19-risk-list">${riskRows.length ? riskRows.map((row) => { const sla = getInboundSlaInfo(row); const delta = Number(sla.delta_minutes); const label = delta < 0 ? `+${formatMinutesCompact(Math.abs(delta))}` : formatMinutesCompact(delta); return `<div class="wm19-risk-row"><div class="wm19-queue">${esc(row.queue_no || "-")}</div><div><b>${esc(row.vendor_name || "-")}</b><small>${esc(displayStatus(safeStatus(row)))} · ${esc(row.plat_number || "-")} · ${esc(row.checker_progress || `${row.ticket_po_count || 0} PO`)}</small></div><div class="wm19-risk-sla">${esc(label)}<small>${delta < 0 ? "LEWAT SLA" : "TERSISA"}</small></div></div>`; }).join("") : `<div class="wm19-empty">Belum ada kendaraan dalam zona risiko SLA.</div>`}</div></article>`;
   }
 
   function breakdownV19(rows) {
     const active = rows.filter((row) => !isTerminal(safeStatus(row)));
     const breakdown = [
       ["Menunggu panggil", countStatus(active, "WAITING"), "blue"],
-      [
-        "Menunggu checker",
-        active.filter((row) =>
-          ["WAITING CHECKER", "CHECKING"].includes(safeStatus(row)),
-        ).length,
-        "purple",
-      ],
+      ["Menunggu checker", active.filter((row) => ["WAITING CHECKER", "CHECKING"].includes(safeStatus(row))).length, "purple"],
       ["Menunggu Done GR", countStatus(active, "WAITING GR"), "orange"],
-      [
-        "Gate digunakan",
-        active.filter((row) =>
-          ["CALLED", "UNLOADING"].includes(safeStatus(row)),
-        ).length,
-        "green",
-      ],
+      ["Gate digunakan", active.filter((row) => ["CALLED", "UNLOADING"].includes(safeStatus(row))).length, "green"],
     ];
     const max = Math.max(...breakdown.map((item) => item[1]), 1);
-    const bottleneck = [...breakdown].sort((a, b) => b[1] - a[1])[0];
-    return `<article class="wm19-card" style="margin-top:14px"><header class="wm19-card-head"><div><h3>Breakdown Bottleneck</h3><p>Tahap yang paling menahan aliran inbound.</p></div><span class="wm19-chip">live</span></header><div class="wm19-breakdown">${breakdown.map(([label, value, tone]) => `<div class="wm19-break-row"><span>${label}</span><div class="wm19-mini"><i style="width:${(value / max) * 100}%;${tone === "purple" ? "background:linear-gradient(90deg,#a78bfa,#6d28d9)" : tone === "orange" ? "background:linear-gradient(90deg,#fbbf24,#d97706)" : tone === "green" ? "background:linear-gradient(90deg,#4ade80,#16a34a)" : ""}"></i></div><b>${numV19(value)}</b></div>`).join("")}<div class="wm19-insight"><b>Insight operasional</b><br/>Bottleneck terbesar ada di tahap <b>${esc(bottleneck[0])}</b> (${numV19(bottleneck[1])} unit). Gunakan filter status untuk langsung follow-up unit terkait.</div></div></article>`;
+    const bottleneck = [...breakdown].sort((a,b) => b[1] - a[1])[0];
+    return `<article class="wm19-card"><header class="wm19-card-head"><div><h3>Breakdown Bottleneck</h3><p>Tahap yang paling menahan aliran inbound.</p></div><span class="wm19-chip">live</span></header><div class="wm19-breakdown">${breakdown.map(([label,value,tone]) => `<div class="wm19-break-row"><span>${label}</span><div class="wm19-mini"><i style="width:${(value / max) * 100}%;${tone === "purple" ? "background:linear-gradient(90deg,#a78bfa,#6d28d9)" : tone === "orange" ? "background:linear-gradient(90deg,#fbbf24,#d97706)" : tone === "green" ? "background:linear-gradient(90deg,#4ade80,#16a34a)" : ""}"></i></div><b>${numV19(value)}</b></div>`).join("")}<div class="wm19-insight"><b>Insight operasional</b><br/>Bottleneck terbesar ada di tahap <b>${esc(bottleneck[0])}</b> (${numV19(bottleneck[1])} unit). Gunakan filter status untuk langsung follow-up unit terkait.</div></div></article>`;
   }
 
   function tableV19(rows) {
-    const sorted = [...rows]
-      .sort(
-        (a, b) =>
-          riskSort(a, b) ||
-          String(a.queue_no || "").localeCompare(String(b.queue_no || "")),
-      )
-      .slice(0, 12);
-    return `<article class="wm19-card wm19-table-card"><header class="wm19-card-head"><div><h3>Queue Operasional</h3><p>Prioritas tertinggi tampil paling atas untuk action SPV.</p></div><span class="wm19-chip">${numV19(rows.length)} total</span></header><div class="wm19-table-wrap"><table id="monitor-unified-table" class="wm19-table"><thead><tr><th>QUEUE</th><th>VENDOR / PLAT</th><th>STATUS</th><th>GATE</th><th>MENUNGGU</th><th>SLA</th><th>PROGRESS PO</th></tr></thead><tbody>${
-      sorted
-        .map((row) => {
-          const status = safeStatus(row);
-          const sla = getInboundSlaInfo(row);
-          const slaText =
-            sla.status === "SLA MISS" || sla.status === "LATE"
-              ? sla.label
-              : sla.label || "On track";
-          const slaColor =
-            sla.status === "SLA MISS" || sla.status === "LATE"
-              ? "color:rgb(var(--error))"
-              : sla.status === "ON PROCESS"
-                ? "color:rgb(var(--warning))"
-                : "color:rgb(var(--success))";
-          return `<tr data-wm19-row="1"><td class="wm19-queue">${esc(row.queue_no || "-")}</td><td><b style="display:block;color:rgb(var(--on-surface));font-size:11px">${esc(row.vendor_name || "-")}</b>${esc(row.plat_number || "-")}</td><td><span class="wm19-status" style="${statusStyle(status)}">${esc(displayStatus(status))}</span></td><td>${esc(row.gate || "-")}</td><td>${esc(rowWaiting(row))}</td><td style="font-weight:800;${slaColor}">${esc(slaText)}</td><td>${esc(row.checker_progress || row.gr_progress || `${row.ticket_po_count || 0} PO`)}</td></tr>`;
-        })
-        .join("") ||
-      `<tr><td colspan="7" class="wm19-empty">Belum ada data antrian.</td></tr>`
-    }</tbody></table></div><footer class="wm19-foot">Menampilkan ${numV19(Math.min(sorted.length, 12))} dari <b>${numV19(rows.length)} kendaraan</b> · urutan berdasarkan risiko SLA.</footer></article>`;
+    const sorted = [...rows].sort((a,b) => riskSort(a,b) || String(a.queue_no || "").localeCompare(String(b.queue_no || "")));
+    return `<article class="wm19-card wm19-table-card"><header class="wm19-card-head"><div><h3>Queue Operasional</h3><p>Panel utama untuk action SPV. Prioritas SLA tertinggi berada paling atas.</p></div><span class="wm19-chip">${numV19(rows.length)} total</span></header><div class="wm19-table-wrap"><table id="monitor-unified-table" class="wm19-table"><thead><tr><th>QUEUE</th><th>VENDOR / PLAT</th><th>STATUS</th><th>GATE</th><th>MENUNGGU</th><th>SLA</th><th>PROGRESS PO</th></tr></thead><tbody>${sorted.map((row) => { const status = safeStatus(row); const sla = getInboundSlaInfo(row); const slaText = sla.status === "SLA MISS" || sla.status === "LATE" ? sla.label : (sla.label || "On track"); const slaColor = (sla.status === "SLA MISS" || sla.status === "LATE") ? "color:rgb(var(--error))" : sla.status === "ON PROCESS" ? "color:rgb(var(--warning))" : "color:rgb(var(--success))"; return `<tr data-wm19-row="1"><td class="wm19-queue">${esc(row.queue_no || "-")}</td><td><b style="display:block;color:rgb(var(--on-surface));font-size:12px">${esc(row.vendor_name || "-")}</b>${esc(row.plat_number || "-")}</td><td><span class="wm19-status" style="${statusStyle(status)}">${esc(displayStatus(status))}</span></td><td>${esc(row.gate || "-")}</td><td>${esc(rowWaiting(row))}</td><td style="font-weight:800;${slaColor}">${esc(slaText)}</td><td>${esc(row.checker_progress || row.gr_progress || `${row.ticket_po_count || 0} PO`)}</td></tr>`; }).join("") || `<tr><td colspan="7" class="wm19-empty">Belum ada data antrian.</td></tr>`}</tbody></table></div><footer class="wm19-foot">Menampilkan seluruh <b>${numV19(rows.length)} kendaraan</b> · scroll di dalam panel · urutan berdasarkan risiko SLA.</footer></article>`;
   }
 
   window.wmFilterV19 = function wmFilterV19(input) {
-    const query = String(input?.value || "")
-      .trim()
-      .toLowerCase();
+    const query = String(input?.value || "").trim().toLowerCase();
+    let visible = 0;
     document.querySelectorAll("[data-wm19-row]").forEach((row) => {
-      row.style.display =
-        !query || row.textContent.toLowerCase().includes(query) ? "" : "none";
+      const show = !query || row.textContent.toLowerCase().includes(query);
+      row.style.display = show ? "" : "none";
+      if (show) visible += 1;
     });
+    const result = document.getElementById("wm19-result-count");
+    if (result) result.textContent = `${numV19(visible)} kendaraan tampil`;
+  };
+
+  window.wmFilterGateV22 = function wmFilterGateV22(gate) {
+    const input = document.getElementById("wm19-search");
+    if (!input) return;
+    input.value = String(gate || "");
+    window.wmFilterV19(input);
+    document.querySelector(".wm19-table-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   window.pageMonitor = function pageMonitorCommandCenterV19() {
-    const rows = Array.isArray(state.dashboard?.queue)
-      ? state.dashboard.queue
-      : [];
+    const rows = Array.isArray(state.dashboard?.queue) ? state.dashboard.queue : [];
     const active = rows.filter((row) => !isTerminal(safeStatus(row)));
-    const slaMiss = active.filter((row) =>
-      ["SLA MISS", "LATE"].includes(getInboundSlaInfo(row).status),
-    ).length;
+    const slaMiss = active.filter((row) => ["SLA MISS", "LATE"].includes(getInboundSlaInfo(row).status)).length;
     const waiting = countStatus(active, "WAITING");
     const unloading = countStatus(active, "UNLOADING");
     const waitingGr = countStatus(active, "WAITING GR");
     const completed = countStatus(rows, "COMPLETED");
-    const riskCount = active.filter((row) => {
-      const delta = Number(getInboundSlaInfo(row).delta_minutes);
-      return getInboundSlaInfo(row).status === "SLA MISS" || delta <= 60;
-    }).length;
+    const riskCount = active.filter((row) => { const delta = Number(getInboundSlaInfo(row).delta_minutes); return getInboundSlaInfo(row).status === "SLA MISS" || delta <= 60; }).length;
     setTimeout(() => window.wmRefreshLiveSlaCells?.(), 0);
-    return `<div class="wm-command-v19"><section class="wm19-hero"><div><div class="wm19-eyebrow">OPERASIONAL / WAITING MONITOR</div><h2 class="wm19-title">Waiting Monitor</h2><p class="wm19-subtitle">SLA, bottleneck, dan queue prioritas dari data inbound yang sedang berjalan.</p></div><div class="flex items-center gap-3"><span class="wm19-live"><i></i>LIVE DATA</span><button type="button" onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-2 text-xs font-bold">↻ Refresh data</button></div></section>${riskCount ? `<div class="wm19-alert"><strong>⚠ ${numV19(riskCount)} kendaraan mendekati atau melewati batas SLA.</strong><span>Prioritaskan unit pada panel Prioritas SLA.</span><button type="button" onclick="document.querySelector('.wm19-risk-list')?.scrollIntoView({behavior:'smooth'})">Lihat prioritas →</button></div>` : ""}<section class="wm19-kpis">${metricV19("ANTRIAN AKTIF", active.length, "Waiting · Called · Bongkar · GR", "blue")}${metricV19("MENUNGGU PANGGIL", waiting, "Butuh follow-up security", "warning")}${metricV19("SEDANG BONGKAR", unloading, "Checker dan gate berjalan", "blue")}${metricV19("SLA BERISIKO", slaMiss, slaMiss ? "Butuh action segera" : "Tidak ada SLA miss", slaMiss ? "danger" : "good")}${metricV19("SELESAI HARI INI", completed, "Ticket completed", "good")}</section><section class="wm19-filter"><span class="material-symbols-outlined text-on-surface-variant">search</span><input oninput="wmFilterV19(this)" placeholder="Cari queue, plat, vendor, PO, atau checker…"/><span class="wm19-result">${numV19(rows.length)} kendaraan tampil</span></section><section class="wm19-grid"><div>${flowV19(rows)}${tableV19(rows)}</div><div>${riskListV19(rows)}${breakdownV19(rows)}</div></section></div>`;
+    return `<div class="wm-command-v19"><section class="wm19-hero"><div><div class="wm19-eyebrow">OPERASIONAL / WAITING MONITOR</div><h2 class="wm19-title">Waiting Monitor</h2><p class="wm19-subtitle">SLA, gate, bottleneck, dan queue prioritas dari data inbound yang sedang berjalan.</p></div><div class="flex items-center gap-3"><span class="wm19-live"><i></i>LIVE DATA</span><button type="button" onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-2 text-xs font-bold">↻ Refresh data</button></div></section>${riskCount ? `<div class="wm19-alert"><strong>⚠ ${numV19(riskCount)} kendaraan mendekati atau melewati batas SLA.</strong><span>Prioritaskan unit pada panel Prioritas SLA.</span><button type="button" onclick="document.querySelector('.wm19-risk-list')?.scrollIntoView({behavior:'smooth'})">Lihat prioritas →</button></div>` : ""}<section class="wm19-kpis">${metricV19("ANTRIAN AKTIF",active.length,"Waiting · Called · Bongkar · GR","blue")}${metricV19("MENUNGGU PANGGIL",waiting,"Butuh follow-up security","warning")}${metricV19("SEDANG BONGKAR",unloading,"Checker dan gate berjalan","blue")}${metricV19("SLA BERISIKO",slaMiss, slaMiss ? "Butuh action segera" : "Tidak ada SLA miss",slaMiss ? "danger" : "good")}${metricV19("SELESAI HARI INI",completed,"Ticket completed","good")}</section><section class="wm19-filter"><span class="material-symbols-outlined text-on-surface-variant">search</span><input id="wm19-search" oninput="wmFilterV19(this)" placeholder="Cari queue, plat, vendor, gate, PO, atau checker…"/><span id="wm19-result-count" class="wm19-result">${numV19(rows.length)} kendaraan tampil</span></section>${gatePanelV22(rows)}<section class="wm19-layout"><div class="wm19-main">${tableV19(rows)}</div><aside class="wm19-side">${riskListV19(rows)}${flowV19(rows)}${breakdownV19(rows)}</aside></section></div>`;
   };
-  try {
-    pageMonitor = window.pageMonitor;
-  } catch (error) {}
+  try { pageMonitor = window.pageMonitor; } catch (error) {}
 })();
 
 /* V20 — Modul BA Reject mandiri: lookup product, preview A4, simpan, cetak. */
 (function installBaRejectV20() {
-  const BA_REASONS = [
-    "MSLOR",
-    "BARANG RUSAK",
-    "KURANG KIRIM",
-    "TIDAK DATANG",
-    "LEBIH KIRIM",
-    "BARANG TIDAK ADA DI PO",
-    "TOLAK BEDA SKU",
-    "TOLAK BEDA GRAMASI",
-    "SALAH BAWA BARANG",
-  ];
-  const ba = {
-    items: [
-      {
-        sku_number: "",
-        product_id: "",
-        product_name: "",
-        quantity: "",
-        reason: "",
-      },
-    ],
-    docs: [],
-    selected: null,
-  };
-  const e = (v) =>
-    String(v ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-  const wibDate = () =>
-    new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
-  const day = (date) =>
-    ["MINGGU", "SENIN", "SELASA", "RABU", "KAMIS", "JUMAT", "SABTU"][
-      new Date(`${date}T12:00:00Z`).getUTCDay()
-    ] || "";
-  const val = (field) =>
-    document.querySelector(`[data-ba-field="${field}"]`)?.value || "";
-  const setVal = (field, value) => {
-    const input = document.querySelector(`[data-ba-field="${field}"]`);
-    if (input) input.value = value || "";
-  };
-  const opts = () =>
-    BA_REASONS.map((x) => `<option value="${e(x)}">${e(x)}</option>`).join("");
+  const BA_REASONS = ["MSLOR","BARANG RUSAK","KURANG KIRIM","TIDAK DATANG","LEBIH KIRIM","BARANG TIDAK ADA DI PO","TOLAK BEDA SKU","TOLAK BEDA GRAMASI","SALAH BAWA BARANG"];
+  const ba = { items: [{ sku_number:"", product_id:"", product_name:"", quantity:"", reason:"" }], docs:[], selected:null };
+  const e = (v) => String(v ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  const wibDate = () => new Date().toLocaleDateString("en-CA", { timeZone:"Asia/Jakarta" });
+  const day = (date) => ["MINGGU","SENIN","SELASA","RABU","KAMIS","JUMAT","SABTU"][new Date(`${date}T12:00:00Z`).getUTCDay()] || "";
+  const val = (field) => document.querySelector(`[data-ba-field="${field}"]`)?.value || "";
+  const setVal = (field, value) => { const input=document.querySelector(`[data-ba-field="${field}"]`); if(input) input.value=value||""; };
+  const opts = () => BA_REASONS.map((x)=>`<option value="${e(x)}">${e(x)}</option>`).join("");
   const master = () => state.dashboard?.raw?.tablev2 || [];
 
-  function poOptions() {
-    const seen = new Set();
-    return master()
-      .filter((r) => {
-        const po = String(r.po_number || r.po || "").trim();
-        if (!po || seen.has(po)) return false;
-        seen.add(po);
-        return true;
-      })
-      .slice(0, 5000)
-      .map((r) => `<option value="${e(r.po_number || r.po)}"></option>`)
-      .join("");
+  function poOptions() { const seen=new Set(); return master().filter((r)=>{const po=String(r.po_number||r.po||"").trim();if(!po||seen.has(po))return false;seen.add(po);return true;}).slice(0,5000).map((r)=>`<option value="${e(r.po_number||r.po)}"></option>`).join(""); }
+  function preview(doc=null, items=null) {
+    const d=doc||{ba_number:"Nomor otomatis setelah Simpan BA",ba_date:val("ba_date"),day_name:day(val("ba_date")),po_number:val("po_number"),supplier_name:val("supplier_name"),note:val("note")};
+    const rows=(items||ba.items).filter((x)=>x.sku_number||x.product_name).map((x)=>`<tr><td>${e(x.sku_number||"-")}</td><td>${e(x.product_name||"-")}</td><td>${e(x.quantity||"-")}</td><td>${e(x.reason||"-")}</td></tr>`).join("")||"<tr><td>-</td><td>-</td><td>-</td><td>-</td></tr>";
+    const date=String(d.ba_date||"").split("-").reverse().join("/")||"__/__/____";
+    return `<article class="bg-white text-black rounded-xl border border-outline-variant shadow-sm overflow-hidden font-serif"><div class="relative p-6 sm:p-9"><div class="absolute right-0 top-0 w-28 h-20 bg-[#193d73]" style="clip-path:polygon(36% 0,100% 0,100% 100%)"></div><div class="absolute right-0 top-0 w-20 h-16 bg-[#d82308]" style="clip-path:polygon(0 0,100% 0,100% 100%)"></div><div class="border-b-[3px] border-[#193d73] pb-3 pr-24 text-[10px] leading-4"><b>PT Astro Technologies Indonesia</b><br/>Graha Antero 5th-6th floor, Jl. Tomang Raya no. 27, Tomang, West Jakarta, 11440<br/>Ph. +6221 58909787 &nbsp;|&nbsp; Em: info@astronauts.id</div><div class="mt-4 text-center text-xs leading-5"><b class="uppercase">Form Berita Acara Penolakan Barang</b><br/>PT Astro Technologies Indonesia<br/><b>Tanggal ${e(date)}</b><br/><b>Nomor: ${e(d.ba_number||"-")}</b></div><div class="mt-5 text-[11px] leading-5"><b>Pada hari ${e(d.day_name||"-")}, ${e(date)}, terdapat BARANG REJECT / KURANG KIRIM / BARANG LEBIH, berikut detailnya :</b><br/><b>NOMOR PO : ${e(d.po_number||"-")}</b><br/><b>NOTE : ${e(d.note||"-")}</b></div><div class="mt-3 overflow-x-auto"><table class="w-full border-collapse text-[10px]"><thead><tr class="bg-slate-100"><th>SKU</th><th>DESKRIPSI</th><th>QTY</th><th>REASON</th></tr></thead><tbody>${rows}</tbody></table></div><p class="mt-3 text-[10px]">Surat ini akan diberikan secara fisik dan digital file ${e(d.supplier_name||"-")}</p><p class="mt-4 text-[10px]">Demikian berita acara penolakan barang ini kami sampaikan. Atas perhatian dan kerjasamanya kami ucapkan terimakasih.</p><div class="mt-5 grid grid-cols-2 sm:grid-cols-4 text-center text-[10px] font-bold"><div class="border border-black h-20 flex items-end justify-center pb-2">Admin</div><div class="border border-l-0 border-black h-20 flex items-end justify-center pb-2">Admin LP</div><div class="border border-black sm:border-l-0 h-20 flex items-end justify-center pb-2">SPV / Leader</div><div class="border border-l-0 border-black h-20 flex items-end justify-center pb-2">Supplier/Principal</div></div></div></article>`;
   }
-  function preview(doc = null, items = null) {
-    const d = doc || {
-      ba_number: "Nomor otomatis setelah Simpan BA",
-      ba_date: val("ba_date"),
-      day_name: day(val("ba_date")),
-      po_number: val("po_number"),
-      supplier_name: val("supplier_name"),
-      note: val("note"),
-    };
-    const rows =
-      (items || ba.items)
-        .filter((x) => x.sku_number || x.product_name)
-        .map(
-          (x) =>
-            `<tr><td>${e(x.sku_number || "-")}</td><td>${e(x.product_name || "-")}</td><td>${e(x.quantity || "-")}</td><td>${e(x.reason || "-")}</td></tr>`,
-        )
-        .join("") || "<tr><td>-</td><td>-</td><td>-</td><td>-</td></tr>";
-    const date =
-      String(d.ba_date || "")
-        .split("-")
-        .reverse()
-        .join("/") || "__/__/____";
-    return `<article class="bg-white text-black rounded-xl border border-outline-variant shadow-sm overflow-hidden font-serif"><div class="relative p-6 sm:p-9"><div class="absolute right-0 top-0 w-28 h-20 bg-[#193d73]" style="clip-path:polygon(36% 0,100% 0,100% 100%)"></div><div class="absolute right-0 top-0 w-20 h-16 bg-[#d82308]" style="clip-path:polygon(0 0,100% 0,100% 100%)"></div><div class="border-b-[3px] border-[#193d73] pb-3 pr-24 text-[10px] leading-4"><b>PT Astro Technologies Indonesia</b><br/>Graha Antero 5th-6th floor, Jl. Tomang Raya no. 27, Tomang, West Jakarta, 11440<br/>Ph. +6221 58909787 &nbsp;|&nbsp; Em: info@astronauts.id</div><div class="mt-4 text-center text-xs leading-5"><b class="uppercase">Form Berita Acara Penolakan Barang</b><br/>PT Astro Technologies Indonesia<br/><b>Tanggal ${e(date)}</b><br/><b>Nomor: ${e(d.ba_number || "-")}</b></div><div class="mt-5 text-[11px] leading-5"><b>Pada hari ${e(d.day_name || "-")}, ${e(date)}, terdapat BARANG REJECT / KURANG KIRIM / BARANG LEBIH, berikut detailnya :</b><br/><b>NOMOR PO : ${e(d.po_number || "-")}</b><br/><b>NOTE : ${e(d.note || "-")}</b></div><div class="mt-3 overflow-x-auto"><table class="w-full border-collapse text-[10px]"><thead><tr class="bg-slate-100"><th>SKU</th><th>DESKRIPSI</th><th>QTY</th><th>REASON</th></tr></thead><tbody>${rows}</tbody></table></div><p class="mt-3 text-[10px]">Surat ini akan diberikan secara fisik dan digital file ${e(d.supplier_name || "-")}</p><p class="mt-4 text-[10px]">Demikian berita acara penolakan barang ini kami sampaikan. Atas perhatian dan kerjasamanya kami ucapkan terimakasih.</p><div class="mt-5 grid grid-cols-2 sm:grid-cols-4 text-center text-[10px] font-bold"><div class="border border-black h-20 flex items-end justify-center pb-2">Admin</div><div class="border border-l-0 border-black h-20 flex items-end justify-center pb-2">Admin LP</div><div class="border border-black sm:border-l-0 h-20 flex items-end justify-center pb-2">SPV / Leader</div><div class="border border-l-0 border-black h-20 flex items-end justify-center pb-2">Supplier/Principal</div></div></div></article>`;
+  function renderPreview(){const target=document.getElementById("ba-preview-v20");if(target)target.innerHTML=preview(ba.selected?.document||null,ba.selected?.items||null);}
+  async function lookup(index, query){query=String(query||"").trim();if(!query)return;try{const product=await motherDuckApiGet("product_lookup",{q:query});if(!product)return showToast("SKU / Product ID tidak ditemukan. Isi deskripsi manual bila perlu.","error");ba.items[index]={...ba.items[index],...product};renderItems();renderPreview();showToast("Produk ditemukan: "+product.product_name,"success");}catch(err){showToast(err.message||"Lookup produk gagal","error");}}
+  function renderItems(){const root=document.getElementById("ba-items-v20");if(!root)return;root.innerHTML=ba.items.map((x,i)=>`<div class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1.7fr_.75fr_1.3fr_auto] gap-2 rounded-xl border border-outline-variant bg-surface-container-low p-3" data-ba-item="${i}"><input data-ba-item-field="sku_number" class="form-input" placeholder="Scan / SKU" value="${e(x.sku_number)}"/><input data-ba-item-field="product_id" class="form-input" placeholder="Product ID" value="${e(x.product_id)}"/><input data-ba-item-field="product_name" class="form-input" placeholder="Deskripsi (boleh edit manual)" value="${e(x.product_name)}"/><input data-ba-item-field="quantity" class="form-input" placeholder="Qty" value="${e(x.quantity)}"/><select data-ba-item-field="reason" class="form-input"><option value="">- Pilih reason -</option>${opts()}</select><button type="button" data-ba-remove="${i}" class="rounded-lg px-3 py-2 text-error hover:bg-error-container"><span class="material-symbols-outlined">close</span></button></div>`).join("");ba.items.forEach((x,i)=>{const s=root.querySelector(`[data-ba-item="${i}"] select`);if(s)s.value=x.reason||"";});root.querySelectorAll("[data-ba-item-field]").forEach((input)=>input.addEventListener("input",(event)=>{const i=Number(event.target.closest("[data-ba-item]").dataset.baItem);ba.items[i][event.target.dataset.baItemField]=event.target.value;renderPreview();}));root.querySelectorAll("[data-ba-remove]").forEach((button)=>button.addEventListener("click",()=>{ba.items.splice(Number(button.dataset.baRemove),1);if(!ba.items.length)ba.items.push({sku_number:"",product_id:"",product_name:"",quantity:"",reason:""});renderItems();renderPreview();}));root.querySelectorAll('[data-ba-item-field="sku_number"],[data-ba-item-field="product_id"]').forEach((input)=>input.addEventListener("keydown",(event)=>{if(event.key==="Enter"){event.preventDefault();lookup(Number(event.target.closest("[data-ba-item]").dataset.baItem),event.target.value);}}));}
+  function syncSupplier(){const po=val("po_number");const match=master().find((r)=>String(r.po_number||r.po||"").trim()===po.trim());if(match&&!val("supplier_name"))setVal("supplier_name",match.vendor_name||match.company_name||"");renderPreview();}
+  async function loadHistory(){try{ba.docs=await motherDuckApiGet("ba_list");}catch{ba.docs=[];}const root=document.getElementById("ba-history-v20");if(!root)return;root.innerHTML=`<h3 class="font-extrabold">BA terakhir</h3><div class="mt-2 space-y-2">${ba.docs.length?ba.docs.slice(0,8).map((d)=>`<button type="button" data-ba-open="${e(d.ba_id)}" class="w-full text-left rounded-xl border border-outline-variant p-3 hover:bg-surface-container"><b>${e(d.ba_number)}</b><span class="block text-xs text-on-surface-variant">${e(d.po_number||"Tanpa PO")} · ${e(d.supplier_name||"-")} · ${d.item_count||0} item</span></button>`).join(""):'<p class="text-sm text-on-surface-variant">Belum ada BA tersimpan.</p>'}</div>`;root.querySelectorAll("[data-ba-open]").forEach((button)=>button.addEventListener("click",async()=>{try{ba.selected=await motherDuckApiGet("ba_detail",{ba_id:button.dataset.baOpen});renderPreview();showToast("Preview BA "+ba.selected.document.ba_number,"success");}catch(err){showToast(err.message||"Gagal membuka BA","error");}}));}
+  async function save(){const button=document.getElementById("ba-save-v20"),payload={ba_date:val("ba_date"),day_name:val("day_name"),po_number:val("po_number"),supplier_name:val("supplier_name"),note:val("note"),items:ba.items};if(!payload.supplier_name)return showToast("Supplier / Principal wajib diisi.","error");if(!payload.items.some((x)=>x.sku_number||x.product_name))return showToast("Isi minimal satu barang.","error");try{button.disabled=true;ba.selected=await motherDuckApiPost("create_ba",payload);renderPreview();await loadHistory();showToast("BA tersimpan: "+ba.selected.document.ba_number,"success");}catch(err){showToast(err.message||"Gagal menyimpan BA","error");}finally{button.disabled=false;}}
+  function print(){const source=document.getElementById("ba-preview-v20");const win=window.open("","_blank","width=960,height=760");if(!win)return showToast("Izinkan popup untuk mencetak BA.","error");win.document.write(`<!doctype html><html><head><title>BA Reject</title><script src="https://cdn.tailwindcss.com"><\/script><style>@page{size:A4;margin:0}body{background:#fff}table{border-collapse:collapse}th,td{border:1px solid #555;padding:5px}th{text-align:center;background:#f0f0f0}</style></head><body>${source.innerHTML}<script>window.onload=()=>window.print()<\/script></body></html>`);win.document.close();}
+  window.pageBaRejectV20=()=>`<div class="max-w-[1500px] mx-auto space-y-5"><div class="rounded-2xl bg-gradient-to-r from-primary to-[#193d73] text-on-primary p-6 shadow-lg"><div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><div class="text-[11px] font-bold tracking-[.18em] uppercase opacity-80">Dokumen terpisah</div><h2 class="mt-1 text-2xl font-extrabold">BA Reject / Penolakan Barang</h2><p class="mt-1 text-sm opacity-85">Tidak mengubah status ticket atau proses Checker. Data BA tersimpan di MotherDuck.</p></div><button type="button" id="ba-print-v20" class="rounded-xl bg-white px-4 py-3 font-bold text-primary"><span class="material-symbols-outlined align-middle mr-1">print</span>Cetak BA</button></div></div><div class="grid grid-cols-1 xl:grid-cols-[minmax(390px,.9fr)_minmax(0,1.3fr)] gap-5"><section class="rounded-2xl bg-surface-container-lowest border border-outline-variant p-5 shadow-sm"><div class="flex items-center justify-between"><h3 class="font-extrabold text-lg">Informasi dokumen</h3><span class="text-xs text-on-surface-variant">Nomor dibuat server saat simpan</span></div><div class="mt-4 grid sm:grid-cols-2 gap-3"><label class="field-label">Tanggal<input data-ba-field="ba_date" type="date" class="form-input mt-1" value="${wibDate()}"/></label><label class="field-label">Hari<input data-ba-field="day_name" class="form-input mt-1 bg-surface-container" readonly value="${day(wibDate())}"/></label><label class="field-label sm:col-span-2">Nomor PO<input data-ba-field="po_number" list="ba-po-options-v20" class="form-input mt-1" placeholder="Pilih / ketik manual nomor PO"/><datalist id="ba-po-options-v20">${poOptions()}</datalist></label><label class="field-label sm:col-span-2">Supplier / Principal<input data-ba-field="supplier_name" class="form-input mt-1" placeholder="Auto dari PO, tetap bisa diketik manual"/></label><label class="field-label sm:col-span-2">Note<textarea data-ba-field="note" class="form-input mt-1 min-h-20" placeholder="Opsional..."></textarea></label></div><div class="mt-6 flex items-center justify-between"><h3 class="font-extrabold text-lg">Daftar barang reject</h3><button type="button" id="ba-add-item-v20" class="rounded-lg border border-primary px-3 py-2 text-sm font-bold text-primary">+ Tambah barang</button></div><p class="mt-1 text-xs text-on-surface-variant">Scan SKU atau isi Product ID lalu tekan Enter. Deskripsi otomatis terisi dan tetap dapat diedit.</p><div id="ba-items-v20" class="mt-3 space-y-2"></div><button type="button" id="ba-save-v20" class="mt-5 w-full rounded-xl bg-primary px-4 py-3 font-bold text-on-primary"><span class="material-symbols-outlined align-middle mr-1">save</span>Simpan BA & buat nomor</button><div id="ba-history-v20" class="mt-6 border-t border-outline-variant pt-5"></div></section><section><div id="ba-preview-v20" class="sticky top-4"></div></section></div></div>`;
+  window.initBaRejectV20=()=>{ba.selected=null;renderItems();renderPreview();document.querySelectorAll("[data-ba-field]").forEach((input)=>input.addEventListener("input",()=>{if(input.dataset.baField==="ba_date")setVal("day_name",day(input.value));renderPreview();}));document.querySelector('[data-ba-field="po_number"]')?.addEventListener("change",syncSupplier);document.getElementById("ba-add-item-v20")?.addEventListener("click",()=>{ba.items.push({sku_number:"",product_id:"",product_name:"",quantity:"",reason:""});renderItems();});document.getElementById("ba-save-v20")?.addEventListener("click",save);document.getElementById("ba-print-v20")?.addEventListener("click",print);loadHistory();};
+  pageMeta.ba_reject={title:"BA Reject",subtitle:"Buat, simpan, dan cetak berita acara penolakan barang"};["SPV","ADMIN","DEVELOPER"].forEach((role)=>{ROLE_ACCESS[role]=Array.isArray(ROLE_ACCESS[role])?ROLE_ACCESS[role]:[];if(!ROLE_ACCESS[role].includes("ba_reject"))ROLE_ACCESS[role].push("ba_reject");});
+  const previousRender=renderPage;renderPage=function(page,toast=true){if(String(page||"")!=="ba_reject")return previousRender.call(this,page,toast);if(!isLoggedIn()||!canAccessPage("ba_reject"))return previousRender.call(this,getDefaultPageForRole(),toast);state.page="ba_reject";document.getElementById("page-title").textContent=pageMeta.ba_reject.title;document.getElementById("page-subtitle").textContent=pageMeta.ba_reject.subtitle;document.getElementById("page-root").innerHTML=window.pageBaRejectV20();applyRoleAccessUI();updateActiveNav("ba_reject");history.replaceState(null,"","#ba_reject");setTimeout(window.initBaRejectV20,0);if(toast)showToast("Buka menu BA Reject");};window.renderPage=renderPage;
+})();
+
+/* ==========================================================================
+ * V21 - DROP-OFF WORKSPACE
+ * DROP-OFF tetap memakai tabel ticket yang sama, tetapi seluruh proyeksi UI
+ * REG/VIP melewati satu seam domain agar antrean lintas hari tidak bercampur.
+ * ========================================================================== */
+(function installDropoffWorkspaceV21() {
+  if (window.__dropoffWorkspaceV21Installed) return;
+  window.__dropoffWorkspaceV21Installed = true;
+
+  const domain = window.DropoffDomain;
+  if (!domain) {
+    console.error("DropoffDomain tidak tersedia");
+    return;
   }
-  function renderPreview() {
-    const target = document.getElementById("ba-preview-v20");
-    if (target)
-      target.innerHTML = preview(
-        ba.selected?.document || null,
-        ba.selected?.items || null,
-      );
+
+  function mainRowsV21(rows = []) {
+    return domain.mainQueueRows(rows);
   }
-  async function lookup(index, query) {
-    query = String(query || "").trim();
-    if (!query) return;
-    try {
-      const product = await motherDuckApiGet("product_lookup", { q: query });
-      if (!product)
-        return showToast(
-          "SKU / Product ID tidak ditemukan. Isi deskripsi manual bila perlu.",
-          "error",
-        );
-      ba.items[index] = { ...ba.items[index], ...product };
-      renderItems();
-      renderPreview();
-      showToast("Produk ditemukan: " + product.product_name, "success");
-    } catch (err) {
-      showToast(err.message || "Lookup produk gagal", "error");
-    }
-  }
-  function renderItems() {
-    const root = document.getElementById("ba-items-v20");
-    if (!root) return;
-    root.innerHTML = ba.items
-      .map(
-        (x, i) =>
-          `<div class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1.7fr_.75fr_1.3fr_auto] gap-2 rounded-xl border border-outline-variant bg-surface-container-low p-3" data-ba-item="${i}"><input data-ba-item-field="sku_number" class="form-input" placeholder="Scan / SKU" value="${e(x.sku_number)}"/><input data-ba-item-field="product_id" class="form-input" placeholder="Product ID" value="${e(x.product_id)}"/><input data-ba-item-field="product_name" class="form-input" placeholder="Deskripsi (boleh edit manual)" value="${e(x.product_name)}"/><input data-ba-item-field="quantity" class="form-input" placeholder="Qty" value="${e(x.quantity)}"/><select data-ba-item-field="reason" class="form-input"><option value="">- Pilih reason -</option>${opts()}</select><button type="button" data-ba-remove="${i}" class="rounded-lg px-3 py-2 text-error hover:bg-error-container"><span class="material-symbols-outlined">close</span></button></div>`,
-      )
-      .join("");
-    ba.items.forEach((x, i) => {
-      const s = root.querySelector(`[data-ba-item="${i}"] select`);
-      if (s) s.value = x.reason || "";
+
+  function withMainDashboardV21(callback) {
+    if (!state.dashboard) return callback();
+    const keys = [
+      "queue",
+      "report_preview",
+      "history_queue",
+      "all_queue",
+      "priority",
+    ];
+    const saved = {};
+    keys.forEach((key) => {
+      saved[key] = state.dashboard[key];
+      if (Array.isArray(state.dashboard[key])) {
+        state.dashboard[key] = mainRowsV21(state.dashboard[key]);
+      }
     });
-    root.querySelectorAll("[data-ba-item-field]").forEach((input) =>
-      input.addEventListener("input", (event) => {
-        const i = Number(event.target.closest("[data-ba-item]").dataset.baItem);
-        ba.items[i][event.target.dataset.baItemField] = event.target.value;
-        renderPreview();
-      }),
-    );
-    root.querySelectorAll("[data-ba-remove]").forEach((button) =>
-      button.addEventListener("click", () => {
-        ba.items.splice(Number(button.dataset.baRemove), 1);
-        if (!ba.items.length)
-          ba.items.push({
-            sku_number: "",
-            product_id: "",
-            product_name: "",
-            quantity: "",
-            reason: "",
-          });
-        renderItems();
-        renderPreview();
-      }),
-    );
-    root
-      .querySelectorAll(
-        '[data-ba-item-field="sku_number"],[data-ba-item-field="product_id"]',
-      )
-      .forEach((input) =>
-        input.addEventListener("keydown", (event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            lookup(
-              Number(event.target.closest("[data-ba-item]").dataset.baItem),
-              event.target.value,
-            );
-          }
-        }),
-      );
-  }
-  function syncSupplier() {
-    const po = val("po_number");
-    const match = master().find(
-      (r) => String(r.po_number || r.po || "").trim() === po.trim(),
-    );
-    if (match && !val("supplier_name"))
-      setVal("supplier_name", match.vendor_name || match.company_name || "");
-    renderPreview();
-  }
-  async function loadHistory() {
     try {
-      ba.docs = await motherDuckApiGet("ba_list");
-    } catch {
-      ba.docs = [];
-    }
-    const root = document.getElementById("ba-history-v20");
-    if (!root) return;
-    root.innerHTML = `<h3 class="font-extrabold">BA terakhir</h3><div class="mt-2 space-y-2">${
-      ba.docs.length
-        ? ba.docs
-            .slice(0, 8)
-            .map(
-              (d) =>
-                `<button type="button" data-ba-open="${e(d.ba_id)}" class="w-full text-left rounded-xl border border-outline-variant p-3 hover:bg-surface-container"><b>${e(d.ba_number)}</b><span class="block text-xs text-on-surface-variant">${e(d.po_number || "Tanpa PO")} · ${e(d.supplier_name || "-")} · ${d.item_count || 0} item</span></button>`,
-            )
-            .join("")
-        : '<p class="text-sm text-on-surface-variant">Belum ada BA tersimpan.</p>'
-    }</div>`;
-    root.querySelectorAll("[data-ba-open]").forEach((button) =>
-      button.addEventListener("click", async () => {
-        try {
-          ba.selected = await motherDuckApiGet("ba_detail", {
-            ba_id: button.dataset.baOpen,
-          });
-          renderPreview();
-          showToast("Preview BA " + ba.selected.document.ba_number, "success");
-        } catch (err) {
-          showToast(err.message || "Gagal membuka BA", "error");
-        }
-      }),
-    );
-  }
-  async function save() {
-    const button = document.getElementById("ba-save-v20"),
-      payload = {
-        ba_date: val("ba_date"),
-        day_name: val("day_name"),
-        po_number: val("po_number"),
-        supplier_name: val("supplier_name"),
-        note: val("note"),
-        items: ba.items,
-      };
-    if (!payload.supplier_name)
-      return showToast("Supplier / Principal wajib diisi.", "error");
-    if (!payload.items.some((x) => x.sku_number || x.product_name))
-      return showToast("Isi minimal satu barang.", "error");
-    try {
-      button.disabled = true;
-      ba.selected = await motherDuckApiPost("create_ba", payload);
-      renderPreview();
-      await loadHistory();
-      showToast("BA tersimpan: " + ba.selected.document.ba_number, "success");
-    } catch (err) {
-      showToast(err.message || "Gagal menyimpan BA", "error");
+      return callback();
     } finally {
-      button.disabled = false;
+      keys.forEach((key) => {
+        state.dashboard[key] = saved[key];
+      });
     }
   }
-  function print() {
-    const source = document.getElementById("ba-preview-v20");
-    const win = window.open("", "_blank", "width=960,height=760");
-    if (!win) return showToast("Izinkan popup untuk mencetak BA.", "error");
-    win.document.write(
-      `<!doctype html><html><head><title>BA Reject</title><script src="https://cdn.tailwindcss.com"><\/script><style>@page{size:A4;margin:0}body{background:#fff}table{border-collapse:collapse}th,td{border:1px solid #555;padding:5px}th{text-align:center;background:#f0f0f0}</style></head><body>${source.innerHTML}<script>window.onload=()=>window.print()<\/script></body></html>`,
-    );
-    win.document.close();
+
+  const checkerRowsBeforeV21 = window.getCheckerSectionRows;
+  if (typeof checkerRowsBeforeV21 === "function") {
+    window.getCheckerSectionRows = function getCheckerSectionRowsV21() {
+      return withMainDashboardV21(() =>
+        mainRowsV21(checkerRowsBeforeV21.apply(this, arguments)),
+      );
+    };
+    try { getCheckerSectionRows = window.getCheckerSectionRows; } catch (error) {}
   }
-  window.pageBaRejectV20 = () =>
-    `<div class="max-w-[1500px] mx-auto space-y-5"><div class="rounded-2xl bg-gradient-to-r from-primary to-[#193d73] text-on-primary p-6 shadow-lg"><div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><div class="text-[11px] font-bold tracking-[.18em] uppercase opacity-80">Dokumen terpisah</div><h2 class="mt-1 text-2xl font-extrabold">BA Reject / Penolakan Barang</h2><p class="mt-1 text-sm opacity-85">Tidak mengubah status ticket atau proses Checker. Data BA tersimpan di MotherDuck.</p></div><button type="button" id="ba-print-v20" class="rounded-xl bg-white px-4 py-3 font-bold text-primary"><span class="material-symbols-outlined align-middle mr-1">print</span>Cetak BA</button></div></div><div class="grid grid-cols-1 xl:grid-cols-[minmax(390px,.9fr)_minmax(0,1.3fr)] gap-5"><section class="rounded-2xl bg-surface-container-lowest border border-outline-variant p-5 shadow-sm"><div class="flex items-center justify-between"><h3 class="font-extrabold text-lg">Informasi dokumen</h3><span class="text-xs text-on-surface-variant">Nomor dibuat server saat simpan</span></div><div class="mt-4 grid sm:grid-cols-2 gap-3"><label class="field-label">Tanggal<input data-ba-field="ba_date" type="date" class="form-input mt-1" value="${wibDate()}"/></label><label class="field-label">Hari<input data-ba-field="day_name" class="form-input mt-1 bg-surface-container" readonly value="${day(wibDate())}"/></label><label class="field-label sm:col-span-2">Nomor PO<input data-ba-field="po_number" list="ba-po-options-v20" class="form-input mt-1" placeholder="Pilih / ketik manual nomor PO"/><datalist id="ba-po-options-v20">${poOptions()}</datalist></label><label class="field-label sm:col-span-2">Supplier / Principal<input data-ba-field="supplier_name" class="form-input mt-1" placeholder="Auto dari PO, tetap bisa diketik manual"/></label><label class="field-label sm:col-span-2">Note<textarea data-ba-field="note" class="form-input mt-1 min-h-20" placeholder="Opsional..."></textarea></label></div><div class="mt-6 flex items-center justify-between"><h3 class="font-extrabold text-lg">Daftar barang reject</h3><button type="button" id="ba-add-item-v20" class="rounded-lg border border-primary px-3 py-2 text-sm font-bold text-primary">+ Tambah barang</button></div><p class="mt-1 text-xs text-on-surface-variant">Scan SKU atau isi Product ID lalu tekan Enter. Deskripsi otomatis terisi dan tetap dapat diedit.</p><div id="ba-items-v20" class="mt-3 space-y-2"></div><button type="button" id="ba-save-v20" class="mt-5 w-full rounded-xl bg-primary px-4 py-3 font-bold text-on-primary"><span class="material-symbols-outlined align-middle mr-1">save</span>Simpan BA & buat nomor</button><div id="ba-history-v20" class="mt-6 border-t border-outline-variant pt-5"></div></section><section><div id="ba-preview-v20" class="sticky top-4"></div></section></div></div>`;
-  window.initBaRejectV20 = () => {
-    ba.selected = null;
-    renderItems();
-    renderPreview();
-    document.querySelectorAll("[data-ba-field]").forEach((input) =>
-      input.addEventListener("input", () => {
-        if (input.dataset.baField === "ba_date")
-          setVal("day_name", day(input.value));
-        renderPreview();
-      }),
-    );
-    document
-      .querySelector('[data-ba-field="po_number"]')
-      ?.addEventListener("change", syncSupplier);
-    document
-      .getElementById("ba-add-item-v20")
-      ?.addEventListener("click", () => {
-        ba.items.push({
-          sku_number: "",
-          product_id: "",
-          product_name: "",
-          quantity: "",
-          reason: "",
-        });
-        renderItems();
-      });
-    document.getElementById("ba-save-v20")?.addEventListener("click", save);
-    document.getElementById("ba-print-v20")?.addEventListener("click", print);
-    loadHistory();
+
+  const checkerCountsBeforeV21 = window.checkerSectionCounts;
+  if (typeof checkerCountsBeforeV21 === "function") {
+    window.checkerSectionCounts = function checkerSectionCountsV21() {
+      return withMainDashboardV21(() => checkerCountsBeforeV21.apply(this, arguments));
+    };
+    try { checkerSectionCounts = window.checkerSectionCounts; } catch (error) {}
+  }
+
+  const checkerActiveBeforeV21 = window.getCheckerActiveRows;
+  if (typeof checkerActiveBeforeV21 === "function") {
+    window.getCheckerActiveRows = function getCheckerActiveRowsV21() {
+      return withMainDashboardV21(() =>
+        mainRowsV21(checkerActiveBeforeV21.apply(this, arguments)),
+      );
+    };
+    try { getCheckerActiveRows = window.getCheckerActiveRows; } catch (error) {}
+  }
+
+  const monitorBeforeV21 = window.pageMonitor;
+  if (typeof monitorBeforeV21 === "function") {
+    window.pageMonitor = function pageMonitorWithoutDropoffV21() {
+      return withMainDashboardV21(() => monitorBeforeV21.apply(this, arguments));
+    };
+    try { pageMonitor = window.pageMonitor; } catch (error) {}
+  }
+
+  const reportBeforeV21 = window.pageLaporan;
+  if (typeof reportBeforeV21 === "function") {
+    window.pageLaporan = function pageLaporanWithoutDropoffV21() {
+      return withMainDashboardV21(() => reportBeforeV21.apply(this, arguments));
+    };
+    try { pageLaporan = window.pageLaporan; } catch (error) {}
+  }
+
+  const latestCallBeforeV21 = window.getLatestCallTicket;
+  if (typeof latestCallBeforeV21 === "function") {
+    window.getLatestCallTicket = function getLatestMainCallTicketV21(queue) {
+      const source = Array.isArray(queue) ? queue : state.dashboard?.queue || [];
+      return latestCallBeforeV21.call(this, mainRowsV21(source));
+    };
+    try { getLatestCallTicket = window.getLatestCallTicket; } catch (error) {}
+  }
+
+  function dropoffSourceRowsV21() {
+    const historyRows = state.dashboard?.history_queue;
+    const source = Array.isArray(historyRows) && historyRows.length
+      ? historyRows
+      : state.dashboard?.queue || [];
+    const now = Date.now();
+    return domain.sortDropoffs(source).filter((row) => {
+      if (!domain.isTerminal(row)) return true;
+      const end = parseInboundDateSafe(
+        row.completed_at || row.cancelled_at || row.expired_at || row.updated_at || "",
+      );
+      return end && now - end.getTime() <= 48 * 60 * 60 * 1000;
+    });
+  }
+
+  function dropoffCanActV21() {
+    const role = normalizeRole(getAuthUser?.()?.role || "");
+    return ["SPV", "ADMIN", "CHECKER", "DEVELOPER"].includes(role);
+  }
+
+  function dropoffGateOptionsV21(selected = "") {
+    const current = String(selected || "").trim();
+    const gates = typeof getCibitungGateOptions === "function"
+      ? getCibitungGateOptions()
+      : state.options?.gate || [];
+    return `<option value="">Pilih Gate</option>${gates
+      .map((gate) => `<option value="${esc(gate)}" ${String(gate) === current ? "selected" : ""}>${esc(gate)}</option>`)
+      .join("")}`;
+  }
+
+  function dropoffStatusToneV21(status = "WAITING") {
+    const safe = String(status || "WAITING").toUpperCase();
+    if (safe === "COMPLETED") return "bg-success/15 text-success border-success/30";
+    if (safe === "EXPIRED") return "bg-error/15 text-error border-error/30";
+    if (safe === "UNLOADING") return "bg-warning/15 text-warning border-warning/30";
+    if (safe === "CALLED") return "bg-primary/15 text-primary border-primary/30";
+    return "bg-surface-container-high text-on-surface-variant border-outline-variant";
+  }
+
+  function dropoffCardV21(row = {}) {
+    const status = domain.statusOf(row);
+    const terminal = domain.isTerminal(row);
+    const canAct = dropoffCanActV21();
+    const ticketId = String(row.ticket_id || "");
+    const safeId = ticketId.replace(/[^A-Za-z0-9_-]/g, "_");
+    const nextLabel = status === "WAITING"
+      ? "Panggil Drop-Off"
+      : status === "CALLED"
+        ? "Mulai Bongkar"
+        : status === "UNLOADING"
+          ? "Selesai Bongkar"
+          : "";
+    const nextIcon = status === "WAITING"
+      ? "campaign"
+      : status === "CALLED"
+        ? "warehouse"
+        : "task_alt";
+    const age = terminal
+      ? `Selesai ${esc(row.completed_at || row.cancelled_at || row.expired_at || row.updated_at || "-")}`
+      : `Aktif ${esc(domain.ageLabel(row))}`;
+    const action = !terminal && canAct
+      ? `<div class="mt-4 flex flex-col sm:flex-row gap-2">
+          ${status === "WAITING" ? `<select id="dropoff-gate-${safeId}" class="form-select sm:max-w-56">${dropoffGateOptionsV21(row.gate)}</select>` : ""}
+          <button type="button" onclick="advanceDropoffTicketV21('${esc(ticketId)}', this)" class="bg-primary-container text-on-primary-container rounded-xl px-4 py-3 font-bold inline-flex items-center justify-center gap-2 flex-1"><span class="material-symbols-outlined">${nextIcon}</span>${esc(nextLabel)}</button>
+        </div>`
+      : !terminal
+        ? `<div class="mt-4 rounded-xl bg-surface-container p-3 text-xs text-on-surface-variant">Mode lihat. Perubahan status dilakukan Checker, Admin, atau SPV.</div>`
+        : "";
+
+    return `<article class="dropoff-card-v21 rounded-2xl border border-outline-variant/50 bg-surface-container-lowest p-5 shadow-sm" data-dropoff-search="${esc([row.queue_no,row.plat_number,row.vendor_name,row.driver_name,status,row.gate].join(" ").toLowerCase())}">
+      <div class="flex items-start justify-between gap-3">
+        <div><div class="font-queue-id text-primary text-2xl">${esc(row.queue_no || "-")}</div><div class="mt-1 text-xs font-bold uppercase text-on-surface-variant">${esc(row.vendor_name || "-")}</div></div>
+        <span class="rounded-full border px-3 py-1 text-[10px] font-extrabold ${dropoffStatusToneV21(status)}">${esc(status)}</span>
+      </div>
+      <div class="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
+        <div class="rounded-xl bg-surface-container p-3"><span class="block text-[10px] uppercase font-bold text-on-surface-variant">Plat</span><b class="mt-1 block">${esc(row.plat_number || "-")}</b></div>
+        <div class="rounded-xl bg-surface-container p-3"><span class="block text-[10px] uppercase font-bold text-on-surface-variant">Driver</span><b class="mt-1 block truncate">${esc(row.driver_name || "-")}</b></div>
+        <div class="rounded-xl bg-surface-container p-3"><span class="block text-[10px] uppercase font-bold text-on-surface-variant">Gate</span><b class="mt-1 block">${esc(row.gate || "-")}</b></div>
+        <div class="rounded-xl bg-surface-container p-3"><span class="block text-[10px] uppercase font-bold text-on-surface-variant">Umur Tiket</span><b class="mt-1 block">${age}</b></div>
+      </div>
+      <div class="mt-3 text-xs text-on-surface-variant"><b>Operasional:</b> ${esc(row.operational_date || "-")} &middot; <b>Slot:</b> ${esc(row.slot || "-")} &middot; tanpa Checker PO / Done GR</div>
+      ${action}
+    </article>`;
+  }
+
+  window.filterDropoffCardsV21 = function filterDropoffCardsV21(input) {
+    const query = String(input?.value || "").trim().toLowerCase();
+    document.querySelectorAll(".dropoff-card-v21").forEach((card) => {
+      card.style.display = !query || String(card.dataset.dropoffSearch || "").includes(query) ? "" : "none";
+    });
   };
-  pageMeta.ba_reject = {
-    title: "BA Reject",
-    subtitle: "Buat, simpan, dan cetak berita acara penolakan barang",
+
+  window.advanceDropoffTicketV21 = async function advanceDropoffTicketV21(ticketId, button) {
+    if (!dropoffCanActV21()) return showToast("Role ini hanya dapat melihat Drop-Off.");
+    const row = dropoffSourceRowsV21().find((item) => String(item.ticket_id || "") === String(ticketId || ""));
+    if (!row) return showToast("Tiket Drop-Off tidak ditemukan. Refresh data.");
+
+    const status = domain.statusOf(row);
+    const nextStatus = { WAITING: "CALLED", CALLED: "UNLOADING", UNLOADING: "COMPLETED" }[status];
+    if (!nextStatus) return showToast(`Status ${status} sudah selesai.`);
+
+    const safeId = String(ticketId).replace(/[^A-Za-z0-9_-]/g, "_");
+    const gateInput = document.getElementById(`dropoff-gate-${safeId}`);
+    const currentGate = String(row.gate || "").trim() === "-" ? "" : String(row.gate || "").trim();
+    const selectedGate = String(gateInput ? gateInput.value : currentGate).trim();
+    if (status === "WAITING" && !selectedGate) return showToast("Pilih Gate terlebih dahulu.");
+    if (nextStatus === "COMPLETED" && !confirm(`Selesaikan bongkar ${row.queue_no || "Drop-Off"}?`)) return;
+
+    const actor = getAuthUser?.() || {};
+    const now = typeof formatDateTimeLocal === "function" ? formatDateTimeLocal(new Date()) : new Date().toISOString();
+    const payload = {
+      ticket_id: row.ticket_id,
+      queue_no: row.original_queue_no || row.queue_no,
+      vendor_name: row.vendor_name || "",
+      fleet_type: row.fleet_type || "DROP-OFF",
+      plat_number: row.plat_number || "",
+      gate: selectedGate,
+      operational_date: row.operational_date || "",
+      status: nextStatus,
+      unload_sla: "ON PROCESS",
+      updated_at: now,
+      actor_role: normalizeRole(actor.role || ""),
+      actor_name: actor.display_name || actor.username || "",
+      actor_username: actor.username || "",
+    };
+    if (nextStatus === "CALLED") payload.called_at = now;
+    if (nextStatus === "UNLOADING") payload.start_unloading_at = now;
+    if (nextStatus === "COMPLETED") {
+      payload.finish_unloading_at = now;
+      payload.completed_at = now;
+    }
+
+    const oldHtml = button?.innerHTML || "";
+    try {
+      if (button) {
+        button.disabled = true;
+        button.innerHTML = '<span class="material-symbols-outlined animate-spin">progress_activity</span>Menyimpan...';
+      }
+      const result = await updateCheckerToBackend(payload);
+      if (typeof applyBackendActionResult === "function") applyBackendActionResult(result);
+      showToast(`Drop-Off berubah menjadi ${nextStatus}.`);
+      await refreshDashboard();
+      renderPage("dropoff", false);
+    } catch (error) {
+      console.error(error);
+      showToast(`Update Drop-Off gagal: ${error.message}`);
+    } finally {
+      if (button && document.body.contains(button)) {
+        button.disabled = false;
+        button.innerHTML = oldHtml;
+      }
+    }
   };
-  ["SPV", "ADMIN", "DEVELOPER"].forEach((role) => {
-    ROLE_ACCESS[role] = Array.isArray(ROLE_ACCESS[role])
-      ? ROLE_ACCESS[role]
-      : [];
-    if (!ROLE_ACCESS[role].includes("ba_reject"))
-      ROLE_ACCESS[role].push("ba_reject");
+
+  window.pageDropoffV21 = function pageDropoffV21() {
+    const rows = dropoffSourceRowsV21();
+    const summary = domain.summarizeDropoffs(rows);
+    return `<div class="max-w-[1500px] mx-auto space-y-5">
+      <section class="rounded-2xl bg-gradient-to-r from-[#4c1d95] via-[#6d28d9] to-primary text-white p-6 shadow-lg">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4"><div><div class="text-[11px] font-bold tracking-[.2em] uppercase opacity-80">Antrean terpisah</div><h2 class="mt-1 text-3xl font-extrabold">Drop-Off Workspace</h2><p class="mt-2 text-sm opacity-90">Tiket lintas hari tidak masuk sequence, KPI, Waiting List, Checker, atau monitor REG/VIP.</p></div><button type="button" onclick="refreshDashboard()" class="rounded-xl bg-white/15 border border-white/30 px-4 py-3 font-bold inline-flex items-center justify-center gap-2"><span class="material-symbols-outlined">refresh</span>Refresh</button></div>
+      </section>
+      <section class="grid grid-cols-2 md:grid-cols-5 gap-3">${miniMetric("Aktif", summary.active, "text-primary")}${miniMetric("Waiting", summary.waiting, "text-tertiary")}${miniMetric("Called", summary.called, "text-primary")}${miniMetric("Bongkar", summary.unloading, "text-warning")}${miniMetric("Selesai 48 Jam", summary.completed, "text-success")}</section>
+      <section class="glass-card rounded-2xl p-4 sm:p-6"><div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4"><div><h3 class="font-headline-md text-headline-md">Daftar Drop-Off</h3><p class="text-on-surface-variant">Tiket aktif selalu dibawa lintas hari sampai selesai. Riwayat selesai tampil selama 48 jam.</p></div><input oninput="filterDropoffCardsV21(this)" class="form-input md:max-w-sm" placeholder="Cari queue, plat, vendor, driver..." /></div><div class="grid grid-cols-1 xl:grid-cols-2 gap-4">${rows.map(dropoffCardV21).join("") || '<div class="xl:col-span-2 rounded-xl border border-dashed border-outline-variant p-10 text-center text-on-surface-variant">Belum ada tiket Drop-Off.</div>'}</div></section>
+    </div>`;
+  };
+
+  pageMeta.dropoff = {
+    title: "Drop-Off",
+    subtitle: "Antrean lintas hari terpisah dari REG dan VIP",
+  };
+  ["SPV", "ADMIN", "CHECKER", "SECURITY", "DEVELOPER"].forEach((role) => {
+    ROLE_ACCESS[role] = Array.isArray(ROLE_ACCESS[role]) ? ROLE_ACCESS[role] : [];
+    if (!ROLE_ACCESS[role].includes("dropoff")) ROLE_ACCESS[role].push("dropoff");
   });
-  const previousRender = renderPage;
-  renderPage = function (page, toast = true) {
-    if (String(page || "") !== "ba_reject")
-      return previousRender.call(this, page, toast);
-    if (!isLoggedIn() || !canAccessPage("ba_reject"))
-      return previousRender.call(this, getDefaultPageForRole(), toast);
-    state.page = "ba_reject";
-    document.getElementById("page-title").textContent =
-      pageMeta.ba_reject.title;
-    document.getElementById("page-subtitle").textContent =
-      pageMeta.ba_reject.subtitle;
-    document.getElementById("page-root").innerHTML = window.pageBaRejectV20();
+
+  const renderBeforeV21 = renderPage;
+  renderPage = function renderPageWithDropoffV21(page, toast = true) {
+    if (String(page || "") !== "dropoff") return renderBeforeV21.call(this, page, toast);
+    if (!isLoggedIn() || !canAccessPage("dropoff")) {
+      return renderBeforeV21.call(this, getDefaultPageForRole(), toast);
+    }
+    state.page = "dropoff";
+    document.getElementById("page-title").textContent = pageMeta.dropoff.title;
+    document.getElementById("page-subtitle").textContent = pageMeta.dropoff.subtitle;
+    document.getElementById("page-root").innerHTML = window.pageDropoffV21();
     applyRoleAccessUI();
-    updateActiveNav("ba_reject");
-    history.replaceState(null, "", "#ba_reject");
-    setTimeout(window.initBaRejectV20, 0);
-    if (toast) showToast("Buka menu BA Reject");
+    updateActiveNav("dropoff");
+    history.replaceState(null, "", "#dropoff");
+    if (toast) showToast("Buka menu Drop-Off");
   };
   window.renderPage = renderPage;
+  applyRoleAccessUI?.();
+})();
+
+/* V23 final role binding runs after modules that rebuild ROLE_ACCESS. */
+(function bindCommercialRoleV23() {
+  ROLE_ACCESS.COMERCIAL = ["commercial"];
+  ROLE_DEFAULT_PAGE.COMERCIAL = "commercial";
+  ["SPV", "ADMIN", "DEVELOPER"].forEach((role) => {
+    ROLE_ACCESS[role] = Array.isArray(ROLE_ACCESS[role]) ? ROLE_ACCESS[role] : [];
+    if (!ROLE_ACCESS[role].includes("commercial")) ROLE_ACCESS[role].push("commercial");
+  });
+  applyRoleAccessUI?.();
+})();
+
+/* V24 — fleet master, DROP-OFF fleet separation, SLA/date, and driver timeline. */
+(function installInboundOperationalV24() {
+  const contracts = window.InboundTicketContracts;
+  if (!contracts || window.__inboundOperationalV24Installed) return;
+  window.__inboundOperationalV24Installed = true;
+
+  state.options.fleet_type = [...contracts.FLEET_TYPES];
+  window.normalizeFleetType = contracts.normalizeFleetType;
+  window.getFleetTypeOptions = () => [...contracts.FLEET_TYPES];
+  window.getFleetDisplayLabel = (type) => contracts.normalizeFleetType(type) || "FLEET";
+  window.getFleetNote = (type) => contracts.fleetNote(type);
+  window.getFleetSlaRuleTextV163 = (type) => contracts.fleetSlaRuleText(type);
+  window.getFleetOptionLabelV163 = (type) => {
+    const fleet = contracts.normalizeFleetType(type);
+    return `${fleet} (${contracts.fleetNote(fleet)})`;
+  };
+  window.vehicleFleetOptionsHtml = function vehicleFleetOptionsHtmlV24(selected = "") {
+    const selectedFleet = contracts.normalizeFleetType(selected || contracts.FLEET_TYPES[0]);
+    return contracts.FLEET_TYPES.map((type) =>
+      `<option value="${esc(type)}" ${type === selectedFleet ? "selected" : ""}>${esc(window.getFleetOptionLabelV163(type))}</option>`,
+    ).join("");
+  };
+  window.getFleetImageUrl = function getFleetImageUrlV24(type) {
+    const fleet = contracts.normalizeFleetType(type);
+    const images = {
+      KR2: FLEET_IMAGE_DATA.roda2,
+      "MINI BUS/MOBIL": FLEET_IMAGE_DATA.mobil,
+      "BLIND VAN": FLEET_IMAGE_DATA.grandmax,
+      "PICKUP/L300": FLEET_IMAGE_DATA.l300Pickup,
+      CDE: FLEET_IMAGE_DATA.cdd,
+      CDEL: FLEET_IMAGE_DATA.cddl,
+      CDD: FLEET_IMAGE_DATA.cdd,
+      CDDL: FLEET_IMAGE_DATA.cddl,
+      "TRONTON/FUSO": FLEET_IMAGE_DATA.fuso,
+      WINGBOX: FLEET_IMAGE_DATA.wingbox,
+    };
+    return images[fleet] || FLEET_IMAGE_DATA.default;
+  };
+
+  try {
+    normalizeFleetType = window.normalizeFleetType;
+    getFleetTypeOptions = window.getFleetTypeOptions;
+    getFleetDisplayLabel = window.getFleetDisplayLabel;
+    getFleetNote = window.getFleetNote;
+    vehicleFleetOptionsHtml = window.vehicleFleetOptionsHtml;
+    getFleetImageUrl = window.getFleetImageUrl;
+  } catch (error) {}
+
+  window.updateVehicleFleetPreview = function updateVehicleFleetPreviewV24(selectEl) {
+    const row = selectEl?.closest(".vehicle-row");
+    if (!row) return;
+    const fleet = contracts.normalizeFleetType(selectEl.value || contracts.FLEET_TYPES[0]);
+    const image = row.querySelector("[data-vehicle-fleet-img]");
+    const label = row.querySelector("[data-vehicle-fleet-label]");
+    const note = row.querySelector("[data-vehicle-fleet-note-v163]");
+    if (image) {
+      image.style.display = "";
+      image.src = window.getFleetImageUrl(fleet);
+      image.alt = fleet;
+    }
+    if (label) {
+      label.style.display = "";
+      label.textContent = fleet;
+    }
+    if (note) {
+      note.style.display = "";
+      note.textContent = `${contracts.fleetNote(fleet)} · ${window.getFleetSlaRuleTextV163?.(fleet) || ""}`;
+    }
+    row.querySelector("[data-dropoff-word-v168]")?.style.setProperty("display", "none");
+    syncVehicleMultiInput?.();
+  };
+  try { updateVehicleFleetPreview = window.updateVehicleFleetPreview; } catch (error) {}
+
+  window.handleTicketTypeChange = function handleTicketTypeChangeV24() {
+    const form = document.getElementById("security-form");
+    if (!form) return;
+    const type = String(form.querySelector('[name="ticket_type"]')?.value || "REG").toUpperCase();
+    const dropOff = type === "DROP" || type === "DROP-OFF";
+    const poHidden = form.querySelector('[name="po_number"]');
+    if (poHidden) {
+      poHidden.required = !dropOff;
+      poHidden.dataset.optionalDropOff = dropOff ? "1" : "0";
+      if (dropOff) poHidden.setCustomValidity("");
+    }
+    const poSearch = document.getElementById("po-search-input");
+    if (poSearch) poSearch.placeholder = dropOff ? "PO opsional untuk DROP-OFF" : "Cari atau ketik PO manual...";
+    form.querySelectorAll('[data-vehicle-field="fleet_type"]').forEach((select) => {
+      select.disabled = false;
+      if (!contracts.FLEET_TYPES.includes(contracts.normalizeFleetType(select.value))) {
+        select.innerHTML = window.vehicleFleetOptionsHtml(contracts.FLEET_TYPES[0]);
+      }
+      window.updateVehicleFleetPreview(select);
+    });
+    lookupPo?.(true);
+  };
+  try { handleTicketTypeChange = window.handleTicketTypeChange; } catch (error) {}
+
+  window.getInboundSlaHours = (row = {}) => contracts.getSlaHours(row);
+  window.getInboundSlaInfo = function getInboundSlaInfoV24(row = {}) {
+    const info = contracts.getInboundSlaInfo(row);
+    const late = ["LATE", "SLA MISS"].includes(info.status);
+    return {
+      ...info,
+      className: late ? "text-error" : info.status === "ON PROCESS" ? "text-warning" : "text-success",
+      badgeClass: late
+        ? "bg-error/10 text-error border-error/30"
+        : info.status === "ON PROCESS"
+          ? "bg-warning/10 text-warning border-warning/30"
+          : "bg-success/10 text-success border-success/30",
+    };
+  };
+  window.getUnloadingEstimateInfo = function getUnloadingEstimateInfoV24(row = {}) {
+    const sla = contracts.getInboundSlaInfo(row);
+    return {
+      estimateDate: sla.target_at || null,
+      target_at: sla.target_at || null,
+      estimateText: sla.target_at ? contracts.formatWibDateTime(sla.target_at) : "",
+      targetHours: sla.target_hours || 0,
+      targetMinutes: sla.target_minutes || 0,
+      hasStartedBongkar: Boolean(sla.start_at),
+      outSla: ["LATE", "SLA MISS"].includes(sla.status),
+      diffMinutes: sla.delta_minutes,
+    };
+  };
+  try {
+    getInboundSlaHours = window.getInboundSlaHours;
+    getInboundSlaInfo = window.getInboundSlaInfo;
+    getUnloadingEstimateInfo = window.getUnloadingEstimateInfo;
+  } catch (error) {}
+
+  window.driverTimelineV16 = function driverTimelineV24(row = {}) {
+    const entries = contracts.driverTimelineEntries(row);
+    const status = String(row.status || "WAITING").toUpperCase();
+    const rank = { WAITING: 0, CALLED: 1, UNLOADING: 2, "WAITING CHECKER": 2, CHECKING: 2, "WAITING GR": 3, "DONE GR": 3, COMPLETED: 4 }[status] ?? 0;
+    return `<div id="driver-track-timeline-v16" class="driver-timeline-v16">${entries.map((entry, index) => {
+      const done = Boolean(entry.value) || (!contracts.isCancelled(row) && index < rank);
+      const active = !contracts.isCancelled(row) && !done && index === rank;
+      const icon = done ? "check_circle" : active ? "pending" : "radio_button_unchecked";
+      return `<div class="driver-timeline-item-v16 ${done ? "is-done" : active ? "is-active" : ""}"><span class="material-symbols-outlined">${icon}</span><span class="driver-timeline-copy-v24"><b>${esc(entry.label)}</b><small>${esc(entry.timeLabel)}</small>${entry.label === "Dibatalkan" ? `<small>${esc(row.cancelled_reason || row.po_cancelled_reason || "")}</small>` : ""}</span></div>`;
+    }).join("")}</div>`;
+  };
+  try { driverTimelineV16 = window.driverTimelineV16; } catch (error) {}
 })();

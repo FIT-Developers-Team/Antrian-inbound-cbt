@@ -86,6 +86,7 @@ test("Waiting Monitor keeps gate visibility and makes the full queue the primary
   assert.match(appSource, /function gatePanelV22\(rows\)/);
   assert.match(appSource, /Visibilitas Gate Bongkar/);
   assert.match(appSource, /Klik gate aktif untuk memfilter Queue Operasional/);
+  assert.match(appSource, /!gate\.toUpperCase\(\)\.startsWith\("STL-"\)/);
   assert.match(appSource, /wm19-layout[\s\S]*tableV19\(rows\)[\s\S]*riskListV19\(rows\)[\s\S]*flowV19\(rows\)/);
   assert.doesNotMatch(
     extractFunction(appSource, "function tableV19", "\n  window.wmFilterV19"),
@@ -373,6 +374,75 @@ test("security ticket print targets one physical A6 portrait page", () => {
   assert.match(printSource, /width: 95mm; height: 138mm;/);
   assert.match(printSource, /break-after: page;/);
   assert.doesNotMatch(printSource, /size: A5/i);
+});
+
+test("printed A6 QR uses a scan-safe size, quiet zone, and sharp raster", () => {
+  const start = appSource.indexOf("function qrImageUrl");
+  const end = appSource.indexOf("\nfunction pageDaftar", start);
+  const printSource = appSource.slice(start, end);
+
+  assert.match(printSource, /size=400&margin=4&ecLevel=M/);
+  assert.match(printSource, /width: 34mm; height: 34mm;/);
+  assert.match(printSource, /image-rendering: pixelated;/);
+});
+
+test("saved-ticket QR uses one short stable ID while legacy payloads remain readable", () => {
+  const source = extractFunction(
+    appSource,
+    "function encodeDriverTicketPayload",
+    "\nfunction findDriverTicketRow",
+  );
+  const context = {
+    URL,
+    URLSearchParams,
+    location: {
+      origin: "https://antrian-inbound-cbt.pages.dev",
+      pathname: "/",
+      search: "",
+    },
+    btoa,
+    atob,
+    escape,
+    unescape,
+    encodeURIComponent,
+    decodeURIComponent,
+    JSON,
+    formatDateTimeLocal: () => "2026-09-01 08:00:00",
+  };
+  vm.runInNewContext(
+    `${source}; globalThis.__make = makeDriverTrackUrl; globalThis.__decode = decodeDriverTicketPayload; globalThis.__get = getDriverTicketPayloadFromUrl;`,
+    context,
+  );
+
+  const trackUrl = context.__make({
+    ticket_id: "IBT-LIVE-001",
+    queue_no: "REG 1-1",
+    plat_number: "B1234XYZ",
+    vendor_name: "Vendor panjang yang tidak perlu dimasukkan ke QR",
+    po_number: "ID1/POR/202609000000000001",
+    status: "WAITING",
+  });
+  const parsedTrackUrl = new URL(trackUrl);
+  assert.equal(parsedTrackUrl.searchParams.get("driver_ticket_id"), "IBT-LIVE-001");
+  assert.equal(parsedTrackUrl.searchParams.has("driver_ticket"), false);
+  context.location.search = parsedTrackUrl.search;
+  assert.equal(
+    JSON.stringify(context.__get()),
+    JSON.stringify({ ticket_id: "IBT-LIVE-001" }),
+  );
+
+  const legacy = btoa(
+    unescape(
+      encodeURIComponent(
+        JSON.stringify({
+          ticket_id: "IBT-OLD-001",
+          vendor_name: "Legacy Vendor",
+          status: "WAITING",
+        }),
+      ),
+    ),
+  );
+  assert.equal(context.__decode(legacy).vendor_name, "Legacy Vendor");
 });
 
 test("Drop-Off start unloading persists its timestamp and requeues GSheet", async () => {

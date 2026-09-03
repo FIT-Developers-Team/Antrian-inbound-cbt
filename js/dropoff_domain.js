@@ -3,7 +3,7 @@
   if (typeof module === "object" && module.exports) module.exports = domain;
   if (root) root.DropoffDomain = domain;
 })(typeof globalThis !== "undefined" ? globalThis : this, function createDropoffDomain() {
-  const TERMINAL_STATUSES = new Set(["COMPLETED", "EXPIRED"]);
+  const TERMINAL_STATUSES = new Set(["COMPLETED", "EXPIRED", "CANCELLED"]);
 
   function normalized(value) {
     return String(value || "")

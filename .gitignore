@@ -1,5 +1,8 @@
 .vercel
+.wrangler/
 .env*
 node_modules/
 .tools/
 dist/
+%SystemDrive%/
+supabase/.temp/

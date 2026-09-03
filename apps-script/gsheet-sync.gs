@@ -9,7 +9,7 @@ var GSHEET_SYNC_SHEET_NAME = "Output form";
 
 var GSHEET_SYNC_HEADERS = [
   "Timestamp", "ticket_id", "queue_no", "ticket_type", "slot", "fleet_type",
-  "plat_number", "driver_name", "phone_number", "ktp_6_digit", "vendor_name",
+  "plat_number", "driver_name", "phone_number", "ktp_6_digit", "tkbm_count", "vendor_name",
   "po_number", "total_po_qty", "actual_quantity", "count_po_sku", "status",
   "gate", "unload_sla", "source", "created_at", "register_time", "called_at",
   "updated_at", "completed_at", "start_unloading_at", "driver_waiting_duration",

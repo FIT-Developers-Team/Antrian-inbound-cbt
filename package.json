@@ -17,12 +17,15 @@
     "build:realtime": "esbuild js/realtime_client_source.js --bundle --minify --platform=browser --format=iife --outfile=js/realtime_client.js",
     "check": "node --check api/inbound.js && node --check api/sync-superset.js",
     "test": "node --test test/*.test.js",
+    "seed:supabase": "node scripts/seed-reference-data.mjs",
     "android:sync": "npx cap sync android",
     "android:build:debug": "cd android && gradlew.bat assembleDebug"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.4.2",
-    "esbuild": "^0.28.1"
+    "@electric-sql/pglite": "^0.5.8",
+    "esbuild": "^0.28.1",
+    "supabase": "^2.39.2"
   }
 }

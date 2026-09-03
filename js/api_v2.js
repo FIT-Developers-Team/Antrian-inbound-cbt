@@ -61,10 +61,10 @@ function parseInboundDateSafe(value) {
 const API_URL_V2 =
   "https://script.google.com/macros/s/AKfycbyjby6UR8H0H397xkHbpx9F57BhPKeTCndn3Ic3aKpqvEeQnIGYUmwBMa9JzPBhIoeD/exec";
 
-// Operational queue and PO master now live in MotherDuck through the same
-// Vercel project. Keeping the URL relative makes Preview and Production use
-// their own API without exposing any database credentials to the browser.
-const MOTHERDUCK_API_URL = "/api/inbound";
+// Operational queue and PO master now live behind a Supabase Edge Function.
+// The URL is public configuration; privileged database credentials remain in
+// Supabase Edge Function secrets and are never shipped to the browser.
+const MOTHERDUCK_API_URL = window.INBOUND_BACKEND_URL;
 
 const columns = [
   "Timestamp",
@@ -113,6 +113,7 @@ const LOCAL_TICKETS_KEY = "inbound_cbt_manual_tickets_v2";
 let v2RawResponse = null;
 let v2PoIndex = null;
 let securitySubmitBusy = false;
+let fullDataLoadBusy = false;
 
 function hasApiV2() {
   return API_URL_V2 && !API_URL_V2.includes("PASTE_GAS_WEB_APP_URL_HERE");
@@ -187,7 +188,9 @@ function motherDuckApiUrl(action, params = {}) {
 async function motherDuckApiGet(action, params = {}) {
   const response = await fetch(motherDuckApiUrl(action, params), {
     method: "GET",
-    credentials: "same-origin",
+    headers: {
+      Authorization: `Bearer ${window.getInboundSessionToken?.() || ""}`,
+    },
   });
   const json = await response.json();
   if (!response.ok || json.ok === false) {
@@ -199,8 +202,10 @@ async function motherDuckApiGet(action, params = {}) {
 async function motherDuckApiPost(action, payload = {}) {
   const response = await fetch(motherDuckApiUrl(action), {
     method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${window.getInboundSessionToken?.() || ""}`,
+    },
     body: JSON.stringify(payload),
   });
   const json = await response.json();
@@ -287,7 +292,7 @@ async function bulkCompleteOperationalTasks() {
       : `Clear semua tiket AKTIF tanggal ${operationalDate}?`,
     "",
     "Status akan diproses sampai COMPLETED.",
-    "PO menjadi Done Checking + Done GR + Handover GRN.",
+    "PO menjadi Done Checking + Done GR, lalu tiket selesai otomatis.",
     "Actual Qty yang kosong akan memakai Qty PO.",
     "Riwayat ticket tidak dihapus.",
   ].join("\n");
@@ -338,6 +343,7 @@ async function submitSecurityRowsToBackend(rows = []) {
         driver_name: master.driver_name,
         driver_phone: master.phone_number,
         ktp_6_digit: master.ktp_6_digit,
+        tkbm_count: Number(master.tkbm_count || 0),
         gate: master.gate,
         slot: master.slot,
         registered_by: master.registered_by,
@@ -756,7 +762,7 @@ function applyCheckerUpdateToQueue(body = {}) {
     state.dashboard.priority = nextQueue
       .filter((q) => {
         const st = String(q.status || "").toUpperCase();
-        return !st.includes("COMPLETED") && !st.includes("EXPIRED");
+        return !st.includes("COMPLETED") && !st.includes("EXPIRED") && !st.includes("CANCELLED");
       })
       .slice(0, 8);
   }
@@ -1116,6 +1122,12 @@ function buildQueueFromOutputForm(outputRows = []) {
       last_call_at: getCell(row, ["last_call_at", "last call at"], ""),
       expired_at: getCell(row, ["expired_at", "expired at"], ""),
       expired_reason: getCell(row, ["expired_reason", "expired reason"], ""),
+      cancelled_at: getCell(row, ["cancelled_at"], ""),
+      cancelled_reason: getCell(row, ["cancelled_reason"], ""),
+      cancelled_by: getCell(row, ["cancelled_by"], ""),
+      po_cancelled_at: getCell(row, ["po_cancelled_at"], ""),
+      po_cancelled_reason: getCell(row, ["po_cancelled_reason"], ""),
+      po_cancelled_by: getCell(row, ["po_cancelled_by"], ""),
       sla_finished_at: getCell(
         row,
         ["sla_finished_at", "SLA Finished At", "sla finished at"],
@@ -1135,6 +1147,7 @@ function buildQueueFromOutputForm(outputRows = []) {
       driver_name: getCell(row, ["driver_name", "driver name"], ""),
       phone_number: getCell(row, ["phone_number", "phone number"], ""),
       ktp_6_digit: getCell(row, ["ktp_6_digit", "ktp 6 digit"], ""),
+      tkbm_count: toNumberV2(getCell(row, ["tkbm_count"], 0)),
       po_number: getCell(
         row,
         ["po_number", "po", "PO Number", "po number"],
@@ -1167,6 +1180,7 @@ function buildQueueFromOutputForm(outputRows = []) {
 }
 
 function buildKpis(kpiRaw = [], tableRows = [], queue = []) {
+  queue = queue.filter((row) => !window.InboundTicketContracts.isCancelled(row));
   const raw = kpiRaw.length ? kpiRaw : tableRows;
   const totalRows = tableRows.length;
   const uniquePo = uniqueCount(
@@ -1259,6 +1273,7 @@ function buildKpis(kpiRaw = [], tableRows = [], queue = []) {
 }
 
 function buildSummary(kpiRaw = [], tableRows = [], queue = []) {
+  queue = queue.filter((row) => !window.InboundTicketContracts.isCancelled(row));
   const completed = queue.filter((q) => q.status.includes("COMPLETED")).length;
   const waiting = queue.filter(
     (q) =>
@@ -1439,7 +1454,7 @@ function buildDashboardFromV2(response) {
     priority: sortQueueBySlotSequence(
       queue.filter((q) => {
         const st = String(q.status || "").toUpperCase();
-        return !st.includes("COMPLETED") && !st.includes("EXPIRED");
+        return !st.includes("COMPLETED") && !st.includes("EXPIRED") && !st.includes("CANCELLED");
       }),
     ).slice(0, 8),
     dock: Object.values(dockMap).slice(0, 10),
@@ -1544,9 +1559,11 @@ async function initApi() {
 
 async function ensureFullDataForDaftar() {
   if (!hasApiV2()) return;
+  if (fullDataLoadBusy) return;
   const tableRows = getTableV2Rows(v2RawResponse || {});
   if (tableRows.length) return;
 
+  fullDataLoadBusy = true;
   try {
     updateApiPill("loading", "Load Data V2...");
     v2RawResponse = await fetchV2Data();
@@ -1558,6 +1575,8 @@ async function ensureFullDataForDaftar() {
     console.error(err);
     updateApiPill("error", "API error");
     showToast("Load Data V2 gagal: " + err.message);
+  } finally {
+    fullDataLoadBusy = false;
   }
 }
 
@@ -3090,6 +3109,7 @@ async function submitSecurity(e) {
         driver_name: vehicle.driver_name,
         phone_number: vehicle.phone_number,
         ktp_6_digit: vehicle.ktp_6_digit || "",
+        tkbm_count: Number(vehicle.tkbm_count || 0),
         status: "WAITING",
         total_po_qty: grouped.total_po_qty,
         count_po_sku: grouped.count_po_sku,
@@ -3270,7 +3290,7 @@ async function submitSecurity(e) {
       const operationalRows = allOutputRows.filter((row) => {
         const op = getRowOperationalDateKey(row);
         const st = String(row.status || "WAITING").toUpperCase();
-        const active = !st.includes("COMPLETED") && !st.includes("EXPIRED");
+        const active = !st.includes("COMPLETED") && !st.includes("EXPIRED") && !st.includes("CANCELLED");
         return op === currentOp || active;
       });
 
@@ -3510,7 +3530,7 @@ async function submitSecurity(e) {
       return;
     }
 
-    const label = target === "DONE GR" ? "Done GR" : "Handover GRN";
+    const label = target === "DONE GR" ? "Done GR" : "Selesai";
     const ok = confirm(
       `${label} untuk ${row.queue_no || "-"}?\n\nPlat: ${row.plat_number || "-"}\nStatus akan menjadi ${target}.`,
     );
@@ -3537,7 +3557,7 @@ async function submitSecurity(e) {
       applyBackendActionResult(result);
 
       if (target === "COMPLETED") {
-        showToast("Handover GRN berhasil. Status COMPLETED.");
+        showToast("Tiket selesai. Status COMPLETED.");
       } else {
         showToast(`${label} berhasil. Status ${target}.`);
       }
@@ -4086,6 +4106,12 @@ async function submitSecurity(e) {
       ),
       expired_at: dateField("expired_at", "expired at"),
       expired_reason: getCell(row, ["expired_reason", "expired reason"], ""),
+      cancelled_at: dateField("cancelled_at"),
+      cancelled_reason: getCell(row, ["cancelled_reason"], ""),
+      cancelled_by: getCell(row, ["cancelled_by"], ""),
+      po_cancelled_at: dateField("po_cancelled_at"),
+      po_cancelled_reason: getCell(row, ["po_cancelled_reason"], ""),
+      po_cancelled_by: getCell(row, ["po_cancelled_by"], ""),
       operational_date: getCell(row, ["operational_date"], ""),
       data_source: getCell(row, ["data_source"], "BACKEND"),
       vendor_name: getCell(row, ["vendor_name", "Vendor Name"], ""),
@@ -4098,6 +4124,7 @@ async function submitSecurity(e) {
       driver_name: getCell(row, ["driver_name", "driver name"], ""),
       phone_number: getCell(row, ["phone_number", "phone number"], ""),
       ktp_6_digit: getCell(row, ["ktp_6_digit"], ""),
+      tkbm_count: toNumberV2(getCell(row, ["tkbm_count"], 0)),
       po_number: getCell(row, ["po_number", "po", "PO Number"], ""),
       total_po_qty: toNumberV2(
         getCell(row, ["total_po_qty", "total_request_quantity"], 0),
@@ -4169,6 +4196,7 @@ async function submitSecurity(e) {
 
   function deriveMasterStatusV15(poRows = []) {
     if (!poRows.length) return "WAITING";
+    if (poRows.every((row) => String(row.status).toUpperCase() === "CANCELLED")) return "CANCELLED";
     const statuses = poRows.map((row) =>
       String(row.status || "WAITING").toUpperCase(),
     );
@@ -4214,6 +4242,7 @@ async function submitSecurity(e) {
           String(a.po_number).localeCompare(String(b.po_number)),
       );
       const first = poRows[0];
+      const activePos = poRows.filter((row) => !window.InboundTicketContracts.isCancelled(row));
       const status = deriveMasterStatusV15(poRows);
       const poNumbers = poRows.map((row) => row.po_number).filter(Boolean);
       const ticketTypeV18 = String(first.ticket_type || "")
@@ -4228,28 +4257,28 @@ async function submitSecurity(e) {
         ticketTypeV18 === "DROP" ||
         ticketTypeV18 === "DROP-OFF" ||
         fleetTypeV18 === "DROP-OFF";
-      const checkerDone = poRows.filter((row) => {
+      const checkerDone = activePos.filter((row) => {
         const value = String(row.checker_status || "").toUpperCase();
         return value === "DONE" || (dropOffV18 && value === "SKIPPED");
       }).length;
-      const grDone = poRows.filter((row) => {
+      const grDone = activePos.filter((row) => {
         const value = String(row.gr_status || "").toUpperCase();
         return value === "DONE GR" || (dropOffV18 && value === "SKIPPED");
       }).length;
       const checkerNames = [
         ...new Set(poRows.map((row) => row.checker_name).filter(Boolean)),
       ];
-      const allDoneGr = poRows.length > 0 && grDone === poRows.length;
-      const allCheckerDone = poRows.length > 0 && checkerDone === poRows.length;
-      const totalQty = poRows.reduce(
+      const allDoneGr = activePos.length > 0 && grDone === activePos.length;
+      const allCheckerDone = activePos.length > 0 && checkerDone === activePos.length;
+      const totalQty = activePos.reduce(
         (sum, row) => sum + toNumberV2(row.total_po_qty),
         0,
       );
-      const totalSku = poRows.reduce(
+      const totalSku = activePos.reduce(
         (sum, row) => sum + toNumberV2(row.count_po_sku),
         0,
       );
-      const actualQtyTotal = poRows.reduce(
+      const actualQtyTotal = activePos.reduce(
         (sum, row) => sum + toNumberV2(row.actual_quantity),
         0,
       );
@@ -4272,22 +4301,21 @@ async function submitSecurity(e) {
           Number(first.ticket_po_count || poRows.length) || poRows.length,
         po_numbers: poNumbers,
         po_number: poNumbers.join(", "),
-        total_po_qty: Number(first.ticket_total_qty || totalQty) || totalQty,
+        total_po_qty: totalQty,
         actual_quantity: actualQtyTotal,
-        count_po_sku: Number(first.ticket_total_sku || totalSku) || totalSku,
-        ticket_total_qty:
-          Number(first.ticket_total_qty || totalQty) || totalQty,
-        ticket_total_sku:
-          Number(first.ticket_total_sku || totalSku) || totalSku,
+        count_po_sku: totalSku,
+        ticket_total_qty: totalQty,
+        ticket_total_sku: totalSku,
+        cancelled_po_count: poRows.length - activePos.length,
         status,
         checker_done_count: checkerDone,
-        checker_total_count: poRows.length,
+        checker_total_count: activePos.length,
         checker_progress: dropOffV18
           ? "SKIP"
-          : `${checkerDone}/${poRows.length}`,
+          : `${checkerDone}/${activePos.length}`,
         gr_done_count: grDone,
-        gr_total_count: poRows.length,
-        gr_progress: dropOffV18 ? "SKIP" : `${grDone}/${poRows.length}`,
+        gr_total_count: activePos.length,
+        gr_progress: dropOffV18 ? "SKIP" : `${grDone}/${activePos.length}`,
         checker_names: checkerNames,
         checker_name: checkerNames.join(", "),
         all_checker_done: allCheckerDone,
@@ -4366,7 +4394,7 @@ async function submitSecurity(e) {
           ? getRowOperationalDateKey(row)
           : String(row.operational_date || "");
       const status = String(row.status || "WAITING").toUpperCase();
-      const active = !["COMPLETED", "EXPIRED"].includes(status);
+      const active = !["COMPLETED", "EXPIRED", "CANCELLED"].includes(status);
       return !currentOp || op === currentOp || active;
     });
 
@@ -4431,7 +4459,7 @@ async function submitSecurity(e) {
       priority: sortQueueBySlotSequence(
         queue.filter(
           (row) =>
-            !["COMPLETED", "EXPIRED"].includes(
+            !["COMPLETED", "EXPIRED", "CANCELLED"].includes(
               String(row.status || "").toUpperCase(),
             ),
         ),
@@ -4477,7 +4505,11 @@ async function submitSecurity(e) {
 
     const lookup = lookupPo(true);
     if (!lookup || !lookup.all_found) {
-      showToast("Semua PO wajib valid dan sesuai Vendor Name.");
+      showToast(
+        lookup?.summary?.manual_metrics_valid === false
+          ? "Total Qty dan Total SKU wajib diisi untuk setiap PO manual."
+          : "Semua PO wajib valid dan sesuai Vendor Name.",
+      );
       return;
     }
 
@@ -4581,6 +4613,7 @@ async function submitSecurity(e) {
           driver_name: vehicle.driver_name,
           phone_number: vehicle.phone_number,
           ktp_6_digit: vehicle.ktp_6_digit || "",
+          tkbm_count: Number(vehicle.tkbm_count || 0),
           status: "WAITING",
           gate: "-",
           register_time: registerTime,
@@ -5025,7 +5058,7 @@ async function submitSecurity(e) {
       successV155 = true;
       showToast(
         result?.all_done_gr
-          ? "Actual Qty tersimpan. Semua PO DONE GR dan siap Handover GRN."
+          ? "Actual Qty tersimpan. Semua PO DONE GR dan tiket selesai."
           : `Actual Qty ${actualQuantity} tersimpan. PO ${po.po_number} selesai GR.`,
       );
 
@@ -5154,7 +5187,7 @@ async function submitSecurity(e) {
       const found = v2PoIndex?.[key];
 
       if (!found) {
-        // PO manual tetap dibuat sebagai child row dengan qty/SKU default 0.
+        const metrics = window.__manualPoMetricsV24?.[po] || {};
         items.push({
           po_number: po,
           po_input: po,
@@ -5163,8 +5196,8 @@ async function submitSecurity(e) {
             document.querySelector('#security-form [name="slot"]')?.value ||
               "3",
           ),
-          total_po_qty: 0,
-          count_po_sku: 0,
+          total_po_qty: Number(metrics.total_po_qty || 0),
+          count_po_sku: Number(metrics.count_po_sku || 0),
           data_source: "MANUAL",
           is_manual_po: true,
         });
@@ -5235,12 +5268,21 @@ async function submitSecurity(e) {
       (sum, item) => sum + toNumberV2(item.count_po_sku),
       0,
     );
+    const manualMetricsValid = items
+      .filter((item) => item.is_manual_po === true)
+      .every((item) =>
+        window.InboundTicketContracts?.validateManualPoMetrics(
+          item.total_po_qty,
+          item.count_po_sku,
+        )?.valid,
+      );
 
     return {
       found: items.length > 0,
       all_found:
         items.length > 0 &&
         vendorMismatch.length === 0 &&
+        manualMetricsValid &&
         (poNumbers.length > 0 || dropOff),
       po_numbers: poNumbers,
       items,
@@ -5262,6 +5304,7 @@ async function submitSecurity(e) {
           (item) =>
             item.is_manual_po || item.is_manual_vendor || item.is_drop_off,
         ).length,
+        manual_metrics_valid: manualMetricsValid,
       },
     };
   };
@@ -5948,7 +5991,7 @@ async function submitSecurity(e) {
       request: () => doneGrPoToBackendV15(payload),
       successMessage: (result) =>
         result?.all_done_gr
-          ? "Actual Qty tersimpan. Semua PO DONE GR dan siap Handover GRN."
+          ? "Actual Qty tersimpan. Semua PO DONE GR dan tiket selesai."
           : `Actual Qty ${actualQuantity} tersimpan. PO ${po.po_number} selesai GR.`,
       errorPrefix: "Done GR gagal",
     });
