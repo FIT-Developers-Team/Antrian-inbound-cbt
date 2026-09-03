@@ -17202,25 +17202,167 @@ if (window.__exportCsvV19) {
     const rows = Array.isArray(state.dashboard?.queue)
       ? state.dashboard.queue
       : [];
-    const stats = wmBusyStatsV28(rows);
+    const selectedGate = String(wmBusyStateV28.gate || "ALL").trim() || "ALL";
+    const configuredGates = wmConfiguredGatesV28();
+    const gates =
+      selectedGate === "ALL"
+        ? configuredGates
+        : configuredGates.filter(
+            (gate) => gate.toUpperCase() === selectedGate.toUpperCase(),
+          );
+
+    const prepared = wmBusyRowsForRangeV28(rows, wmBusyStateV28.range);
+    const todayKey = wmIdleTodayKeyV27();
+    const dateKeys = [
+      ...new Set(prepared.map((item) => item.dateKey).filter(Boolean)),
+    ].sort();
+    if (wmBusyStateV28.range === "today" && !dateKeys.includes(todayKey)) {
+      dateKeys.push(todayKey);
+    }
+
+    const formatDateId = (dateKey) => {
+      const parts = String(dateKey || "").split("-");
+      return parts.length === 3
+        ? `${parts[2]}/${parts[1]}/${parts[0]}`
+        : dateKey;
+    };
+    const formatDuration = (minutes) => {
+      const totalSeconds = Math.max(0, Math.round(Number(minutes || 0) * 60));
+      const hours = Math.floor(totalSeconds / 3600);
+      const mins = Math.floor((totalSeconds % 3600) / 60);
+      const secs = totalSeconds % 60;
+      return `${String(hours).padStart(2, "0")}:${String(mins).padStart(
+        2,
+        "0",
+      )}:${String(secs).padStart(2, "0")}`;
+    };
+    const wibParts = (value) => {
+      const date = value instanceof Date ? value : parseInboundDateSafe(value);
+      if (!date) return null;
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Jakarta",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hourCycle: "h23",
+      }).formatToParts(date);
+      const get = (type) =>
+        parts.find((part) => part.type === type)?.value || "";
+      return {
+        dateKey: `${get("year")}-${get("month")}-${get("day")}`,
+        hour: Number(get("hour")),
+        minute: Number(get("minute")),
+        second: Number(get("second")),
+      };
+    };
+    const bucketPosition = (dateKey, hour, minute = 0, second = 0) => {
+      const [year, month, day] = String(dateKey || "")
+        .split("-")
+        .map(Number);
+      return Date.UTC(year, month - 1, day, hour, minute, second);
+    };
+
+    const idleByGate = new Map();
+    gates.forEach((gate) => {
+      const gateKey = gate.toUpperCase();
+      const sessions = rows
+        .filter((row) =>
+          gateListV22(row).some(
+            (item) =>
+              String(item || "")
+                .trim()
+                .toUpperCase() === gateKey,
+          ),
+        )
+        .map((row) => {
+          const start = parseInboundDateSafe(wmIdleStartV27(row));
+          const end = parseInboundDateSafe(wmIdleEndV27(row));
+          return { row, start, end };
+        })
+        .filter((item) => item.start)
+        .sort((a, b) => a.start.getTime() - b.start.getTime());
+
+      const intervals = [];
+      for (let i = 1; i < sessions.length; i += 1) {
+        const previous = sessions[i - 1];
+        const current = sessions[i];
+        if (!previous.end || current.start <= previous.end) continue;
+
+        const startPart = wibParts(previous.end);
+        const endPart = wibParts(current.start);
+        if (!startPart || !endPart) continue;
+
+        const startPos = bucketPosition(
+          startPart.dateKey,
+          startPart.hour,
+          startPart.minute,
+          startPart.second,
+        );
+        const endPos = bucketPosition(
+          endPart.dateKey,
+          endPart.hour,
+          endPart.minute,
+          endPart.second,
+        );
+        if (endPos <= startPos) continue;
+        intervals.push({ startPos, endPos });
+      }
+      idleByGate.set(gate, intervals);
+    });
+
     const headers = [
-      "Periode",
+      "Tanggal",
       "Gate",
+      "Gate ID",
       "Jam WIB",
+      "Idle Time",
+      "Idle Menit",
+      "Idle % dari 1 Jam",
       "Total Start Unloading",
-      "Rata-rata Unit per Hari",
-      "Persentase dari Total",
     ];
-    const period =
-      wmBusyStateV28.range === "today" ? wmIdleTodayKeyV27() : "ALL";
-    const body = stats.buckets.map((bucket) => [
-      period,
-      stats.selectedGate,
-      bucket.label,
-      bucket.count,
-      Math.round(bucket.averagePerDay * 100) / 100,
-      Math.round(bucket.percentage * 100) / 100,
-    ]);
+    const body = [];
+
+    dateKeys.forEach((dateKey) => {
+      gates.forEach((gate) => {
+        const intervals = idleByGate.get(gate) || [];
+        for (let hour = 0; hour < 24; hour += 1) {
+          const bucketStart = bucketPosition(dateKey, hour);
+          const bucketEnd = bucketStart + 60 * 60 * 1000;
+          let idleMs = 0;
+          intervals.forEach((interval) => {
+            const overlap =
+              Math.min(interval.endPos, bucketEnd) -
+              Math.max(interval.startPos, bucketStart);
+            if (overlap > 0) idleMs += overlap;
+          });
+          const idleMinutes = idleMs / 60000;
+          const startCount = prepared.filter(
+            (item) =>
+              item.dateKey === dateKey &&
+              item.hour === hour &&
+              item.gates.some(
+                (itemGate) => itemGate.toUpperCase() === gate.toUpperCase(),
+              ),
+          ).length;
+          body.push([
+            formatDateId(dateKey),
+            gateLabelV22(gate),
+            gate,
+            `${String(hour).padStart(2, "0")}:00-${String(
+              (hour + 1) % 24,
+            ).padStart(2, "0")}:00`,
+            formatDuration(idleMinutes),
+            Math.round(idleMinutes * 100) / 100,
+            Math.round((Math.min(idleMinutes, 60) / 60) * 10000) / 100,
+            startCount,
+          ]);
+        }
+      });
+    });
+
     const escapeCsv = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
     const csv =
       "\ufeff" +
@@ -17231,7 +17373,7 @@ if (window.__exportCsvV19) {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `gate-busy-hour-${String(stats.selectedGate || "all")
+    anchor.download = `gate-busy-hour-idle-${String(selectedGate || "all")
       .replace(/[^a-z0-9]+/gi, "-")
       .toLowerCase()}-${wmBusyStateV28.range}-${wmIdleTodayKeyV27()}.csv`;
     document.body.appendChild(anchor);
