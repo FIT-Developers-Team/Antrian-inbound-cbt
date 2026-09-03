@@ -224,12 +224,23 @@ async function deleteTicketsByOperationalDate() {
     showToast("Pilih tanggal operasional yang valid.", "error");
     return;
   }
-  if (!confirm(`Hapus PERMANEN seluruh ticket, detail PO, dan event tanggal ${operationalDate}?`)) return;
+  if (
+    !confirm(
+      `Hapus PERMANEN seluruh ticket, detail PO, dan event tanggal ${operationalDate}?`,
+    )
+  )
+    return;
   if (button) button.disabled = true;
   if (result) result.textContent = "Menghapus data dari MotherDuck...";
   try {
-    const deleted = await motherDuckApiPost("delete_tickets_by_date", { operational_date: operationalDate });
-    const message = `Terhapus: ${Number(deleted.tickets_deleted || 0)} ticket, ${Number(deleted.po_rows_deleted || 0)} PO, ${Number(deleted.events_deleted || 0)} event.`;
+    const deleted = await motherDuckApiPost("delete_tickets_by_date", {
+      operational_date: operationalDate,
+    });
+    const message = `Terhapus: ${Number(
+      deleted.tickets_deleted || 0,
+    )} ticket, ${Number(deleted.po_rows_deleted || 0)} PO, ${Number(
+      deleted.events_deleted || 0,
+    )} event.`;
     if (result) result.textContent = message;
     showToast(message, "success");
   } catch (error) {
@@ -248,22 +259,43 @@ async function deleteSingleTicket() {
   const button = document.getElementById("single-ticket-delete-button");
   const result = document.getElementById("single-ticket-delete-result");
   const queueNo = String(queueInput?.value || "").trim();
-  const plateNumber = String(plateInput?.value || "").replace(/\s+/g, "").toUpperCase();
+  const plateNumber = String(plateInput?.value || "")
+    .replace(/\s+/g, "")
+    .toUpperCase();
   const operationalDate = String(dateInput?.value || "").trim();
-  if (!queueNo || !plateNumber || !/^\d{4}-\d{2}-\d{2}$/.test(operationalDate)) {
-    showToast("Isi Queue No, Plat Number, dan tanggal operasional secara lengkap.", "error");
+  if (
+    !queueNo ||
+    !plateNumber ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(operationalDate)
+  ) {
+    showToast(
+      "Isi Queue No, Plat Number, dan tanggal operasional secara lengkap.",
+      "error",
+    );
     return;
   }
-  if (!confirm(`HAPUS PERMANEN satu ticket ini?\n\nQueue: ${queueNo}\nPlat: ${plateNumber}\nTanggal operasional: ${operationalDate}\n\nTicket, detail PO, dan event terkait akan dihapus.`)) return;
+  if (
+    !confirm(
+      `HAPUS PERMANEN satu ticket ini?\n\nQueue: ${queueNo}\nPlat: ${plateNumber}\nTanggal operasional: ${operationalDate}\n\nTicket, detail PO, dan event terkait akan dihapus.`,
+    )
+  )
+    return;
   if (button) button.disabled = true;
-  if (result) result.textContent = "Mencari dan menghapus satu ticket di MotherDuck...";
+  if (result)
+    result.textContent = "Mencari dan menghapus satu ticket di MotherDuck...";
   try {
     const deleted = await motherDuckApiPost("delete_single_ticket", {
       queue_no: queueNo,
       plat_number: plateNumber,
       operational_date: operationalDate,
     });
-    const message = `Ticket ${deleted?.deleted_ticket?.queue_no || queueNo} (${plateNumber}) terhapus: ${Number(deleted.tickets_deleted || 0)} ticket, ${Number(deleted.po_rows_deleted || 0)} PO, ${Number(deleted.events_deleted || 0)} event.`;
+    const message = `Ticket ${
+      deleted?.deleted_ticket?.queue_no || queueNo
+    } (${plateNumber}) terhapus: ${Number(
+      deleted.tickets_deleted || 0,
+    )} ticket, ${Number(deleted.po_rows_deleted || 0)} PO, ${Number(
+      deleted.events_deleted || 0,
+    )} event.`;
     if (result) result.textContent = message;
     showToast(message, "success");
     await refreshDashboard();
@@ -281,7 +313,9 @@ async function bulkCompleteOperationalTasks() {
   const button = document.getElementById("bulk-complete-operational-button");
   const result = document.getElementById("bulk-complete-operational-result");
   const operationalDate = String(input?.value || "").trim();
-  const allActive = Boolean(document.getElementById("bulk-complete-all-dates")?.checked);
+  const allActive = Boolean(
+    document.getElementById("bulk-complete-all-dates")?.checked,
+  );
   if (!/^\d{4}-\d{2}-\d{2}$/.test(operationalDate)) {
     showToast("Pilih tanggal operasional yang valid.", "error");
     return;
@@ -304,8 +338,12 @@ async function bulkCompleteOperationalTasks() {
       operational_date: operationalDate,
       all_active: allActive,
     });
-    const scope = completed.all_active ? "semua tanggal aktif" : `tanggal ${operationalDate}`;
-    const message = `Selesai (${scope}): ${Number(completed.tickets_completed || 0)} tiket dan ${Number(completed.po_completed || 0)} PO menjadi COMPLETED.`;
+    const scope = completed.all_active
+      ? "semua tanggal aktif"
+      : `tanggal ${operationalDate}`;
+    const message = `Selesai (${scope}): ${Number(
+      completed.tickets_completed || 0,
+    )} tiket dan ${Number(completed.po_completed || 0)} PO menjadi COMPLETED.`;
     if (result) result.textContent = message;
     showToast(message, "success");
     await refreshDashboard();
@@ -365,10 +403,14 @@ async function submitSecurityRowsToBackend(rows = []) {
       })),
     };
   });
-  const bulkResult = await motherDuckApiPost("create_tickets_bulk", { tickets });
+  const bulkResult = await motherDuckApiPost("create_tickets_bulk", {
+    tickets,
+  });
   const created = Array.isArray(bulkResult?.created) ? bulkResult.created : [];
   if (created.length !== ticketGroups.length) {
-    throw new Error("Jumlah ticket tersimpan tidak sesuai request. Refresh data lalu cek kembali.");
+    throw new Error(
+      "Jumlah ticket tersimpan tidak sesuai request. Refresh data lalu cek kembali.",
+    );
   }
   const persistedRows = [];
   ticketGroups.forEach((ticketRows, index) => {
@@ -439,20 +481,32 @@ async function failCallToBackend(body = {}) {
 function outputRowKeyV12(row = {}) {
   const poId = String(row.ticket_po_id || "").trim();
   if (poId) return `po:${poId}`;
-  return `ticket:${String(row.ticket_id || "").trim()}\u001f${String(row.po_number || "").trim()}`;
+  return `ticket:${String(row.ticket_id || "").trim()}\u001f${String(
+    row.po_number || "",
+  ).trim()}`;
 }
 
-function mergeOutputDeltaV12(currentRows = [], deltaRows = [], activeTicketIds = null) {
+function mergeOutputDeltaV12(
+  currentRows = [],
+  deltaRows = [],
+  activeTicketIds = null,
+) {
   const hasActiveSnapshot = Array.isArray(activeTicketIds);
-  const active = new Set((activeTicketIds || []).map((value) => String(value || "").trim()).filter(Boolean));
+  const active = new Set(
+    (activeTicketIds || [])
+      .map((value) => String(value || "").trim())
+      .filter(Boolean),
+  );
   const merged = new Map();
   (currentRows || []).forEach((row) => {
     const ticketId = String(row?.ticket_id || "").trim();
-    if (!hasActiveSnapshot || active.has(ticketId)) merged.set(outputRowKeyV12(row), row);
+    if (!hasActiveSnapshot || active.has(ticketId))
+      merged.set(outputRowKeyV12(row), row);
   });
   (deltaRows || []).forEach((row) => {
     const ticketId = String(row?.ticket_id || "").trim();
-    if (!hasActiveSnapshot || active.has(ticketId)) merged.set(outputRowKeyV12(row), row);
+    if (!hasActiveSnapshot || active.has(ticketId))
+      merged.set(outputRowKeyV12(row), row);
   });
   return [...merged.values()];
 }
@@ -762,7 +816,11 @@ function applyCheckerUpdateToQueue(body = {}) {
     state.dashboard.priority = nextQueue
       .filter((q) => {
         const st = String(q.status || "").toUpperCase();
-        return !st.includes("COMPLETED") && !st.includes("EXPIRED") && !st.includes("CANCELLED");
+        return (
+          !st.includes("COMPLETED") &&
+          !st.includes("EXPIRED") &&
+          !st.includes("CANCELLED")
+        );
       })
       .slice(0, 8);
   }
@@ -923,10 +981,10 @@ function normalizeQueueSequenceBySlot(queue = []) {
       .includes("VIP")
       ? "VIP"
       : String(row.ticket_type || row.queue_no || "REG")
-            .toUpperCase()
-            .includes("DROP")
-        ? "DROP-OFF"
-        : "REG";
+          .toUpperCase()
+          .includes("DROP")
+      ? "DROP-OFF"
+      : "REG";
 
     seqBySlot[slot] = (seqBySlot[slot] || 0) + 1;
 
@@ -981,7 +1039,11 @@ function normalizeOutputDateV7(...values) {
   if (!date) return "";
 
   const pad = (number) => String(number).padStart(2, "0");
-  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  return `${pad(date.getDate())}/${pad(
+    date.getMonth() + 1,
+  )}/${date.getFullYear()} ${pad(date.getHours())}:${pad(
+    date.getMinutes(),
+  )}:${pad(date.getSeconds())}`;
 }
 
 function buildQueueFromOutputForm(outputRows = []) {
@@ -1180,7 +1242,9 @@ function buildQueueFromOutputForm(outputRows = []) {
 }
 
 function buildKpis(kpiRaw = [], tableRows = [], queue = []) {
-  queue = queue.filter((row) => !window.InboundTicketContracts.isCancelled(row));
+  queue = queue.filter(
+    (row) => !window.InboundTicketContracts.isCancelled(row),
+  );
   const raw = kpiRaw.length ? kpiRaw : tableRows;
   const totalRows = tableRows.length;
   const uniquePo = uniqueCount(
@@ -1273,7 +1337,9 @@ function buildKpis(kpiRaw = [], tableRows = [], queue = []) {
 }
 
 function buildSummary(kpiRaw = [], tableRows = [], queue = []) {
-  queue = queue.filter((row) => !window.InboundTicketContracts.isCancelled(row));
+  queue = queue.filter(
+    (row) => !window.InboundTicketContracts.isCancelled(row),
+  );
   const completed = queue.filter((q) => q.status.includes("COMPLETED")).length;
   const waiting = queue.filter(
     (q) =>
@@ -1454,7 +1520,11 @@ function buildDashboardFromV2(response) {
     priority: sortQueueBySlotSequence(
       queue.filter((q) => {
         const st = String(q.status || "").toUpperCase();
-        return !st.includes("COMPLETED") && !st.includes("EXPIRED") && !st.includes("CANCELLED");
+        return (
+          !st.includes("COMPLETED") &&
+          !st.includes("EXPIRED") &&
+          !st.includes("CANCELLED")
+        );
       }),
     ).slice(0, 8),
     dock: Object.values(dockMap).slice(0, 10),
@@ -1476,9 +1546,11 @@ function updateApiPill(mode, text) {
     mode === "on"
       ? "bg-success"
       : mode === "loading"
-        ? "bg-warning"
-        : "bg-error";
-  pill.innerHTML = `<span class="w-2 h-2 rounded-full ${color} ${mode === "on" ? "status-pulse" : ""}"></span>${text}`;
+      ? "bg-warning"
+      : "bg-error";
+  pill.innerHTML = `<span class="w-2 h-2 rounded-full ${color} ${
+    mode === "on" ? "status-pulse" : ""
+  }"></span>${text}`;
 }
 
 function shouldUseOutputOnlyInitialLoad() {
@@ -1583,9 +1655,14 @@ async function ensureFullDataForDaftar() {
 async function refreshDashboard() {
   try {
     if (
-      ["checker", "laporan", "monitor", "antrian", "panggil", "dropoff"].includes(
-        state.page,
-      ) &&
+      [
+        "checker",
+        "laporan",
+        "monitor",
+        "antrian",
+        "panggil",
+        "dropoff",
+      ].includes(state.page) &&
       v2RawResponse
     ) {
       updateApiPill("loading", "Refresh Output form...");
@@ -1730,7 +1807,11 @@ function updatePoLookupUi(lookup) {
   // Slot dari master PO hanya merupakan suggestion. Jika Security sudah memilih
   // slot secara manual, pilihan tersebut tidak boleh ditimpa oleh lookup ulang
   // (lookup juga dipanggil lagi saat Buat Tiket).
-  if (form.slot && lookup?.summary?.slot && form.slot.dataset.manualSelection !== "true")
+  if (
+    form.slot &&
+    lookup?.summary?.slot &&
+    form.slot.dataset.manualSelection !== "true"
+  )
     form.slot.value = String(lookup.summary.slot || form.slot.value || "3");
 
   const total = document.getElementById("security-total-qty");
@@ -2293,8 +2374,8 @@ async function submitChecker(e) {
   const targetStatus = requested.includes("WAITING GR")
     ? "WAITING GR"
     : requested.includes("UNLOADING")
-      ? "UNLOADING"
-      : "CALLED";
+    ? "UNLOADING"
+    : "CALLED";
 
   body.status = targetStatus;
   body.unload_sla = targetStatus === "WAITING GR" ? "ON PROCESS" : "ON PROCESS";
@@ -2585,7 +2666,9 @@ async function markDriverCallFailedFromKey(encodedKey = "", btn = null) {
   }
 
   const ok = confirm(
-    `Expire antrian ${row.queue_no || "-"}? Driver wajib registrasi ulang kalau datang lagi.`,
+    `Expire antrian ${
+      row.queue_no || "-"
+    }? Driver wajib registrasi ulang kalau datang lagi.`,
   );
   if (!ok) return;
 
@@ -2654,41 +2737,77 @@ function formatDebugTimestamp(value) {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat("id-ID", {
-    timeZone: "Asia/Jakarta", dateStyle: "medium", timeStyle: "medium",
-  }).format(date) + " WIB";
+  return (
+    new Intl.DateTimeFormat("id-ID", {
+      timeZone: "Asia/Jakarta",
+      dateStyle: "medium",
+      timeStyle: "medium",
+    }).format(date) + " WIB"
+  );
 }
 
 function renderSupersetFreshness(freshness = null) {
   const target = document.getElementById("superset-freshness-output");
   if (!target) return;
   if (!freshness) {
-    target.innerHTML = '<p class="text-sm text-on-surface-variant">Klik cek freshness untuk membaca data live MotherDuck.</p>';
+    target.innerHTML =
+      '<p class="text-sm text-on-surface-variant">Klik cek freshness untuk membaca data live MotherDuck.</p>';
     return;
   }
   const todayCount = Number(freshness.received_today_count || 0);
   const samples = Array.isArray(freshness.received_today_samples)
-    ? freshness.received_today_samples : [];
+    ? freshness.received_today_samples
+    : [];
   target.innerHTML = `
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-      <div class="rounded-lg border border-outline-variant bg-surface-container-low p-3"><p class="text-xs uppercase font-bold text-on-surface-variant">Master PO</p><p class="text-2xl font-black">${Number(freshness.total_master_po || 0).toLocaleString("id-ID")}</p></div>
-      <div class="rounded-lg border border-primary/30 bg-primary-container/10 p-3"><p class="text-xs uppercase font-bold text-on-surface-variant">Received ${esc(freshness.received_date_wib || "hari ini")}</p><p class="text-2xl font-black text-primary">${todayCount.toLocaleString("id-ID")}</p></div>
-      <div class="rounded-lg border border-outline-variant bg-surface-container-low p-3"><p class="text-xs uppercase font-bold text-on-surface-variant">Sync terakhir</p><p class="text-sm font-bold leading-5">${esc(formatDebugTimestamp(freshness.last_synced_at))}</p></div>
+      <div class="rounded-lg border border-outline-variant bg-surface-container-low p-3"><p class="text-xs uppercase font-bold text-on-surface-variant">Master PO</p><p class="text-2xl font-black">${Number(
+        freshness.total_master_po || 0,
+      ).toLocaleString("id-ID")}</p></div>
+      <div class="rounded-lg border border-primary/30 bg-primary-container/10 p-3"><p class="text-xs uppercase font-bold text-on-surface-variant">Received ${esc(
+        freshness.received_date_wib || "hari ini",
+      )}</p><p class="text-2xl font-black text-primary">${todayCount.toLocaleString(
+    "id-ID",
+  )}</p></div>
+      <div class="rounded-lg border border-outline-variant bg-surface-container-low p-3"><p class="text-xs uppercase font-bold text-on-surface-variant">Sync terakhir</p><p class="text-sm font-bold leading-5">${esc(
+        formatDebugTimestamp(freshness.last_synced_at),
+      )}</p></div>
     </div>
-    <p class="text-xs text-on-surface-variant mb-2">Sample PO dengan received time tanggal ${esc(freshness.received_date_wib || "hari ini")}</p>
-    <div class="overflow-x-auto"><table class="w-full text-xs"><thead><tr class="text-left text-on-surface-variant border-b border-outline-variant"><th class="py-2 pr-3">PO</th><th class="py-2 pr-3">Vendor</th><th class="py-2">Received time</th></tr></thead><tbody>${samples.length ? samples.map((row) => `<tr class="border-b border-outline-variant/50"><td class="py-2 pr-3 font-bold">${esc(row.po_number || "-")}</td><td class="py-2 pr-3">${esc(row.vendor_name || "-")}</td><td class="py-2">${esc(row.fulfillment_arrived_start_at || "-")}</td></tr>`).join("") : '<tr><td colspan="3" class="py-3 text-on-surface-variant">Belum ada received time yang cocok untuk tanggal ini.</td></tr>'}</tbody></table></div>`;
+    <p class="text-xs text-on-surface-variant mb-2">Sample PO dengan received time tanggal ${esc(
+      freshness.received_date_wib || "hari ini",
+    )}</p>
+    <div class="overflow-x-auto"><table class="w-full text-xs"><thead><tr class="text-left text-on-surface-variant border-b border-outline-variant"><th class="py-2 pr-3">PO</th><th class="py-2 pr-3">Vendor</th><th class="py-2">Received time</th></tr></thead><tbody>${
+      samples.length
+        ? samples
+            .map(
+              (row) =>
+                `<tr class="border-b border-outline-variant/50"><td class="py-2 pr-3 font-bold">${esc(
+                  row.po_number || "-",
+                )}</td><td class="py-2 pr-3">${esc(
+                  row.vendor_name || "-",
+                )}</td><td class="py-2">${esc(
+                  row.fulfillment_arrived_start_at || "-",
+                )}</td></tr>`,
+            )
+            .join("")
+        : '<tr><td colspan="3" class="py-3 text-on-surface-variant">Belum ada received time yang cocok untuk tanggal ini.</td></tr>'
+    }</tbody></table></div>`;
 }
 
 async function loadSupersetFreshness() {
   const target = document.getElementById("superset-freshness-output");
-  if (target) target.innerHTML = '<p class="text-sm text-on-surface-variant">Membaca freshness MotherDuck...</p>';
+  if (target)
+    target.innerHTML =
+      '<p class="text-sm text-on-surface-variant">Membaca freshness MotherDuck...</p>';
   try {
     const freshness = await motherDuckApiGet("superset_freshness");
     state.debug = { ...(state.debug || {}), superset_freshness: freshness };
     renderSupersetFreshness(freshness);
     showToast("Freshness Superset diperbarui", "success");
   } catch (error) {
-    if (target) target.innerHTML = `<p class="text-sm text-error">Gagal membaca freshness: ${esc(error.message || "Unknown error")}</p>`;
+    if (target)
+      target.innerHTML = `<p class="text-sm text-error">Gagal membaca freshness: ${esc(
+        error.message || "Unknown error",
+      )}</p>`;
     showToast("Freshness Superset gagal dibaca", "error");
   }
 }
@@ -3243,7 +3362,9 @@ async function submitSecurity(e) {
       if (m) return `${m[1]}-${m[2]}-${m[3]}`;
       const dmy = direct.match(/(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/);
       if (dmy)
-        return `${dmy[3]}-${String(dmy[2]).padStart(2, "0")}-${String(dmy[1]).padStart(2, "0")}`;
+        return `${dmy[3]}-${String(dmy[2]).padStart(2, "0")}-${String(
+          dmy[1],
+        ).padStart(2, "0")}`;
     }
     return getOperationalDateKey(
       row.register_time || row.created_at || row.Timestamp || new Date(),
@@ -3290,7 +3411,10 @@ async function submitSecurity(e) {
       const operationalRows = allOutputRows.filter((row) => {
         const op = getRowOperationalDateKey(row);
         const st = String(row.status || "WAITING").toUpperCase();
-        const active = !st.includes("COMPLETED") && !st.includes("EXPIRED") && !st.includes("CANCELLED");
+        const active =
+          !st.includes("COMPLETED") &&
+          !st.includes("EXPIRED") &&
+          !st.includes("CANCELLED");
         return op === currentOp || active;
       });
 
@@ -3397,8 +3521,8 @@ async function submitSecurity(e) {
     typeof window.submitChecker === "function"
       ? window.submitChecker
       : typeof submitChecker === "function"
-        ? submitChecker
-        : null;
+      ? submitChecker
+      : null;
 
   if (!originalSubmitChecker) return;
 
@@ -3532,7 +3656,9 @@ async function submitSecurity(e) {
 
     const label = target === "DONE GR" ? "Done GR" : "Selesai";
     const ok = confirm(
-      `${label} untuk ${row.queue_no || "-"}?\n\nPlat: ${row.plat_number || "-"}\nStatus akan menjadi ${target}.`,
+      `${label} untuk ${row.queue_no || "-"}?\n\nPlat: ${
+        row.plat_number || "-"
+      }\nStatus akan menjadi ${target}.`,
     );
     if (!ok) return;
 
@@ -3662,7 +3788,9 @@ async function submitSecurity(e) {
       return;
     }
     const ok = confirm(
-      `Yakin ticket ${row.queue_no || "-"} akan dibuat EXPIRED pada step 4/4?\n\nDriver sudah dipanggil 3 kali dan tidak datang. Setelah expired, driver wajib registrasi ulang.`,
+      `Yakin ticket ${
+        row.queue_no || "-"
+      } akan dibuat EXPIRED pada step 4/4?\n\nDriver sudah dipanggil 3 kali dan tidak datang. Setelah expired, driver wajib registrasi ulang.`,
     );
     if (!ok) return;
     if (btn) {
@@ -3888,7 +4016,9 @@ async function submitSecurity(e) {
         ? mergeOutputDeltaV12(
             currentRows,
             responseRows,
-            Array.isArray(outputResponse?.ticket_ids) ? outputResponse.ticket_ids : null,
+            Array.isArray(outputResponse?.ticket_ids)
+              ? outputResponse.ticket_ids
+              : null,
           )
         : responseRows;
       const signature = buildOutputSignatureV11(rows);
@@ -3933,7 +4063,11 @@ async function submitSecurity(e) {
       updateSyncIndicatorV11("error", "Sinkron otomatis gagal");
     } finally {
       busy = false;
-      if (rerunRequested && !stopped && document.visibilityState === "visible") {
+      if (
+        rerunRequested &&
+        !stopped &&
+        document.visibilityState === "visible"
+      ) {
         rerunRequested = false;
         setTimeout(() => runAutoSyncV11(true), 100);
       }
@@ -4196,7 +4330,8 @@ async function submitSecurity(e) {
 
   function deriveMasterStatusV15(poRows = []) {
     if (!poRows.length) return "WAITING";
-    if (poRows.every((row) => String(row.status).toUpperCase() === "CANCELLED")) return "CANCELLED";
+    if (poRows.every((row) => String(row.status).toUpperCase() === "CANCELLED"))
+      return "CANCELLED";
     const statuses = poRows.map((row) =>
       String(row.status || "WAITING").toUpperCase(),
     );
@@ -4242,7 +4377,9 @@ async function submitSecurity(e) {
           String(a.po_number).localeCompare(String(b.po_number)),
       );
       const first = poRows[0];
-      const activePos = poRows.filter((row) => !window.InboundTicketContracts.isCancelled(row));
+      const activePos = poRows.filter(
+        (row) => !window.InboundTicketContracts.isCancelled(row),
+      );
       const status = deriveMasterStatusV15(poRows);
       const poNumbers = poRows.map((row) => row.po_number).filter(Boolean);
       const ticketTypeV18 = String(first.ticket_type || "")
@@ -4269,7 +4406,8 @@ async function submitSecurity(e) {
         ...new Set(poRows.map((row) => row.checker_name).filter(Boolean)),
       ];
       const allDoneGr = activePos.length > 0 && grDone === activePos.length;
-      const allCheckerDone = activePos.length > 0 && checkerDone === activePos.length;
+      const allCheckerDone =
+        activePos.length > 0 && checkerDone === activePos.length;
       const totalQty = activePos.reduce(
         (sum, row) => sum + toNumberV2(row.total_po_qty),
         0,
@@ -4342,12 +4480,12 @@ async function submitSecurity(e) {
             ? "LATE"
             : "TERCAPAI"
           : poRows.some(
-                (row) => String(row.sla_status).toUpperCase() === "LATE",
-              )
-            ? "LATE"
-            : first.start_unloading_at
-              ? "ON PROCESS"
-              : "WAITING START UNLOADING",
+              (row) => String(row.sla_status).toUpperCase() === "LATE",
+            )
+          ? "LATE"
+          : first.start_unloading_at
+          ? "ON PROCESS"
+          : "WAITING START UNLOADING",
         unload_sla: allDoneGr
           ? poRows.some(
               (row) => String(row.sla_status).toUpperCase() === "LATE",
@@ -4355,12 +4493,12 @@ async function submitSecurity(e) {
             ? "LATE"
             : "TERCAPAI"
           : poRows.some(
-                (row) => String(row.sla_status).toUpperCase() === "LATE",
-              )
-            ? "LATE"
-            : first.start_unloading_at
-              ? "ON PROCESS"
-              : "WAITING START UNLOADING",
+              (row) => String(row.sla_status).toUpperCase() === "LATE",
+            )
+          ? "LATE"
+          : first.start_unloading_at
+          ? "ON PROCESS"
+          : "WAITING START UNLOADING",
       };
     });
   }
@@ -4586,7 +4724,9 @@ async function submitSecurity(e) {
           String(base.ticket_type || "").toUpperCase() === "DROP-OFF"
             ? base.slot || grouped.slot || "3"
             : base.slot || grouped.slot || "3";
-        const ticketId = `IBT-${Date.now().toString(36).toUpperCase()}-${String(vehicleIndex + 1).padStart(2, "0")}`;
+        const ticketId = `IBT-${Date.now().toString(36).toUpperCase()}-${String(
+          vehicleIndex + 1,
+        ).padStart(2, "0")}`;
         const queueNo = nextLocalQueueNoFromList(
           base.ticket_type,
           rowSlot,
@@ -4668,7 +4808,9 @@ async function submitSecurity(e) {
           : outputRows;
       // Cache lokal hanya diisi setelah MotherDuck mengonfirmasi ticket tersimpan.
       // Ini mencegah nomor terlihat sukses di device Security tetapi tidak muncul di Checker.
-      const savedTicketIds = new Set(savedRows.map((row) => String(row.ticket_id || "")));
+      const savedTicketIds = new Set(
+        savedRows.map((row) => String(row.ticket_id || "")),
+      );
       const localRowsV15 = getLocalTickets().filter(
         (row) => !savedTicketIds.has(String(row.ticket_id || "")),
       );
@@ -4775,11 +4917,13 @@ async function submitSecurity(e) {
         body.status === "CALLED"
           ? "Panggil driver ke gate?"
           : body.status === "UNLOADING"
-            ? "Mulai unloading?"
-            : "Finish unloading? Semua PO wajib Done Checking.";
+          ? "Mulai unloading?"
+          : "Finish unloading? Semua PO wajib Done Checking.";
 
       const approved = confirm(
-        `${label}\n\nQueue: ${body.queue_no || "-"}\nPlat: ${body.plat_number || "-"}\nGate: ${body.gate || "-"}`,
+        `${label}\n\nQueue: ${body.queue_no || "-"}\nPlat: ${
+          body.plat_number || "-"
+        }\nGate: ${body.gate || "-"}`,
       );
       if (!approved) return;
     }
@@ -5011,7 +5155,9 @@ async function submitSecurity(e) {
       qtyInput?.classList.add("invalid");
       qtyInput?.focus();
       return showToast(
-        `Actual Qty PO ${po.po_number || "-"} wajib diisi dan harus lebih dari 0.`,
+        `Actual Qty PO ${
+          po.po_number || "-"
+        } wajib diisi dan harus lebih dari 0.`,
       );
     }
 
@@ -5089,7 +5235,9 @@ async function submitSecurity(e) {
     if (!ticket) return showToast("Ticket tidak ditemukan.");
     if (!ticket.all_done_gr) {
       return showToast(
-        `Handover belum bisa. GR selesai ${ticket.gr_done_count || 0}/${ticket.gr_total_count || ticket.po_rows?.length || 0} PO.`,
+        `Handover belum bisa. GR selesai ${ticket.gr_done_count || 0}/${
+          ticket.gr_total_count || ticket.po_rows?.length || 0
+        } PO.`,
       );
     }
     if (!confirm(`Handover GRN ${ticket.queue_no || "-"}?`)) return;
@@ -5270,11 +5418,12 @@ async function submitSecurity(e) {
     );
     const manualMetricsValid = items
       .filter((item) => item.is_manual_po === true)
-      .every((item) =>
-        window.InboundTicketContracts?.validateManualPoMetrics(
-          item.total_po_qty,
-          item.count_po_sku,
-        )?.valid,
+      .every(
+        (item) =>
+          window.InboundTicketContracts?.validateManualPoMetrics(
+            item.total_po_qty,
+            item.count_po_sku,
+          )?.valid,
       );
 
     return {
@@ -5363,12 +5512,13 @@ async function submitSecurity(e) {
       typeof getOperationalDateKey === "function"
         ? getOperationalDateKey(new Date())
         : "";
-    const sameSlot = queue.filter((row) =>
-      String(row.slot || queueSlotValue(row) || "") === slotText &&
-      (!operationalDate ||
-        (typeof getRowOperationalDateKey === "function"
-          ? getRowOperationalDateKey(row)
-          : String(row.operational_date || "")) === operationalDate),
+    const sameSlot = queue.filter(
+      (row) =>
+        String(row.slot || queueSlotValue(row) || "") === slotText &&
+        (!operationalDate ||
+          (typeof getRowOperationalDateKey === "function"
+            ? getRowOperationalDateKey(row)
+            : String(row.operational_date || "")) === operationalDate),
     );
     const nextSeq =
       sameSlot.reduce(
@@ -5538,8 +5688,8 @@ async function submitSecurity(e) {
     typeof window.submitChecker === "function"
       ? window.submitChecker
       : typeof submitChecker === "function"
-        ? submitChecker
-        : null;
+      ? submitChecker
+      : null;
 
   if (!submitCheckerBeforeV180) return;
 
@@ -5947,7 +6097,9 @@ async function submitSecurity(e) {
       qtyInput?.classList.add("invalid");
       qtyInput?.focus();
       return showToast(
-        `Actual Qty PO ${po.po_number || "-"} wajib diisi dan harus lebih dari 0.`,
+        `Actual Qty PO ${
+          po.po_number || "-"
+        } wajib diisi dan harus lebih dari 0.`,
       );
     }
 
@@ -6259,5 +6411,7 @@ async function submitSecurity(e) {
     }
     return result;
   };
-  try { submitChecker = window.submitChecker; } catch (error) {}
+  try {
+    submitChecker = window.submitChecker;
+  } catch (error) {}
 })();
