@@ -17105,7 +17105,25 @@ if (window.__exportCsvV19) {
     wmIdleStateV27.status = "all";
     wmRenderIdleModalV27();
   };
+  // V31 - Reliable Gate Card Click Handler
+  if (!window.__wmGateIdleClickBoundV31) {
+    window.__wmGateIdleClickBoundV31 = true;
 
+    document.addEventListener("click", function (event) {
+      const card = event.target.closest(".wm19-gate-card[data-gate]");
+      if (!card) return;
+
+      const gate = String(card.dataset.gate || "").trim();
+      if (!gate) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (typeof window.wmOpenGateIdleV27 === "function") {
+        window.wmOpenGateIdleV27(gate);
+      }
+    });
+  }
   window.wmCloseGateIdleV27 = function wmCloseGateIdleV27() {
     wmIdleStateV27.gate = "";
     document.getElementById("wm27-idle-modal")?.remove();
