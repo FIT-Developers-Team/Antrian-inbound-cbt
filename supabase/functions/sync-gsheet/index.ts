@@ -39,7 +39,7 @@ function format(row: Record<string, unknown>): Record<string, unknown> {
   return {
     Timestamp: dateTime(row.created_at || row.register_time), ticket_id: row.ticket_id || "", queue_no: row.queue_no || "",
     ticket_type: row.ticket_type || "", slot: row.slot || "", fleet_type: row.fleet_type || "", plat_number: row.plat_number || "",
-    driver_name: row.driver_name || "", phone_number: row.phone_number || "", ktp_6_digit: row.ktp_6_digit || "",
+    driver_name: row.driver_name || "", phone_number: row.phone_number || "", ktp_6_digit: row.ktp_6_digit || "", tkbm_count: Number(row.tkbm_count || 0),
     vendor_name: row.vendor_name || "", po_number: row.po_number || "", total_po_qty: row.total_po_qty || 0,
     actual_quantity: row.actual_quantity || 0, count_po_sku: row.count_po_sku || 0, status: row.status || "", gate: row.gate || "",
     unload_sla: row.unload_sla || "", source: row.source || "Supabase", created_at: dateTime(row.created_at),

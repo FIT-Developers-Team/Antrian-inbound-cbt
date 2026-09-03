@@ -19,6 +19,7 @@ create table if not exists public.tickets (
   operational_date date,
   registered_by text,
   ktp_6_digit text,
+  tkbm_count integer not null default 0 check (tkbm_count >= 0),
   unload_sla text,
   source text,
   called_at timestamptz,
@@ -229,7 +230,8 @@ select
   coalesce(sum(p.count_sku) over (partition by t.ticket_id), 0) as ticket_total_sku,
   max(p.gr_done_at) over (partition by t.ticket_id) as ticket_done_gr_at,
   count(*) filter (where upper(coalesce(p.gr_status, '')) = 'DONE GR') over (partition by t.ticket_id)
-    = count(*) over (partition by t.ticket_id) as ticket_all_done_gr
+    = count(*) over (partition by t.ticket_id) as ticket_all_done_gr,
+  t.tkbm_count
 from public.tickets t
 left join public.ticket_pos p on p.ticket_id = t.ticket_id;
 
@@ -242,7 +244,7 @@ select t.ticket_id, t.queue_no, t.ticket_type, t.status, t.vendor_name,
   t.created_at, t.updated_at,
   coalesce(sum(p.request_quantity), 0) as request_quantity,
   coalesce(sum(p.actual_quantity), 0) as actual_quantity,
-  count(p.ticket_po_id) as po_count
+  count(p.ticket_po_id) as po_count, t.tkbm_count
 from public.tickets t left join public.ticket_pos p on p.ticket_id = t.ticket_id
 group by t.ticket_id;
 
@@ -307,7 +309,7 @@ begin
 
     insert into public.tickets(ticket_id, queue_no, ticket_type, status, vendor_name,
       fleet_type, plat_number, driver_name, driver_phone, gate, slot, operational_date,
-      registered_by, ktp_6_digit, unload_sla, source)
+      registered_by, ktp_6_digit, unload_sla, source, tkbm_count)
     values(v_ticket_id, v_queue_no, v_ticket_type,
       coalesce(nullif(btrim(v_ticket->>'status'), ''), 'WAITING'), nullif(btrim(v_ticket->>'vendor_name'), ''),
       nullif(btrim(v_ticket->>'fleet_type'), ''), nullif(btrim(v_ticket->>'plat_number'), ''),
@@ -315,7 +317,8 @@ begin
       nullif(btrim(v_ticket->>'gate'), ''), v_slot, v_operational_date,
       nullif(btrim(v_ticket->>'registered_by'), ''), nullif(btrim(v_ticket->>'ktp_6_digit'), ''),
       coalesce(nullif(btrim(v_ticket->>'unload_sla'), ''), 'ON PROCESS'),
-      coalesce(nullif(btrim(v_ticket->>'source'), ''), 'Supabase'));
+      coalesce(nullif(btrim(v_ticket->>'source'), ''), 'Supabase'),
+      greatest(coalesce((v_ticket->>'tkbm_count')::integer, 0), 0));
 
     for v_po in select value from jsonb_array_elements(v_item->'pos')
     loop

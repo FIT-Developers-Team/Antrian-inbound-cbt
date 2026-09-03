@@ -475,14 +475,51 @@ function renderPoLookupSummary(lookup) {
     )
     .join("");
 
+  const manualMetrics = found
+    .filter((item) => item.is_manual_po === true)
+    .map((item) => {
+      const po = String(item.po_number || item.po_input || "").trim();
+      const encoded = encodeURIComponent(po);
+      return `<div class="mt-3 rounded-lg border border-warning/35 bg-warning/5 p-3" data-manual-po-metrics="${esc(po)}">
+        <div class="font-bold text-on-surface">Data PO manual · ${esc(po)}</div>
+        <div class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <label class="flex flex-col gap-1"><span class="font-bold">Total Qty PO</span><input type="number" min="1" step="1" inputmode="numeric" class="form-input" value="${esc(item.total_po_qty || "")}" placeholder="Wajib diisi" oninput="updateManualPoMetricV24(decodeURIComponent('${encoded}'),'total_po_qty',this.value)" /></label>
+          <label class="flex flex-col gap-1"><span class="font-bold">Total SKU PO</span><input type="number" min="1" step="1" inputmode="numeric" class="form-input" value="${esc(item.count_po_sku || "")}" placeholder="Wajib diisi" oninput="updateManualPoMetricV24(decodeURIComponent('${encoded}'),'count_po_sku',this.value)" /></label>
+        </div>
+        <div class="mt-1 text-[11px] text-warning">Wajib diisi karena PO tidak ditemukan di master.</div>
+      </div>`;
+    })
+    .join("");
+
   return `<div id="po-lookup-summary" class="mt-3 rounded-lg border border-outline-variant/40 bg-surface-container/35 p-3 text-[12px] text-on-surface-variant">
     <div class="font-bold text-on-surface mb-2">PO terdeteksi: ${num(found.length)} valid${missing.length ? `, ${num(missing.length)} tidak ketemu` : ""}${vendorMismatch.length ? `, ${num(vendorMismatch.length)} beda vendor` : ""}</div>
     <div>${chips || `<span class="text-on-surface-variant">Belum ada PO valid.</span>`}</div>
     ${missing.length ? `<div class="mt-2"><span class="font-bold text-error">Missing:</span> ${missingChips}</div>` : ""}
     ${vendorMismatch.length ? `<div class="mt-2"><span class="font-bold text-warning">Beda vendor:</span> ${mismatchChips}</div>` : ""}
+    ${manualMetrics}
     <div class="mt-2">Submit: 1 plat = 1 mobil/antrian. Banyak PO dengan vendor sama di 1 plat akan digabung di 1 baris Output form.</div>
   </div>`;
 }
+
+window.updateManualPoMetricV24 = function updateManualPoMetricV24(poNumber, field, value) {
+  const po = String(poNumber || "").trim();
+  if (!po || !["total_po_qty", "count_po_sku"].includes(field)) return;
+  window.__manualPoMetricsV24 = window.__manualPoMetricsV24 || {};
+  const current = window.__manualPoMetricsV24[po] || {};
+  current[field] = String(value ?? "").trim();
+  window.__manualPoMetricsV24[po] = current;
+  const lookup = state.poLookup;
+  const item = lookup?.items?.find((row) => String(row.po_number || row.po_input || "").trim() === po);
+  if (item) item[field] = Number(value || 0);
+  if (lookup?.summary) {
+    lookup.summary.total_po_qty = (lookup.items || []).reduce((sum, row) => sum + Number(row.total_po_qty || 0), 0);
+    lookup.summary.count_po_sku = (lookup.items || []).reduce((sum, row) => sum + Number(row.count_po_sku || 0), 0);
+    const total = document.getElementById("security-total-qty");
+    const sku = document.getElementById("security-count-sku");
+    if (total) total.textContent = num(lookup.summary.total_po_qty);
+    if (sku) sku.textContent = num(lookup.summary.count_po_sku);
+  }
+};
 
 function splitPlateParts(value = "") {
   const cleaned = normalizePlateValue(value);
@@ -851,39 +888,60 @@ function decodeDriverTicketPayload(value = "") {
 
 function getDriverTicketPayloadFromUrl() {
   const params = new URLSearchParams(location.search);
+  const ticketId = String(params.get("driver_ticket_id") || "").trim();
+  if (ticketId) return { ticket_id: ticketId };
   const raw = params.get("driver_ticket") || params.get("ticket") || "";
   return decodeDriverTicketPayload(raw);
 }
 
 function isDriverTrackMode() {
   const params = new URLSearchParams(location.search);
-  return params.has("driver_ticket") || params.has("ticket");
+  return (
+    params.has("driver_ticket_id") ||
+    params.has("driver_ticket") ||
+    params.has("ticket")
+  );
 }
 
 function makeDriverTrackUrl(row = {}) {
-  const payload = {
-    ticket_id: row.ticket_id || "",
-    queue_no: row.queue_no || "",
-    vendor_name: row.vendor_name || "",
-    po_number: row.po_number || "",
-    plat_number: row.plat_number || "",
-    driver_name: row.driver_name || "",
-    fleet_type: row.fleet_type || "",
-    gate: row.gate || "-",
-    status: row.status || "WAITING",
-    register_time:
-      row.register_time || row.created_at || formatDateTimeLocal(new Date()),
-    created_at:
-      row.created_at || row.register_time || formatDateTimeLocal(new Date()),
-  };
+  const ticketId = String(row.ticket_id || "").trim();
+  const isPreview =
+    !ticketId ||
+    ticketId.includes("-PREVIEW-") ||
+    String(row.source || "").toUpperCase() === "SECURITY_PRINT_PREVIEW";
+  const payload = isPreview
+    ? {
+        ticket_id: ticketId,
+        queue_no: row.queue_no || "",
+        vendor_name: row.vendor_name || "",
+        po_number: row.po_number || "",
+        plat_number: row.plat_number || "",
+        driver_name: row.driver_name || "",
+        fleet_type: row.fleet_type || "",
+        gate: row.gate || "-",
+        status: row.status || "WAITING",
+        register_time:
+          row.register_time || row.created_at || formatDateTimeLocal(new Date()),
+        created_at:
+          row.created_at || row.register_time || formatDateTimeLocal(new Date()),
+      }
+    : {
+        ticket_id: ticketId,
+        queue_no: row.queue_no || "",
+        plat_number: row.plat_number || "",
+      };
   const url = new URL(location.origin + location.pathname);
-  url.searchParams.set("driver_ticket", encodeDriverTicketPayload(payload));
+  if (isPreview) {
+    url.searchParams.set("driver_ticket", encodeDriverTicketPayload(payload));
+  } else {
+    url.searchParams.set("driver_ticket_id", ticketId);
+  }
   return url.toString();
 }
 
 function qrImageUrl(text = "") {
   return (
-    "https://quickchart.io/qr?size=180&margin=1&text=" +
+    "https://quickchart.io/qr?size=400&margin=4&ecLevel=M&dark=000000&light=ffffff&text=" +
     encodeURIComponent(text)
   );
 }
@@ -919,6 +977,9 @@ function getDriverTicketEffectiveRow() {
 
 function driverWaitingLabel(row = {}) {
   const st = String(row.status || "").toUpperCase();
+  if (st === "CANCELLED") return "Dibatalkan";
+  if (["COMPLETED", "DONE GR"].includes(st)) return "Selesai";
+  if (window.InboundTicketContracts?.isDoneGrTerminal(row)) return "Selesai";
   if (st.includes("EXPIRED")) {
     const start = row.register_time || row.created_at;
     const end = row.expired_at || row.updated_at;
@@ -1100,7 +1161,11 @@ function buildSecurityPreviewRowsForPrint() {
 
   const lookup = lookupPo(true);
   if (!lookup || !lookup.all_found) {
-    showToast("PO wajib valid dan sesuai Vendor Name sebelum print.");
+    showToast(
+      lookup?.summary?.manual_metrics_valid === false
+        ? "Total Qty dan Total SKU wajib diisi untuk setiap PO manual sebelum print."
+        : "PO wajib valid dan sesuai Vendor Name sebelum print.",
+    );
     return [];
   }
 
@@ -1401,6 +1466,7 @@ function printSecurityTickets(rowsOverride = null, winOverride = null) {
           <div class="qrbox">
             <img src="${esc(qrUrl)}" alt="QR Driver Status" />
             <div>Scan untuk lihat status antrian & jam menunggu</div>
+            <div class="driver-contact"><b>No. Telp Driver</b><span>${esc(String(r.phone_number || "").trim() || String(r.driver_phone || "").trim() || "-")}</span></div>
           </div>
         </div>
       </div>`;
@@ -1424,14 +1490,16 @@ function printSecurityTickets(rowsOverride = null, winOverride = null) {
   .sub { color: #6b7280; font-size: 6.5pt; margin-top: .5mm; text-transform: uppercase; letter-spacing: .1em; }
   .status { border: .25mm solid #f97316; color: #ea580c; background: #fff7ed; font-weight: 900; border-radius: 99mm; padding: 1.2mm 2mm; font-size: 7pt; white-space: nowrap; }
   .queue { text-align: center; font-family: "Courier New", monospace; font-size: 30pt; line-height: 1.08; color: #1d4ed8; font-weight: 900; margin: 3mm 0; letter-spacing: .02em; white-space: nowrap; }
-  .main { display: grid; grid-template-columns: minmax(0, 1fr) 28mm; gap: 2.5mm; align-items: start; flex: 1; min-height: 0; }
+  .main { display: grid; grid-template-columns: minmax(0, 1fr) 37mm; gap: 2mm; align-items: start; flex: 1; min-height: 0; }
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5mm; align-content: start; }
   .grid div { border: .25mm solid #d1d5db; border-radius: 1.5mm; padding: 1.4mm; min-height: 0; overflow: hidden; }
   b { display: block; font-size: 5.8pt; color: #6b7280; text-transform: uppercase; letter-spacing: .06em; margin-bottom: .7mm; }
   span { display: block; font-size: 7.2pt; line-height: 1.18; font-weight: 700; overflow-wrap: anywhere; }
-  .qrbox { border: .25mm solid #d1d5db; border-radius: 2mm; padding: 1.5mm; text-align: center; align-self: start; }
-  .qrbox img { width: 25mm; height: 25mm; object-fit: contain; display: block; margin: 0 auto 1mm; }
+  .qrbox { border: .25mm solid #d1d5db; border-radius: 2mm; padding: 1mm; text-align: center; align-self: start; }
+  .qrbox img { width: 34mm; height: 34mm; object-fit: contain; image-rendering: pixelated; display: block; margin: 0 auto 1mm; }
   .qrbox div { font-size: 5.6pt; color: #374151; font-weight: 700; line-height: 1.2; }
+  .qrbox .driver-contact { margin-top: 2mm; padding-top: 2mm; border-top: .25mm solid #d1d5db; }
+  .driver-contact span { font-size: 8pt; color: #111827; }
   @media screen { body { background: #e5e7eb; padding: 8mm 0; } .ticket { background: #fff; margin: 0 auto 8mm; box-shadow: 0 4mm 10mm rgba(15,23,42,.16); } }
   @media print { html, body { width: auto; } }
 </style>
@@ -1704,7 +1772,7 @@ function setCheckerSubmitButtonState(stateName = "ready", label = "") {
 function getCheckerActiveRows() {
   return (state.dashboard?.queue || []).filter((r) => {
     const st = String(r.status || "").toUpperCase();
-    return !st.includes("COMPLETED") && !st.includes("EXPIRED");
+    return !st.includes("COMPLETED") && !st.includes("EXPIRED") && !st.includes("CANCELLED");
   });
 }
 
@@ -1946,6 +2014,9 @@ function queueWaitingStartValue(row = {}) {
 }
 
 function queueWaitingText(row = {}) {
+  const status = String(row.status || "").trim().toUpperCase();
+  if (["COMPLETED", "DONE GR"].includes(status)) return "Selesai";
+  if (window.InboundTicketContracts?.isDoneGrTerminal(row)) return "Selesai";
   return liveWaitingText(queueWaitingStartValue(row), row.completed_at);
 }
 
@@ -2571,7 +2642,7 @@ function getMonitorSummary(rows = []) {
   ).length;
   const active = rows.filter((r) => {
     const st = String(r.status || "").toUpperCase();
-    return !st.includes("COMPLETED") && !st.includes("EXPIRED");
+    return !st.includes("COMPLETED") && !st.includes("EXPIRED") && !st.includes("CANCELLED");
   }).length;
 
   return {
@@ -3616,7 +3687,7 @@ function pageDebug() {
     </div>
     ${isDeveloper ? `<div class="mt-5 border border-warning/40 rounded-lg p-4 bg-warning-container/10">
       <h4 class="font-bold text-warning mb-1">Clear task otomatis</h4>
-      <p class="text-sm text-on-surface-variant mb-3">Khusus akun Developer. Semua tiket aktif akan diproses sampai <b>COMPLETED</b>: panggil, bongkar/checking, Done GR, lalu Handover GRN. Actual Qty yang masih kosong diisi sesuai Qty PO. Riwayat ticket tetap tersimpan.</p>
+      <p class="text-sm text-on-surface-variant mb-3">Khusus akun Developer. Semua tiket aktif akan diproses sampai <b>COMPLETED</b>: panggil, bongkar/checking, lalu Done GR. Actual Qty yang masih kosong diisi sesuai Qty PO. Riwayat ticket tetap tersimpan.</p>
       <div class="flex flex-col sm:flex-row gap-3 sm:items-end">
         <label class="flex flex-col gap-1"><span class="text-xs font-bold uppercase">Tanggal operasional</span><input id="bulk-complete-operational-date" type="date" value="${esc(operationalDate)}" class="form-input" /></label>
         <button id="bulk-complete-operational-button" onclick="bulkCompleteOperationalTasks()" class="bg-warning text-on-warning px-5 py-3 rounded-lg font-bold">Clear semua tiket aktif</button>
@@ -4844,6 +4915,7 @@ function getTicketStartUnloadingTimeV7(row = {}) {
 }
 
 function getTicketWaitingEndV7(row = {}) {
+  if (window.InboundTicketContracts?.isCancelled(row)) return row.cancelled_at || row.po_cancelled_at || row.updated_at || "";
   const status = String(row.status || "")
     .trim()
     .toUpperCase();
@@ -4893,11 +4965,19 @@ function formatWaitingClockV7(startValue, endValue = "") {
 }
 
 function ticketWaitingMarkupV7(row = {}, extraClass = "") {
+  if (window.InboundTicketContracts?.isCancelled(row)) return `<span class="${extraClass} text-error">Dibatalkan</span>`;
   const start = getTicketRegisterTimeV7(row);
   const end = getTicketWaitingEndV7(row);
   const status = String(row.status || "")
     .trim()
     .toUpperCase();
+
+  if (
+    ["COMPLETED", "DONE GR"].includes(status) ||
+    window.InboundTicketContracts?.isDoneGrTerminal(row)
+  ) {
+    return `<span class="${extraClass} text-success">Selesai</span>`;
+  }
 
   return `<span
     class="live-waiting-cell ${extraClass}"
@@ -4942,7 +5022,8 @@ function refreshLiveWaitingCells() {
     const created = el.dataset.created || "";
     const completed = el.dataset.completed || "";
 
-    el.textContent = formatWaitingClockV7(created, completed);
+    const terminal = ["COMPLETED", "DONE GR"].includes(status);
+    el.textContent = status === "CANCELLED" ? "Dibatalkan" : terminal ? "Selesai" : formatWaitingClockV7(created, completed);
 
     el.classList.remove(
       "text-tertiary",
@@ -4956,7 +5037,7 @@ function refreshLiveWaitingCells() {
       el.classList.add("text-on-surface-variant");
     } else if (status === "EXPIRED") {
       el.classList.add("text-error");
-    } else if (completed) {
+    } else if (terminal || completed) {
       el.classList.add("text-success");
     } else {
       el.classList.add("text-tertiary");
@@ -6221,6 +6302,11 @@ function vehicleRowInput(vehicle = {}, index = 0) {
           <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">6 Digit No KTP Driver</span>
           <input data-vehicle-field="ktp_6_digit" class="form-input" placeholder="Optional. Contoh: 123456" maxlength="6" inputmode="numeric" value="${esc(vehicle.ktp_6_digit || "")}" oninput="this.value=this.value.replace(/\\D/g,'').slice(0,6); syncVehicleMultiInput();" />
         </label>
+        <label class="flex flex-col gap-2">
+          <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Jumlah TKBM</span>
+          <input data-vehicle-field="tkbm_count" type="number" min="0" max="2147483647" step="1" inputmode="numeric" class="form-input" value="${esc(vehicle.tkbm_count ?? 0)}" placeholder="Contoh: 3" required oninput="syncVehicleMultiInput();" />
+          <span class="text-[11px] text-on-surface-variant">Jumlah orang yang dibawa driver untuk mobil ini. Isi 0 jika tidak membawa TKBM.</span>
+        </label>
       </div>
     </div>
   </div>`;
@@ -6327,6 +6413,9 @@ function collectVehicleRows() {
         row.querySelector('[data-vehicle-plate-part="suffix"]')?.value || "";
       const rawPhone =
         row.querySelector('[data-vehicle-field="phone_number"]')?.value || "";
+      const tkbmResult = window.InboundTicketContracts?.normalizeTkbm(
+        row.querySelector('[data-vehicle-field="tkbm_count"]')?.value || "",
+      ) || { valid: false, count: 0 };
       const normalizedPhones =
         typeof parseAndNormalizePhones === "function"
           ? parseAndNormalizePhones(rawPhone)
@@ -6345,6 +6434,8 @@ function collectVehicleRows() {
         ktp_6_digit: String(
           row.querySelector('[data-vehicle-field="ktp_6_digit"]')?.value || "",
         ).trim(),
+        tkbm_count: tkbmResult.count,
+        tkbm_valid: tkbmResult.valid,
       };
     })
     .filter(
@@ -6353,7 +6444,8 @@ function collectVehicleRows() {
         v.plat_number ||
         v.driver_name ||
         v.phone_number ||
-        v.ktp_6_digit,
+        v.ktp_6_digit ||
+        v.tkbm_count > 0,
     );
 }
 
@@ -6407,6 +6499,7 @@ function validateVehicleRows() {
     const driverEl = row.querySelector('[data-vehicle-field="driver_name"]');
     const phoneEl = row.querySelector('[data-vehicle-field="phone_number"]');
     const ktpEl = row.querySelector('[data-vehicle-field="ktp_6_digit"]');
+    const tkbmEl = row.querySelector('[data-vehicle-field="tkbm_count"]');
     const prefixEl = row.querySelector('[data-vehicle-plate-part="prefix"]');
     const numberEl = row.querySelector('[data-vehicle-plate-part="number"]');
     const suffixEl = row.querySelector('[data-vehicle-plate-part="suffix"]');
@@ -6426,6 +6519,9 @@ function validateVehicleRows() {
     const driverOk = !!String(driverEl?.value || "").trim();
     const phoneOk = !!phone;
     const ktpOk = !ktp || /^\d{6}$/.test(ktp);
+    const tkbmResult = window.InboundTicketContracts?.normalizeTkbm(
+      tkbmEl?.value || "",
+    ) || { valid: false };
 
     if (plate) plateSet.add(plate);
     if (fleetEl) fleetEl.classList.toggle("invalid", !fleetOk);
@@ -6435,8 +6531,9 @@ function validateVehicleRows() {
     if (driverEl) driverEl.classList.toggle("invalid", !driverOk);
     if (phoneEl) phoneEl.classList.toggle("invalid", !phoneOk);
     if (ktpEl) ktpEl.classList.toggle("invalid", !ktpOk);
+    if (tkbmEl) tkbmEl.classList.toggle("invalid", !tkbmResult.valid);
 
-    if (!fleetOk || !plateOk || !driverOk || !phoneOk || !ktpOk) ok = false;
+    if (!fleetOk || !plateOk || !driverOk || !phoneOk || !ktpOk || !tkbmResult.valid) ok = false;
   });
 
   if (!vehicles.length) ok = false;
@@ -6511,7 +6608,7 @@ function validateSecurityForm(form) {
   }
   if (!vehicleOk) {
     showToast(
-      "Data kendaraan wajib lengkap: fleet type, plat valid, driver, dan nomor WhatsApp. Plat tidak boleh duplicate.",
+      "Data kendaraan wajib lengkap: fleet type, plat valid, driver, WhatsApp, dan jumlah TKBM (bilangan bulat, isi 0 jika tidak ada). Plat tidak boleh duplicate.",
     );
     return false;
   }
@@ -7479,7 +7576,9 @@ function securityFormMatchesRowsForPrint(rows = []) {
     if (raw.includes("VIP")) return "VIP";
     return "REG";
   };
-  const isTerminal = (row) => ["COMPLETED", "EXPIRED", "CANCELLED"].includes(statusOf(row));
+  const isTerminal = (row) =>
+    ["COMPLETED", "EXPIRED", "CANCELLED", "DONE GR"].includes(statusOf(row)) ||
+    Boolean(window.InboundTicketContracts?.isDoneGrTerminal(row));
   const keyOf = (row) => cleanText(row?.ticket_id || `${row?.queue_no || ""}|${row?.plat_number || ""}`);
   const poRowsOf = (row) => Array.isArray(row?.po_rows) ? row.po_rows : [];
   const poTextOf = (row) => [row?.po_number, ...poRowsOf(row).map((po) => po?.po_number)].filter(Boolean).join(" ");
@@ -7550,7 +7649,7 @@ function securityFormMatchesRowsForPrint(rows = []) {
       const estimate = typeof getUnloadingEstimateInfo === "function"
         ? getUnloadingEstimateInfo(row) || {}
         : {};
-      return cleanText(estimate.estimateText || row.sla_finished_at || row.sla_target_at || "-");
+      return estimate.target_at || estimate.estimateText || row.sla_finished_at || row.sla_target_at || "-";
     } catch (error) {
       return cleanText(row.sla_finished_at || row.sla_target_at || "-");
     }
@@ -7558,15 +7657,7 @@ function securityFormMatchesRowsForPrint(rows = []) {
 
   function dateTimeLabel(value) {
     if (!value) return "-";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return cleanText(value);
-    return new Intl.DateTimeFormat("id-ID", {
-      timeZone: "Asia/Jakarta",
-      day: "2-digit",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(date).replace(".", ":");
+    return window.InboundTicketContracts?.formatWibDateTime(value) || cleanText(value);
   }
 
   function filteredRows() {
@@ -7645,13 +7736,12 @@ function securityFormMatchesRowsForPrint(rows = []) {
 
   function timelineHtml(row) {
     const status = statusOf(row);
-    const rank = { WAITING: 0, CALLED: 1, UNLOADING: 2, "WAITING GR": 3, "DONE GR": 3, COMPLETED: 4 }[status] ?? 0;
+    const rank = { WAITING: 0, CALLED: 1, UNLOADING: 2, "WAITING GR": 3, "DONE GR": 4, COMPLETED: 4 }[status] ?? 0;
     const steps = [
       ["REGISTER", row.register_time || row.created_at],
       ["CALLED", row.called_at],
       ["BONGKAR", row.start_unloading_at],
-      ["GR", row.done_gr_at || row.po_updated_at],
-      ["COMPLETED", row.completed_at || row.finish_unloading_at],
+      ["DONE GR", row.done_gr_at || row.ticket_done_gr_at || row.po_updated_at],
     ];
     return `<div class="commercial-timeline" aria-label="Timeline proses tiket">${steps.map(([label, time], index) => `<div class="commercial-step ${index < rank || time ? "done" : index === rank ? "current" : ""}"><i><span class="material-symbols-outlined">${index < rank || time ? "check" : index === rank ? "radio_button_checked" : "circle"}</span></i><b>${label}</b><small>${dateTimeLabel(time)}</small></div>`).join("")}</div>`;
   }
@@ -7675,7 +7765,7 @@ function securityFormMatchesRowsForPrint(rows = []) {
       <section class="commercial-detail-kpis"><div><small>Target SLA</small><b>${esc(dateTimeLabel(target))}</b></div><div><small>Kondisi SLA</small><b class="sla-${slaTone(row)}">${esc(slaLabel(row))}</b></div><div><small>Jam Menunggu</small><b>${esc(waitingLabel(row))}</b></div></section>
       <section class="commercial-progress"><div><span><b>Checker</b><em>${esc(checkerProgress)}</em></span><progress max="100" value="${progressPercent(checkerProgress)}"></progress></div><div><span><b>GR</b><em>${esc(grProgress)}</em></span><progress max="100" value="${progressPercent(grProgress)}"></progress></div></section>
       <section class="commercial-section"><h3>Timeline Proses</h3>${timelineHtml(row)}</section>
-      <section class="commercial-section"><h3>Detail Tiket</h3><div class="commercial-info-grid"><div><small>Driver</small><b>${esc(row.driver_name || "-")}</b></div><div><small>Vendor</small><b>${esc(row.vendor_name || "-")}</b></div><div><small>Plat</small><b>${esc(row.plat_number || "-")}</b></div><div><small>Fleet</small><b>${esc(row.fleet_type || "-")}</b></div><div><small>Jenis Tiket</small><b>${esc(typeOf(row))}</b></div><div><small>Last Update</small><b>${esc(dateTimeLabel(row.updated_at || row.row_updated_at))}</b></div></div></section>
+      <section class="commercial-section"><h3>Detail Tiket</h3><div class="commercial-info-grid"><div><small>Driver</small><b>${esc(row.driver_name || "-")}</b></div><div><small>Vendor</small><b>${esc(row.vendor_name || "-")}</b></div><div><small>Plat</small><b>${esc(row.plat_number || "-")}</b></div><div><small>Fleet</small><b>${esc(row.fleet_type || "-")}</b></div><div><small>Jumlah TKBM</small><b>${esc(Number(row.tkbm_count || 0))}</b></div><div><small>Jenis Tiket</small><b>${esc(typeOf(row))}</b></div><div><small>Last Update</small><b>${esc(dateTimeLabel(row.updated_at || row.row_updated_at))}</b></div></div></section>
       ${poTableHtml(row)}
       <div class="commercial-actions"><button type="button" onclick="copyCommercialTrackingLink('${esc(trackUrl)}')"><span class="material-symbols-outlined">content_copy</span>Salin Link Tracking</button><button type="button" onclick="openCommercialDriverView('${esc(trackUrl)}')"><span class="material-symbols-outlined">open_in_new</span>Buka Tampilan Driver</button></div>
     </article>`;
@@ -7797,7 +7887,8 @@ function securityFormMatchesRowsForPrint(rows = []) {
   };
 
   const LEGACY_OUTPUT_HEADERS_V20 = [
-    "Timestamp", "ticket_id", "queue_no", "ticket_type", "slot", "fleet_type", "plat_number", "driver_name", "phone_number", "ktp_6_digit", "vendor_name", "po_number", "total_po_qty", "actual_quantity", "count_po_sku", "status", "gate", "unload_sla", "source", "created_at", "register_time", "called_at", "updated_at", "completed_at", "start_unloading_at", "driver_waiting_duration", "driver_waiting_minutes", "unloading_duration", "unloading_duration_minutes", "sla_target_hours", "sla_status", "wa_call_status", "wa_call_sent_at", "wa_call_error", "wa_call_provider", "wa_call_target", "call_count", "last_call_attempt_at", "expired_at", "expired_reason", "sla_finished_at", "operational_date", "data_source", "last_call_at", "waiting_gr_at", "done_gr_at", "handover_grn_at", "wa_handover_status", "wa_handover_sent_at", "wa_handover_error", "wa_handover_target", "ticket_po_id", "po_sequence", "ticket_po_count", "ticket_total_qty", "ticket_total_sku", "finish_unloading_at", "checker_id", "checker_name", "checker_status", "checker_started_at", "checker_done_at", "checker_started_by", "checker_done_by", "checker_duration", "checker_duration_minutes", "gr_status", "done_gr_by", "gr_wait_duration", "gr_wait_minutes", "inbound_sla_duration", "inbound_sla_minutes", "wa_ticket_status", "wa_ticket_sent_at", "wa_ticket_error", "wa_ticket_target",
+    "cancelled_at", "cancelled_reason", "cancelled_by", "po_cancelled_at", "po_cancelled_reason", "po_cancelled_by",
+    "Timestamp", "ticket_id", "queue_no", "ticket_type", "slot", "fleet_type", "plat_number", "driver_name", "phone_number", "ktp_6_digit", "tkbm_count", "vendor_name", "po_number", "total_po_qty", "actual_quantity", "count_po_sku", "status", "gate", "unload_sla", "source", "created_at", "register_time", "called_at", "updated_at", "completed_at", "start_unloading_at", "driver_waiting_duration", "driver_waiting_minutes", "unloading_duration", "unloading_duration_minutes", "sla_target_hours", "sla_status", "wa_call_status", "wa_call_sent_at", "wa_call_error", "wa_call_provider", "wa_call_target", "call_count", "last_call_attempt_at", "expired_at", "expired_reason", "sla_finished_at", "operational_date", "data_source", "last_call_at", "waiting_gr_at", "done_gr_at", "handover_grn_at", "wa_handover_status", "wa_handover_sent_at", "wa_handover_error", "wa_handover_target", "ticket_po_id", "po_sequence", "ticket_po_count", "ticket_total_qty", "ticket_total_sku", "finish_unloading_at", "checker_id", "checker_name", "checker_status", "checker_started_at", "checker_done_at", "checker_started_by", "checker_done_by", "checker_duration", "checker_duration_minutes", "gr_status", "done_gr_by", "gr_wait_duration", "gr_wait_minutes", "inbound_sla_duration", "inbound_sla_minutes", "wa_ticket_status", "wa_ticket_sent_at", "wa_ticket_error", "wa_ticket_target",
   ];
 
   function durationExportV20(from, to) {
@@ -7819,16 +7910,19 @@ function securityFormMatchesRowsForPrint(rows = []) {
     return rows.map((row) => {
       const pos = byTicket.get(String(row.ticket_id || "")) || [row];
       const poSequence = Math.max(1, pos.findIndex((item) => item.ticket_po_id === row.ticket_po_id) + 1);
-      const ticketQty = pos.reduce((sum, item) => sum + Number(item.total_po_qty || 0), 0);
-      const ticketSku = pos.reduce((sum, item) => sum + Number(item.count_po_sku || 0), 0);
-      const finish = row.finish_unloading_at || "";
+      const activePos = pos.filter((item) => !window.InboundTicketContracts.isCancelled(item));
+      const ticketQty = activePos.reduce((sum, item) => sum + Number(item.total_po_qty || 0), 0);
+      const ticketSku = activePos.reduce((sum, item) => sum + Number(item.count_po_sku || 0), 0);
+      const finish = row.cancelled_at || row.po_cancelled_at || row.finish_unloading_at || "";
       const driverWaiting = durationExportV20(row.created_at || row.register_time, row.start_unloading_at || finish);
       const unloading = durationExportV20(row.start_unloading_at, finish);
       const checker = durationExportV20(row.checker_started_at, row.checker_done_at);
       const grWait = durationExportV20(row.checker_done_at, row.done_gr_at);
       const inboundSla = durationExportV20(row.start_unloading_at, finish || row.done_gr_at);
       return {
-        Timestamp: row.created_at || row.register_time || "", ticket_id: row.ticket_id || "", queue_no: row.queue_no || "", ticket_type: row.ticket_type || "", slot: row.slot || "", fleet_type: row.fleet_type || "", plat_number: row.plat_number || "", driver_name: row.driver_name || "", phone_number: row.phone_number || "", ktp_6_digit: row.ktp_6_digit || "", vendor_name: row.po_vendor_name || row.vendor_name || "", po_number: row.po_number || "", total_po_qty: row.total_po_qty || 0, actual_quantity: row.actual_quantity || 0, count_po_sku: row.count_po_sku || 0, status: row.status || "", gate: row.gate || "", unload_sla: row.unload_sla || "", source: row.source || "MotherDuck", created_at: row.created_at || "", register_time: row.register_time || row.created_at || "", called_at: row.called_at || "", updated_at: row.updated_at || row.po_updated_at || "", completed_at: String(row.status || "").toUpperCase() === "COMPLETED" ? finish : "", start_unloading_at: row.start_unloading_at || "", driver_waiting_duration: driverWaiting.text, driver_waiting_minutes: driverWaiting.minutes, unloading_duration: unloading.text, unloading_duration_minutes: unloading.minutes, sla_target_hours: "", sla_status: row.unload_sla || "", wa_call_status: "", wa_call_sent_at: "", wa_call_error: "", wa_call_provider: "", wa_call_target: "", call_count: row.call_count || 0, last_call_attempt_at: row.last_call_at || "", expired_at: row.expired_at || "", expired_reason: row.expired_reason || "", sla_finished_at: finish, operational_date: row.operational_date || "", data_source: "MotherDuck", last_call_at: row.last_call_at || "", waiting_gr_at: row.checker_done_at || "", done_gr_at: row.done_gr_at || "", handover_grn_at: row.handover_grn_at || "", wa_handover_status: "", wa_handover_sent_at: "", wa_handover_error: "", wa_handover_target: "", ticket_po_id: row.ticket_po_id || "", po_sequence: poSequence, ticket_po_count: pos.length, ticket_total_qty: ticketQty, ticket_total_sku: ticketSku, finish_unloading_at: finish, checker_id: row.checker_id || "", checker_name: row.checker_name || "", checker_status: row.checker_status || "", checker_started_at: row.checker_started_at || "", checker_done_at: row.checker_done_at || "", checker_started_by: "", checker_done_by: "", checker_duration: checker.text, checker_duration_minutes: checker.minutes, gr_status: row.gr_status || "", done_gr_by: "", gr_wait_duration: grWait.text, gr_wait_minutes: grWait.minutes, inbound_sla_duration: inboundSla.text, inbound_sla_minutes: inboundSla.minutes, wa_ticket_status: "", wa_ticket_sent_at: "", wa_ticket_error: "", wa_ticket_target: "",
+        cancelled_at: row.cancelled_at || "", cancelled_reason: row.cancelled_reason || "", cancelled_by: row.cancelled_by || "",
+        po_cancelled_at: row.po_cancelled_at || "", po_cancelled_reason: row.po_cancelled_reason || "", po_cancelled_by: row.po_cancelled_by || "",
+        Timestamp: row.created_at || row.register_time || "", ticket_id: row.ticket_id || "", queue_no: row.queue_no || "", ticket_type: row.ticket_type || "", slot: row.slot || "", fleet_type: row.fleet_type || "", plat_number: row.plat_number || "", driver_name: row.driver_name || "", phone_number: row.phone_number || "", ktp_6_digit: row.ktp_6_digit || "", tkbm_count: Number(row.tkbm_count || 0), vendor_name: row.po_vendor_name || row.vendor_name || "", po_number: row.po_number || "", total_po_qty: row.total_po_qty || 0, actual_quantity: row.actual_quantity || 0, count_po_sku: row.count_po_sku || 0, status: row.status || "", gate: row.gate || "", unload_sla: row.unload_sla || "", source: row.source || "Supabase", created_at: row.created_at || "", register_time: row.register_time || row.created_at || "", called_at: row.called_at || "", updated_at: row.updated_at || row.po_updated_at || "", completed_at: String(row.status || "").toUpperCase() === "COMPLETED" ? finish : "", start_unloading_at: row.start_unloading_at || "", driver_waiting_duration: driverWaiting.text, driver_waiting_minutes: driverWaiting.minutes, unloading_duration: unloading.text, unloading_duration_minutes: unloading.minutes, sla_target_hours: window.InboundTicketContracts.getInboundSlaInfo(row).target_hours, sla_status: window.InboundTicketContracts.getInboundSlaInfo(row).status, wa_call_status: "", wa_call_sent_at: "", wa_call_error: "", wa_call_provider: "", wa_call_target: "", call_count: row.call_count || 0, last_call_attempt_at: row.last_call_at || "", expired_at: row.expired_at || "", expired_reason: row.expired_reason || "", sla_finished_at: finish, operational_date: row.operational_date || "", data_source: "Supabase", last_call_at: row.last_call_at || "", waiting_gr_at: row.checker_done_at || "", done_gr_at: row.done_gr_at || "", handover_grn_at: row.handover_grn_at || "", wa_handover_status: "", wa_handover_sent_at: "", wa_handover_error: "", wa_handover_target: "", ticket_po_id: row.ticket_po_id || "", po_sequence: poSequence, ticket_po_count: pos.length, ticket_total_qty: ticketQty, ticket_total_sku: ticketSku, finish_unloading_at: finish, checker_id: row.checker_id || "", checker_name: row.checker_name || "", checker_status: row.checker_status || "", checker_started_at: row.checker_started_at || "", checker_done_at: row.checker_done_at || "", checker_started_by: "", checker_done_by: "", checker_duration: checker.text, checker_duration_minutes: checker.minutes, gr_status: row.gr_status || "", done_gr_by: "", gr_wait_duration: grWait.text, gr_wait_minutes: grWait.minutes, inbound_sla_duration: inboundSla.text, inbound_sla_minutes: inboundSla.minutes, wa_ticket_status: "", wa_ticket_sent_at: "", wa_ticket_error: "", wa_ticket_target: "",
       };
     });
   }
@@ -8393,11 +8487,6 @@ function securityFormMatchesRowsForPrint(rows = []) {
             ["ADMIN", "SPV", "DEVELOPER"].includes(role)
           )
             action = `<button onclick="advanceGrStatusFromKey('${key}','DONE GR',this)" class="bg-secondary-container text-on-secondary-container px-3 py-2 rounded-lg font-bold text-xs whitespace-nowrap">Done GR</button>`;
-          if (
-            st === "DONE GR" &&
-            ["SECURITY", "SPV", "DEVELOPER"].includes(role)
-          )
-            action = `<button onclick="advanceGrStatusFromKey('${key}','COMPLETED',this)" class="bg-success/15 border border-success/30 text-success px-3 py-2 rounded-lg font-bold text-xs whitespace-nowrap">Handover GRN</button>`;
           const terminal = st === "COMPLETED" || st === "EXPIRED";
           const wait =
             st === "EXPIRED"
@@ -10548,7 +10637,7 @@ window.initShader = function initShaderDisabled() {
   window.checkerStatusPill = function checkerStatusPillV15(status = "") {
     const value = String(status || "WAITING").toUpperCase();
     const cls =
-      value === "EXPIRED"
+      ["EXPIRED", "CANCELLED"].includes(value)
         ? "bg-error/10 text-error border-error/30"
         : value === "COMPLETED"
           ? "bg-success/10 text-success border-success/30"
@@ -10717,7 +10806,7 @@ window.initShader = function initShaderDisabled() {
         <div class="rounded-xl border border-primary/25 bg-primary/10 p-4"><div class="text-xs uppercase font-bold text-on-surface-variant">Master Checker</div><div class="text-3xl font-extrabold text-primary mt-2">${num(mp.length)}</div><div class="text-xs text-on-surface-variant mt-1">Nama aktif dari sheet <b>inbound mp</b></div></div>
         <div class="mt-4 rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4 text-sm text-on-surface-variant"><b class="text-on-surface">Cara kerja</b><br/>Buka card ticket → pilih nama checker → pilih PO → Start. Setelah selesai, pilih nama yang sama dan Done Checker.</div>`;
     }
-    return `<h3 class="font-headline-md text-headline-md mb-1">Data Selesai Checker</h3><p class="text-on-surface-variant">Admin wajib mengisi Actual Qty per PO sebelum Done GR. Handover GRN aktif setelah seluruh PO DONE GR.</p>`;
+    return `<h3 class="font-headline-md text-headline-md mb-1">Data Selesai Checker</h3><p class="text-on-surface-variant">Admin wajib mengisi Actual Qty per PO sebelum Done GR. DONE GR adalah tahap akhir proses tiket.</p>`;
   }
 
   window.pageChecker = function pageCheckerV15() {
@@ -10880,6 +10969,8 @@ window.initShader = function initShaderDisabled() {
           po.ticket_po_id || po.po_number || "",
         ).replace(/[^A-Za-z0-9_-]/g, "_")}`;
         const canEditActual =
+          !window.InboundTicketContracts.isCancelled(po) &&
+          !window.InboundTicketContracts.isCancelled(ticket) &&
           !dropOff &&
           ["ADMIN", "SPV", "DEVELOPER"].includes(role) &&
           String(po.checker_status || "").toUpperCase() === "DONE" &&
@@ -10917,8 +11008,8 @@ window.initShader = function initShaderDisabled() {
           <td>${esc(po.checker_done_at || "-")}</td>
           <td>${esc(po.gr_status || (dropOff ? "SKIPPED" : "PENDING"))}</td>
           <td>${esc(po.done_gr_at || "-")}</td>
-          <td>${esc(po.sla_status || po.unload_sla || "-")}</td>
-          <td>${actionMarkup}</td>
+          <td>${window.InboundTicketContracts.isCancelled(po) ? "CANCELLED" : esc(po.sla_status || po.unload_sla || "-")}</td>
+          <td>${actionMarkup} ${window.cancelActionMarkup(ticket, po)}</td>
         </tr>`;
       })
       .join("");
@@ -10938,24 +11029,17 @@ window.initShader = function initShaderDisabled() {
         rows
           .map((ticket, index) => {
             const status = String(ticket.status || "").toUpperCase();
-            const canHandover =
-              ["SECURITY", "SPV", "DEVELOPER"].includes(role) &&
-              !!ticket.finish_unloading_at &&
-              ticket.all_done_gr &&
-              status !== "COMPLETED";
             const wait =
               status === "EXPIRED"
                 ? "Expired"
-                : status === "COMPLETED"
+                : status === "COMPLETED" || ticket.all_done_gr
                   ? "Selesai"
                   : driverWaitingLabel(ticket);
             const sla = getInboundSlaInfo(ticket);
-            const action = canHandover
-              ? `<button type="button" onclick="handoverGrnTicketV15('${esc(ticket.ticket_id)}',this)" class="bg-success/15 border border-success/30 text-success rounded-lg px-3 py-2 text-xs font-bold whitespace-nowrap">Handover GRN</button>`
-              : status === "WAITING GR" &&
+            const action = window.cancelActionMarkup(ticket) + (status === "WAITING GR" &&
                   ["ADMIN", "SPV", "DEVELOPER"].includes(role)
                 ? `<span class="text-xs font-bold text-warning">GR ${ticket.gr_progress || "0/0"}</span>`
-                : "-";
+                : "");
             const detailId = `waiting-detail-${String(ticket.ticket_id).replace(/[^A-Za-z0-9_-]/g, "_")}`;
             return `<tr class="hover:bg-primary/5"><td class="px-4 py-3">${action}</td><td class="px-4 py-3"><button type="button" onclick="toggleWaitingDetailV16('${detailId}')" class="thin-tab rounded-lg px-3 py-2 text-xs font-bold">Detail PO</button></td><td class="px-4 py-3"><button onclick="printWaitingListTicket(${index})" class="thin-tab rounded-lg px-3 py-2 font-bold text-xs">Print</button></td><td class="px-4 py-3 text-sm whitespace-nowrap">${esc(ticket.created_at || "-")}</td><td class="px-4 py-3 font-queue-id text-primary">${esc(ticket.queue_no || "-")}</td><td class="px-4 py-3 min-w-[190px]">${esc(ticket.vendor_name || "-")}</td><td class="px-4 py-3">${esc(ticket.fleet_type || "-")}</td><td class="px-4 py-3 font-queue-id">${esc(ticket.plat_number || "-")}</td><td class="px-4 py-3">${ticket.po_rows?.length || 1}</td><td class="px-4 py-3">${esc(ticket.gate || "-")}</td><td class="px-4 py-3">${checkerStatusPill(status)}</td><td class="px-4 py-3 font-bold">${num(ticket.call_count || 0)}</td><td class="px-4 py-3 font-queue-id whitespace-nowrap">${esc(wait)}</td><td class="px-4 py-3">${num(ticket.total_po_qty || 0)}</td><td class="px-4 py-3 font-queue-id">${num(ticket.actual_quantity || 0)}</td><td class="px-4 py-3">${num(ticket.count_po_sku || 0)}</td><td class="px-4 py-3 whitespace-nowrap">${esc(ticket.checker_progress || "0/0")}</td><td class="px-4 py-3 whitespace-nowrap">${esc(ticket.gr_progress || "0/0")}</td><td class="px-4 py-3 whitespace-nowrap"><span class="inline-flex rounded-full border px-2 py-1 text-xs font-bold ${sla.badgeClass}">${esc(sla.status)}</span></td></tr>
           <tr id="${detailId}" class="hidden waiting-detail-row-v15"><td colspan="19" class="p-0"><div class="waiting-detail-panel-v15"><div class="flex flex-wrap gap-4 mb-4 text-xs"><span><b>Created:</b> ${esc(ticket.created_at || ticket.register_time || "-")}</span><span><b>Driver:</b> ${esc(ticket.driver_name || "-")} · ${esc(ticket.driver_phone || ticket.phone_number || "-")}</span><span><b>Ticket:</b> ${esc(ticket.ticket_type || "REG")} · Slot ${esc(ticket.slot || "-")} · Gate ${esc(ticket.gate || "-")}</span><span><b>Start Unloading:</b> ${esc(ticket.start_unloading_at || "-")}</span><span><b>Finish Unloading:</b> ${esc(ticket.finish_unloading_at || "-")}</span><span><b>Checker:</b> ${esc(ticket.checker_progress || "0/0")}</span><span><b>GR:</b> ${esc(ticket.gr_progress || "0/0")}</span><span><b>WA Ticket:</b> ${esc(ticket.wa_ticket_status || ticket.po_rows?.[0]?.wa_ticket_status || "-")}</span><span><b>WA Handover:</b> ${esc(ticket.wa_handover_status || ticket.po_rows?.[0]?.wa_handover_status || "-")}</span></div><div class="overflow-x-auto"><table class="po-detail-table-v15"><thead><tr><th>PO Number</th><th>PO Qty</th><th>Actual Qty</th><th>SKU</th><th>Checker</th><th>Status Checker</th><th>Start Checker</th><th>Done Checker</th><th>GR Status</th><th>Done GR</th><th>SLA</th><th>Action</th></tr></thead><tbody>${waitingPoDetailRowsV15(ticket, role)}</tbody></table></div></div></td></tr>`;
@@ -10969,7 +11053,7 @@ window.initShader = function initShaderDisabled() {
 
   window.pageLaporan = function pageLaporanV15() {
     const rows = state.dashboard?.report_preview || [];
-    return `<div class="glass-card rounded-xl p-4 sm:p-6"><div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6"><div><h3 class="font-headline-md text-headline-md">Waiting List</h3><p class="text-on-surface-variant">Satu kendaraan tampil satu baris. Admin wajib mengisi Actual Qty per PO sebelum Done GR. Handover GRN dilakukan setelah seluruh PO selesai Done GR.</p></div><div class="flex gap-2"><button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">refresh</span>Refresh</button><button onclick="exportCsv()" class="bg-primary-container text-on-primary-container px-5 py-3 rounded-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined">download</span>Export CSV</button></div></div>${reportTable(rows)}</div>`;
+    return `<div class="glass-card rounded-xl p-4 sm:p-6"><div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6"><div><h3 class="font-headline-md text-headline-md">Waiting List</h3><p class="text-on-surface-variant">Satu kendaraan tampil satu baris. Admin wajib mengisi Actual Qty per PO sebelum Done GR. DONE GR adalah tahap akhir proses tiket.</p></div><div class="flex gap-2"><button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">refresh</span>Refresh</button><button onclick="exportCsv()" class="bg-primary-container text-on-primary-container px-5 py-3 rounded-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined">download</span>Export CSV</button></div></div>${reportTable(rows)}</div>`;
   };
   pageLaporan = window.pageLaporan;
 
@@ -11053,6 +11137,7 @@ window.initShader = function initShaderDisabled() {
       doneGr: count("DONE GR"),
       completed: count("COMPLETED"),
       expired: count("EXPIRED"),
+      cancelled: count("CANCELLED"),
       miss: rows.filter((row) =>
         ["SLA MISS", "LATE"].includes(getInboundSlaInfo(row).status),
       ).length,
@@ -11116,8 +11201,7 @@ window.initShader = function initShaderDisabled() {
       ["Dipanggil", 1],
       ["Unloading", 2],
       [`Checker Barang ${row.checker_progress || "0/0"}`, 4],
-      [`Proses GR ${row.gr_progress || "0/0"}`, 6],
-      ["Handover Surat Jalan", 7],
+      [`Done GR ${row.gr_progress || "0/0"}`, 6],
     ];
     return `<div class="driver-timeline-v15">${items.map(([label, step]) => `<div class="driver-timeline-item-v15 ${current >= step ? "is-done" : current + 1 === step ? "is-active" : ""}"><span class="material-symbols-outlined">${current >= step ? "check_circle" : "radio_button_unchecked"}</span><span>${esc(label)}</span></div>`).join("")}</div>`;
   }
@@ -12338,17 +12422,9 @@ window.initShader = function initShaderDisabled() {
         active: stateV16.unloadingStarted && !stateV16.unloadingFinished,
       },
       {
-        label: `Proses GR ${stateV16.grDone}/${stateV16.grTotal}`,
+        label: `Done GR ${stateV16.grDone}/${stateV16.grTotal}`,
         done: stateV16.allDoneGr,
         active: stateV16.grStarted && !stateV16.allDoneGr,
-      },
-      {
-        label: "Handover Surat Jalan",
-        done: stateV16.completed,
-        active:
-          stateV16.unloadingFinished &&
-          stateV16.allDoneGr &&
-          !stateV16.completed,
       },
     ];
 
@@ -12603,7 +12679,7 @@ window.initShader = function initShaderDisabled() {
     row = {},
   ) {
     const status = String(row.status || "").toUpperCase();
-    if (status.includes("EXPIRED")) return 0;
+    if (status.includes("EXPIRED") || status === "CANCELLED") return 0;
     const start = parseInboundDateSafe(row.start_unloading_at);
     if (!start) return 0;
     const end =
@@ -13425,7 +13501,7 @@ window.initShader = function initShaderDisabled() {
   function checkerFinishedInfoPanelV165() {
     return `<h3 class="font-headline-md text-headline-md mb-1">Proses Checker Selesai</h3>
       <p class="text-on-surface-variant mb-5">Ticket di sini sudah Finish Unloading, Done GR, Completed, atau Expired.</p>
-      <div class="rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4 text-sm text-on-surface-variant">Done GR dikerjakan Admin per PO dari Waiting List. Handover GRN dilakukan Security setelah semua PO Done GR.</div>`;
+      <div class="rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4 text-sm text-on-surface-variant">Done GR dikerjakan Admin per PO dari Waiting List dan menjadi tahap akhir tiket.</div>`;
   }
 
   window.pageChecker = function pageCheckerV165() {
@@ -13903,7 +13979,7 @@ window.initShader = function initShaderDisabled() {
         const grStatuses = poRows.map((po) => String(po.gr_status || "PENDING").toUpperCase());
         const wanted = String(filters.grStatus).toUpperCase();
         if (wanted === "BELUM DONE GR") {
-          if (!grStatuses.some((status) => status !== "DONE GR")) return false;
+          if (!grStatuses.some((status) => !["DONE GR", "CANCELLED"].includes(status))) return false;
         } else if (!grStatuses.some((status) => status === wanted)) {
           return false;
         }
@@ -14173,7 +14249,7 @@ if (window.__exportCsvV19) {
   window.__waitingMonitorCommandCenterV19Installed = true;
 
   const safeStatus = (row = {}) => String(row.status || "WAITING").toUpperCase();
-  const isTerminal = (status) => ["COMPLETED", "EXPIRED"].includes(status);
+  const isTerminal = (status) => ["DONE GR", "COMPLETED", "EXPIRED", "CANCELLED"].includes(status);
   const displayStatus = (status) =>
     ({ UNLOADING: "BONGKAR", "WAITING GR": "WAITING GR", "DONE GR": "DONE GR" }[status] || status);
   const statusStyle = (status) => {
@@ -14187,7 +14263,7 @@ if (window.__exportCsvV19) {
   const numV19 = (value) => new Intl.NumberFormat("id-ID").format(Number(value || 0));
   const rowWaiting = (row) => {
     const start = row.register_time || row.created_at || "";
-    const end = isTerminal(safeStatus(row)) ? (row.completed_at || row.expired_at || row.updated_at || "") : "";
+    const end = isTerminal(safeStatus(row)) ? (row.completed_at || row.cancelled_at || row.expired_at || row.updated_at || "") : "";
     return typeof liveWaitingText === "function" ? liveWaitingText(start, end) : "-";
   };
   const riskSort = (a, b) => {
@@ -14476,7 +14552,7 @@ if (window.__exportCsvV19) {
     return domain.sortDropoffs(source).filter((row) => {
       if (!domain.isTerminal(row)) return true;
       const end = parseInboundDateSafe(
-        row.completed_at || row.expired_at || row.updated_at || "",
+        row.completed_at || row.cancelled_at || row.expired_at || row.updated_at || "",
       );
       return end && now - end.getTime() <= 48 * 60 * 60 * 1000;
     });
@@ -14525,7 +14601,7 @@ if (window.__exportCsvV19) {
         ? "warehouse"
         : "task_alt";
     const age = terminal
-      ? `Selesai ${esc(row.completed_at || row.expired_at || row.updated_at || "-")}`
+      ? `Selesai ${esc(row.completed_at || row.cancelled_at || row.expired_at || row.updated_at || "-")}`
       : `Aktif ${esc(domain.ageLabel(row))}`;
     const action = !terminal && canAct
       ? `<div class="mt-4 flex flex-col sm:flex-row gap-2">
@@ -14670,4 +14746,148 @@ if (window.__exportCsvV19) {
     if (!ROLE_ACCESS[role].includes("commercial")) ROLE_ACCESS[role].push("commercial");
   });
   applyRoleAccessUI?.();
+})();
+
+/* V24 — fleet master, DROP-OFF fleet separation, SLA/date, and driver timeline. */
+(function installInboundOperationalV24() {
+  const contracts = window.InboundTicketContracts;
+  if (!contracts || window.__inboundOperationalV24Installed) return;
+  window.__inboundOperationalV24Installed = true;
+
+  state.options.fleet_type = [...contracts.FLEET_TYPES];
+  window.normalizeFleetType = contracts.normalizeFleetType;
+  window.getFleetTypeOptions = () => [...contracts.FLEET_TYPES];
+  window.getFleetDisplayLabel = (type) => contracts.normalizeFleetType(type) || "FLEET";
+  window.getFleetNote = (type) => contracts.fleetNote(type);
+  window.getFleetSlaRuleTextV163 = (type) => contracts.fleetSlaRuleText(type);
+  window.getFleetOptionLabelV163 = (type) => {
+    const fleet = contracts.normalizeFleetType(type);
+    return `${fleet} (${contracts.fleetNote(fleet)})`;
+  };
+  window.vehicleFleetOptionsHtml = function vehicleFleetOptionsHtmlV24(selected = "") {
+    const selectedFleet = contracts.normalizeFleetType(selected || contracts.FLEET_TYPES[0]);
+    return contracts.FLEET_TYPES.map((type) =>
+      `<option value="${esc(type)}" ${type === selectedFleet ? "selected" : ""}>${esc(window.getFleetOptionLabelV163(type))}</option>`,
+    ).join("");
+  };
+  window.getFleetImageUrl = function getFleetImageUrlV24(type) {
+    const fleet = contracts.normalizeFleetType(type);
+    const images = {
+      KR2: FLEET_IMAGE_DATA.roda2,
+      "MINI BUS/MOBIL": FLEET_IMAGE_DATA.mobil,
+      "BLIND VAN": FLEET_IMAGE_DATA.grandmax,
+      "PICKUP/L300": FLEET_IMAGE_DATA.l300Pickup,
+      CDE: FLEET_IMAGE_DATA.cdd,
+      CDEL: FLEET_IMAGE_DATA.cddl,
+      CDD: FLEET_IMAGE_DATA.cdd,
+      CDDL: FLEET_IMAGE_DATA.cddl,
+      "TRONTON/FUSO": FLEET_IMAGE_DATA.fuso,
+      WINGBOX: FLEET_IMAGE_DATA.wingbox,
+    };
+    return images[fleet] || FLEET_IMAGE_DATA.default;
+  };
+
+  try {
+    normalizeFleetType = window.normalizeFleetType;
+    getFleetTypeOptions = window.getFleetTypeOptions;
+    getFleetDisplayLabel = window.getFleetDisplayLabel;
+    getFleetNote = window.getFleetNote;
+    vehicleFleetOptionsHtml = window.vehicleFleetOptionsHtml;
+    getFleetImageUrl = window.getFleetImageUrl;
+  } catch (error) {}
+
+  window.updateVehicleFleetPreview = function updateVehicleFleetPreviewV24(selectEl) {
+    const row = selectEl?.closest(".vehicle-row");
+    if (!row) return;
+    const fleet = contracts.normalizeFleetType(selectEl.value || contracts.FLEET_TYPES[0]);
+    const image = row.querySelector("[data-vehicle-fleet-img]");
+    const label = row.querySelector("[data-vehicle-fleet-label]");
+    const note = row.querySelector("[data-vehicle-fleet-note-v163]");
+    if (image) {
+      image.style.display = "";
+      image.src = window.getFleetImageUrl(fleet);
+      image.alt = fleet;
+    }
+    if (label) {
+      label.style.display = "";
+      label.textContent = fleet;
+    }
+    if (note) {
+      note.style.display = "";
+      note.textContent = `${contracts.fleetNote(fleet)} · ${window.getFleetSlaRuleTextV163?.(fleet) || ""}`;
+    }
+    row.querySelector("[data-dropoff-word-v168]")?.style.setProperty("display", "none");
+    syncVehicleMultiInput?.();
+  };
+  try { updateVehicleFleetPreview = window.updateVehicleFleetPreview; } catch (error) {}
+
+  window.handleTicketTypeChange = function handleTicketTypeChangeV24() {
+    const form = document.getElementById("security-form");
+    if (!form) return;
+    const type = String(form.querySelector('[name="ticket_type"]')?.value || "REG").toUpperCase();
+    const dropOff = type === "DROP" || type === "DROP-OFF";
+    const poHidden = form.querySelector('[name="po_number"]');
+    if (poHidden) {
+      poHidden.required = !dropOff;
+      poHidden.dataset.optionalDropOff = dropOff ? "1" : "0";
+      if (dropOff) poHidden.setCustomValidity("");
+    }
+    const poSearch = document.getElementById("po-search-input");
+    if (poSearch) poSearch.placeholder = dropOff ? "PO opsional untuk DROP-OFF" : "Cari atau ketik PO manual...";
+    form.querySelectorAll('[data-vehicle-field="fleet_type"]').forEach((select) => {
+      select.disabled = false;
+      if (!contracts.FLEET_TYPES.includes(contracts.normalizeFleetType(select.value))) {
+        select.innerHTML = window.vehicleFleetOptionsHtml(contracts.FLEET_TYPES[0]);
+      }
+      window.updateVehicleFleetPreview(select);
+    });
+    lookupPo?.(true);
+  };
+  try { handleTicketTypeChange = window.handleTicketTypeChange; } catch (error) {}
+
+  window.getInboundSlaHours = (row = {}) => contracts.getSlaHours(row);
+  window.getInboundSlaInfo = function getInboundSlaInfoV24(row = {}) {
+    const info = contracts.getInboundSlaInfo(row);
+    const late = ["LATE", "SLA MISS"].includes(info.status);
+    return {
+      ...info,
+      className: late ? "text-error" : info.status === "ON PROCESS" ? "text-warning" : "text-success",
+      badgeClass: late
+        ? "bg-error/10 text-error border-error/30"
+        : info.status === "ON PROCESS"
+          ? "bg-warning/10 text-warning border-warning/30"
+          : "bg-success/10 text-success border-success/30",
+    };
+  };
+  window.getUnloadingEstimateInfo = function getUnloadingEstimateInfoV24(row = {}) {
+    const sla = contracts.getInboundSlaInfo(row);
+    return {
+      estimateDate: sla.target_at || null,
+      target_at: sla.target_at || null,
+      estimateText: sla.target_at ? contracts.formatWibDateTime(sla.target_at) : "",
+      targetHours: sla.target_hours || 0,
+      targetMinutes: sla.target_minutes || 0,
+      hasStartedBongkar: Boolean(sla.start_at),
+      outSla: ["LATE", "SLA MISS"].includes(sla.status),
+      diffMinutes: sla.delta_minutes,
+    };
+  };
+  try {
+    getInboundSlaHours = window.getInboundSlaHours;
+    getInboundSlaInfo = window.getInboundSlaInfo;
+    getUnloadingEstimateInfo = window.getUnloadingEstimateInfo;
+  } catch (error) {}
+
+  window.driverTimelineV16 = function driverTimelineV24(row = {}) {
+    const entries = contracts.driverTimelineEntries(row);
+    const status = String(row.status || "WAITING").toUpperCase();
+    const rank = { WAITING: 0, CALLED: 1, UNLOADING: 2, "WAITING CHECKER": 2, CHECKING: 2, "WAITING GR": 3, "DONE GR": 3, COMPLETED: 4 }[status] ?? 0;
+    return `<div id="driver-track-timeline-v16" class="driver-timeline-v16">${entries.map((entry, index) => {
+      const done = Boolean(entry.value) || (!contracts.isCancelled(row) && index < rank);
+      const active = !contracts.isCancelled(row) && !done && index === rank;
+      const icon = done ? "check_circle" : active ? "pending" : "radio_button_unchecked";
+      return `<div class="driver-timeline-item-v16 ${done ? "is-done" : active ? "is-active" : ""}"><span class="material-symbols-outlined">${icon}</span><span class="driver-timeline-copy-v24"><b>${esc(entry.label)}</b><small>${esc(entry.timeLabel)}</small>${entry.label === "Dibatalkan" ? `<small>${esc(row.cancelled_reason || row.po_cancelled_reason || "")}</small>` : ""}</span></div>`;
+    }).join("")}</div>`;
+  };
+  try { driverTimelineV16 = window.driverTimelineV16; } catch (error) {}
 })();

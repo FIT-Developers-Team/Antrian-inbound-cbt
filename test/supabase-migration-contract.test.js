@@ -37,3 +37,22 @@ test("Supabase package owns schema, RLS, API, sync, and scheduler", () => {
   assert.match(files, /inbound_finalize_superset_sync/i);
   assert.match(files, /\*\/5 \* \* \* \*/);
 });
+
+test("GSheet mirror is disabled without deleting operational data", () => {
+  const migration = read(
+    "supabase/migrations/20260901030000_disable_gsheet_sync.sql",
+  );
+  assert.match(migration, /jobname = 'inbound-sync-gsheet-1m'/i);
+  assert.match(migration, /cron\.unschedule/i);
+  assert.match(migration, /'gsheet', 'disabled'/i);
+  assert.doesNotMatch(migration, /drop table.*gsheet_sync_outbox/i);
+});
+
+test("Superset master sync is reduced to every 30 minutes", () => {
+  const migration = read(
+    "supabase/migrations/20260901033000_reduce_superset_sync_frequency.sql",
+  );
+  assert.match(migration, /inbound-sync-superset-5m/i);
+  assert.match(migration, /inbound-sync-superset-30m/i);
+  assert.match(migration, /'\*\/30 \* \* \* \*'/i);
+});

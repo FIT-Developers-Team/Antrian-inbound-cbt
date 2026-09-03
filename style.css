@@ -2741,6 +2741,20 @@ body.security-lobby-qr-open-v152 {
   background: rgb(var(--primary) / 0.1);
 }
 
+.driver-timeline-copy-v24 {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.driver-timeline-copy-v24 small {
+  color: rgb(var(--on-surface-variant));
+  font-size: 11px;
+  font-weight: 600;
+}
+
 /* ==========================================================================
  * V18.0 — Actual Qty Waiting List + Shared Gate visibility
  * ========================================================================== */

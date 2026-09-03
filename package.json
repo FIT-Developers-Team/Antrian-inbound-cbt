@@ -24,6 +24,7 @@
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.4.2",
+    "@electric-sql/pglite": "^0.5.8",
     "esbuild": "^0.28.1",
     "supabase": "^2.39.2"
   }

@@ -81,6 +81,7 @@ function authenticate(body: Record<string, unknown>): Session | null {
 function canUseAction(session: Session | null, action: string): boolean {
   if (!session) return false;
   const role = session.role;
+  if (action === "cancel_ticket" || action === "cancel_po") return ["SPV", "ADMIN", "DEVELOPER"].includes(role);
   if (["delete_tickets_by_date", "delete_single_ticket"].includes(action)) return ["ADMIN", "DEVELOPER"].includes(role);
   if (action === "bulk_complete_operational") return role === "DEVELOPER";
   if (["state", "state_delta", "realtime_config", "tickets", "export_rows"].includes(action)) {
@@ -195,6 +196,12 @@ Deno.serve(async (request) => {
     }
 
     const actor = { role: session!.role, name: session!.display_name };
+    if (request.method === "POST" && ["cancel_ticket", "cancel_po"].includes(action)) {
+      if (action === "cancel_po" && !clean(body.ticket_po_id)) throw new Error("ticket_po_id wajib diisi.");
+      const payload = { ticket_id: body.ticket_id, reason: body.reason,
+        ticket_po_id: action === "cancel_po" ? body.ticket_po_id : null };
+      return jsonResponse(request, 200, { ok: true, data: await rpc("inbound_cancel", { p_payload: payload, p_actor: actor }) });
+    }
     if (request.method === "POST" && ["create_ticket", "create_tickets_bulk"].includes(action)) {
       const payload = action === "create_ticket" ? { tickets: [body] } : body;
       const data = await rpc("inbound_create_tickets_bulk", { p_payload: payload, p_actor: actor });
