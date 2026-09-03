@@ -284,18 +284,18 @@ async function submitLogin(e) {
     });
     const result = await response.json();
     const found = result?.data?.user;
-    if (!response.ok || !found) throw new Error(result?.message || "Username / password salah.");
+    if (!response.ok || !found)
+      throw new Error(result?.message || "Username / password salah.");
 
     setAuthUser(found);
     applyRoleAccessUI();
     showToast("Login sebagai " + normalizeRole(found.role));
     const nextPage = getDefaultPageForRole(found.role);
     state.page = nextPage;
-    // Tinggalkan layar login segera setelah autentikasi berhasil. Initial API
-    // load dapat terkena cold start MotherDuck dan tidak boleh menahan transisi UI.
-    renderPage(nextPage, false);
     if (typeof initApi === "function") {
       await initApi();
+    } else {
+      renderPage(nextPage, false);
     }
   } catch (error) {
     showToast(error.message || "Username / password salah.");
@@ -305,8 +305,10 @@ async function submitLogin(e) {
 
 function logoutUser() {
   const user = getAuthUser();
-  fetch("/api/inbound?action=logout", { method: "POST", credentials: "same-origin" }).catch(() => {});
-  window.stopInboundRealtime?.();
+  fetch("/api/inbound?action=logout", {
+    method: "POST",
+    credentials: "same-origin",
+  }).catch(() => {});
   clearAuthUser();
   stopCallMonitorRuntime?.();
   applyTvModeStyles?.(false);
@@ -1383,7 +1385,8 @@ function printSecurityTickets(rowsOverride = null, winOverride = null) {
             <div><b>PO</b><span>${esc(r.po_number || "-")}</span></div>
             <div><b>Plat</b><span>${esc(r.plat_number || "-")}</span></div>
             <div><b>Driver</b><span>${esc(r.driver_name || "-")}</span></div>
-            <div><b>Fleet</b><span>${esc(r.fleet_type || "-")}</span></div>
+<div><b>No. WhatsApp</b><span>${esc(r.phone_number || "-")}</span></div>
+<div><b>Fleet</b><span>${esc(r.fleet_type || "-")}</span></div>
             <div><b>Slot</b><span>${esc(r.slot || "-")}</span></div>
             <div><b>Total Qty</b><span>${esc(num(r.total_po_qty || 0))}</span></div>
             <div><b>Count SKU</b><span>${esc(num(r.count_po_sku || 0))}</span></div>
@@ -1405,27 +1408,24 @@ function printSecurityTickets(rowsOverride = null, winOverride = null) {
 <meta charset="utf-8" />
 <title>Print Nomor Antrian</title>
 <style>
-  @page { size: 105mm 148mm; margin: 5mm; }
+  @page { size: A5 portrait; margin: 10mm; }
   * { box-sizing: border-box; }
-  html, body { width: 95mm; margin: 0; padding: 0; }
-  body { font-family: Arial, Helvetica, sans-serif; color: #111827; background: #fff; }
-  .ticket { width: 95mm; height: 138mm; overflow: hidden; border: .45mm solid #111827; border-radius: 3mm; padding: 3.5mm; margin: 0; page-break-inside: avoid; break-inside: avoid; page-break-after: always; break-after: page; display: flex; flex-direction: column; }
-  .ticket:last-child { page-break-after: auto; break-after: auto; }
-  .ticket-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 2mm; border-bottom: .25mm solid #d1d5db; padding-bottom: 2mm; }
-  .brand { font-weight: 900; font-size: 13pt; letter-spacing: .02em; }
-  .sub { color: #6b7280; font-size: 6.5pt; margin-top: .5mm; text-transform: uppercase; letter-spacing: .1em; }
-  .status { border: .25mm solid #f97316; color: #ea580c; background: #fff7ed; font-weight: 900; border-radius: 99mm; padding: 1.2mm 2mm; font-size: 7pt; white-space: nowrap; }
-  .queue { text-align: center; font-family: "Courier New", monospace; font-size: 30pt; line-height: 1.08; color: #1d4ed8; font-weight: 900; margin: 3mm 0; letter-spacing: .02em; white-space: nowrap; }
-  .main { display: grid; grid-template-columns: minmax(0, 1fr) 28mm; gap: 2.5mm; align-items: start; flex: 1; min-height: 0; }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5mm; align-content: start; }
-  .grid div { border: .25mm solid #d1d5db; border-radius: 1.5mm; padding: 1.4mm; min-height: 0; overflow: hidden; }
-  b { display: block; font-size: 5.8pt; color: #6b7280; text-transform: uppercase; letter-spacing: .06em; margin-bottom: .7mm; }
-  span { display: block; font-size: 7.2pt; line-height: 1.18; font-weight: 700; overflow-wrap: anywhere; }
-  .qrbox { border: .25mm solid #d1d5db; border-radius: 2mm; padding: 1.5mm; text-align: center; align-self: start; }
-  .qrbox img { width: 25mm; height: 25mm; object-fit: contain; display: block; margin: 0 auto 1mm; }
-  .qrbox div { font-size: 5.6pt; color: #374151; font-weight: 700; line-height: 1.2; }
-  @media screen { body { background: #e5e7eb; padding: 8mm 0; } .ticket { background: #fff; margin: 0 auto 8mm; box-shadow: 0 4mm 10mm rgba(15,23,42,.16); } }
-  @media print { html, body { width: auto; } }
+  body { margin: 0; font-family: Arial, Helvetica, sans-serif; color: #111827; background: #fff; }
+  .ticket { border: 2px solid #111827; border-radius: 18px; padding: 18px; margin: 0 0 14px; page-break-inside: avoid; }
+  .ticket-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 1px solid #d1d5db; padding-bottom: 10px; }
+  .brand { font-weight: 900; font-size: 20px; letter-spacing: .02em; }
+  .sub { color: #6b7280; font-size: 12px; margin-top: 2px; text-transform: uppercase; letter-spacing: .12em; }
+  .status { border: 1px solid #f97316; color: #ea580c; background: #fff7ed; font-weight: 900; border-radius: 999px; padding: 7px 11px; font-size: 12px; }
+  .queue { text-align: center; font-family: "Courier New", monospace; font-size: 60px; line-height: 1; color: #1d4ed8; font-weight: 900; margin: 18px 0; letter-spacing: .04em; }
+  .main { display: grid; grid-template-columns: 1fr 145px; gap: 12px; align-items: start; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .grid div { border: 1px solid #d1d5db; border-radius: 10px; padding: 8px; min-height: 50px; }
+  b { display: block; font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 5px; }
+  span { font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
+  .qrbox { border: 1px solid #d1d5db; border-radius: 12px; padding: 8px; text-align: center; }
+  .qrbox img { width: 128px; height: 128px; object-fit: contain; display: block; margin: 0 auto 6px; }
+  .qrbox div { font-size: 9px; color: #374151; font-weight: 700; line-height: 1.25; }
+  @media print { .ticket { margin-bottom: 10mm; } }
 </style>
 </head>
 <body>${cards}<script>window.onload = () => { window.print(); setTimeout(() => window.close(), 700); };</script></body>
@@ -3575,10 +3575,12 @@ function pageSetting() {
 
 function pageDebug() {
   const debugUser = typeof getAuthUser === "function" ? getAuthUser() : null;
-  const isDeveloper = String(debugUser?.role || "").toUpperCase() === "DEVELOPER";
-  const operationalDate = typeof getOperationalDateKey === "function"
-    ? getOperationalDateKey(new Date())
-    : new Date().toISOString().slice(0, 10);
+  const isDeveloper =
+    String(debugUser?.role || "").toUpperCase() === "DEVELOPER";
+  const operationalDate =
+    typeof getOperationalDateKey === "function"
+      ? getOperationalDateKey(new Date())
+      : new Date().toISOString().slice(0, 10);
   return `<div class="glass-card rounded-xl p-6">
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4"><div><h3 class="font-headline-md text-headline-md">Debug API</h3><p class="text-on-surface-variant">Cek schema, sample row, dan hasil agregasi.</p></div><button onclick="loadDebug()" class="bg-primary-container text-on-primary-container px-5 py-3 rounded-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined">bug_report</span>Run Debug</button></div>
     <section class="mb-5 rounded-xl border border-primary/25 bg-primary-container/5 p-4">
@@ -3586,7 +3588,9 @@ function pageDebug() {
       <div id="superset-freshness-output"><p class="text-sm text-on-surface-variant">Klik cek data live untuk melihat received time dan sync terakhir.</p></div>
     </section>
     <pre id="debug-output" class="bg-surface-container-high/60 border border-outline-variant rounded-lg p-4 text-xs overflow-auto max-h-[650px]">${esc(JSON.stringify(state.debug || { info: "Klik Run Debug" }, null, 2))}</pre>
-    ${isDeveloper ? `<div class="mt-6 border border-error/30 rounded-lg p-4 bg-error-container/10">
+    ${
+      isDeveloper
+        ? `<div class="mt-6 border border-error/30 rounded-lg p-4 bg-error-container/10">
       <h4 class="font-bold text-error mb-1">Hapus satu ticket salah input</h4>
       <p class="text-sm text-on-surface-variant mb-3">Khusus Developer. Ticket, detail PO, dan event dihapus permanen hanya bila <b>Queue No + Plat + tanggal operasional</b> cocok persis. Tidak memengaruhi ticket lain.</p>
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:items-end">
@@ -3596,7 +3600,9 @@ function pageDebug() {
       </div>
       <button id="single-ticket-delete-button" onclick="deleteSingleTicket()" class="mt-3 bg-error text-on-error px-5 py-3 rounded-lg font-bold">Hapus satu ticket ini</button>
       <p id="single-ticket-delete-result" class="text-sm mt-3"></p>
-    </div>` : ""}
+    </div>`
+        : ""
+    }
     <div class="mt-6 border border-error/30 rounded-lg p-4 bg-error-container/10">
       <h4 class="font-bold text-error mb-1">Hapus data operasional per tanggal</h4>
       <p class="text-sm text-on-surface-variant mb-3">Khusus Developer. Menghapus ticket, detail PO, dan event pada tanggal yang dipilih secara permanen.</p>
@@ -3606,7 +3612,9 @@ function pageDebug() {
       </div>
       <p id="cleanup-operational-result" class="text-sm mt-3"></p>
     </div>
-    ${isDeveloper ? `<div class="mt-5 border border-warning/40 rounded-lg p-4 bg-warning-container/10">
+    ${
+      isDeveloper
+        ? `<div class="mt-5 border border-warning/40 rounded-lg p-4 bg-warning-container/10">
       <h4 class="font-bold text-warning mb-1">Clear task otomatis</h4>
       <p class="text-sm text-on-surface-variant mb-3">Khusus akun Developer. Semua tiket aktif akan diproses sampai <b>COMPLETED</b>: panggil, bongkar/checking, Done GR, lalu Handover GRN. Actual Qty yang masih kosong diisi sesuai Qty PO. Riwayat ticket tetap tersimpan.</p>
       <div class="flex flex-col sm:flex-row gap-3 sm:items-end">
@@ -3615,7 +3623,9 @@ function pageDebug() {
       </div>
       <label class="mt-3 inline-flex items-start gap-2 text-sm text-on-surface-variant cursor-pointer"><input id="bulk-complete-all-dates" type="checkbox" checked class="mt-1" /><span><b class="text-on-surface">Clear semua tanggal aktif</b><br/>Centang ini untuk termasuk tiket gantung dari hari operasional sebelumnya. Lepas centang bila hanya ingin tanggal di atas.</span></label>
       <p id="bulk-complete-operational-result" class="text-sm mt-3"></p>
-    </div>` : ""}
+    </div>`
+        : ""
+    }
   </div>`;
 }
 
@@ -3920,16 +3930,12 @@ function vendorMatchesFilter(vendor, filter) {
 
 function handleVendorFilterInput(input) {
   const currentVendor = getVendorValue() || String(input?.value || "").trim();
-  const currentVendorIsMaster = isMasterVendorValue(currentVendor);
   const selected = getSelectedPoNumbers();
 
   if (selected.length) {
-    const kept = selected.filter((po) => {
-      // Vendor manual boleh dipasangkan dengan PO manual maupun PO master.
-      // PO manual juga tidak mempunyai metadata vendor untuk dibandingkan.
-      if (!currentVendorIsMaster || !getPoMeta(po)) return true;
-      return vendorMatchesFilter(getPoVendor(po), currentVendor);
-    });
+    const kept = selected.filter((po) =>
+      vendorMatchesFilter(getPoVendor(po), currentVendor),
+    );
     if (kept.length !== selected.length) {
       setSelectedPoNumbers(kept, true);
       showToast("PO yang beda vendor otomatis dilepas.");
@@ -4122,33 +4128,18 @@ function getVendorValue() {
   ).trim();
 }
 
-function isMasterVendorValue(value = "") {
-  const key = normalizeKey(value);
-  return Boolean(
-    key &&
-      (state.options.vendor_name || []).some(
-        (vendor) => normalizeKey(vendor) === key,
-      ),
-  );
-}
-
 function setVendorValue(value = "", trigger = true) {
   const safeValue = String(value || "").trim();
-  const isManual = Boolean(safeValue && !isMasterVendorValue(safeValue));
   const hidden = document.getElementById("vendor-name-value");
   const search = document.getElementById("vendor-search-input");
   const label = document.getElementById("vendor-selected-label");
 
-  if (hidden) {
-    hidden.value = safeValue;
-    hidden.dataset.manualVendor = isManual ? "true" : "false";
-  }
+  if (hidden) hidden.value = safeValue;
   if (search) search.value = "";
   if (label) {
     label.innerHTML = safeValue
       ? `<span class="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/25 text-primary px-2 py-1 text-[11px] font-extrabold max-w-full">
           <span class="break-words">${esc(safeValue)}</span>
-          ${isManual ? '<span class="rounded bg-warning/15 text-warning px-1.5 py-0.5 text-[9px]">MANUAL</span>' : ""}
           <button type="button" class="w-5 h-5 rounded-full bg-primary/10 hover:bg-primary/20 leading-none shrink-0" onclick="event.stopPropagation(); clearVendorChoice()" title="Hapus vendor">×</button>
         </span>`
       : `<span class="text-[12px] text-on-surface-variant px-1">Belum ada vendor dipilih</span>`;
@@ -4233,7 +4224,7 @@ function vendorCustomSelectInput(value = "") {
         <div id="vendor-dropdown-list"></div>
       </div>
     </div>
-    <span class="form-help">Pilih hasil master. Jika tidak ditemukan, ketik nama lengkap lalu pilih <b>Gunakan vendor manual</b>.</span>
+    <span class="form-help">Pilih vendor dari dropdown custom. Setelah vendor dipilih, PO Number otomatis filter sesuai vendor.</span>
   </label>`;
 }
 
@@ -4255,23 +4246,15 @@ function filterVendorDropdown() {
 
   const options = getFilteredVendorOptions();
   const q = getVendorSearchText();
-  const exactMaster = isMasterVendorValue(q);
-  const manualAction =
-    q && !exactMaster
-      ? `<button type="button" onclick="commitManualVendor(event)" class="w-full mb-2 px-3 py-3 rounded-lg bg-warning/10 border border-warning/30 hover:bg-warning/20 text-left touch-manipulation">
-          <span class="block text-[10px] text-warning font-extrabold uppercase">Vendor tidak ada di master?</span>
-          <span class="block mt-1 font-bold text-[12px] sm:text-[13px] text-on-surface break-words">Gunakan manual: ${esc(q)}</span>
-        </button>`
-      : "";
 
   if (!options.length) {
-    list.innerHTML = `${manualAction}<div class="px-3 py-3 text-[12px] text-on-surface-variant">${
+    list.innerHTML = `<div class="px-3 py-3 text-[12px] text-on-surface-variant">${
       q ? "Vendor tidak ditemukan." : "Vendor belum tersedia dari Data V2."
     }</div>`;
     return;
   }
 
-  list.innerHTML = manualAction + options
+  list.innerHTML = options
     .map((vendor) => {
       const poCount = (state.options.po_number || []).filter((po) =>
         vendorMatchesFilter(getPoVendor(po), vendor),
@@ -4284,18 +4267,6 @@ function filterVendorDropdown() {
       </button>`;
     })
     .join("");
-}
-
-function commitManualVendor(event = null) {
-  event?.preventDefault?.();
-  event?.stopPropagation?.();
-  const vendor = getVendorSearchText().replace(/\s+/g, " ").trim().slice(0, 180);
-  if (!vendor) return showToast("Ketik Vendor Name manual terlebih dahulu.");
-  setVendorValue(vendor, true);
-  document.getElementById("vendor-dropdown")?.classList.add("hidden");
-  showToast(`Vendor manual digunakan: ${vendor}`);
-  const poSearch = document.getElementById("po-search-input");
-  if (poSearch && !isMobileTouchFormDevice()) poSearch.focus();
 }
 
 function selectVendorChoice(encoded) {
@@ -4323,7 +4294,6 @@ function handleVendorSearchKeydown(event) {
     event.preventDefault();
     const first = getFilteredVendorOptions()[0];
     if (first) selectVendorChoice(poEncode(first));
-    else commitManualVendor(event);
   } else if (event.key === "Escape") {
     document.getElementById("vendor-dropdown")?.classList.add("hidden");
   }
@@ -4356,7 +4326,7 @@ function poMultiSelectInput(value = "") {
         onclick="handleCustomSearchContainerClick(event, 'po-search-input', 'po')">
         <div id="po-selected-chips" class="contents">${chipHtml}</div>
         <input id="po-search-input" type="text" class="min-w-[150px] sm:min-w-[220px] flex-1 bg-transparent border-0 outline-none focus:ring-0 p-1 text-on-surface placeholder:text-on-surface-variant/70 text-sm sm:text-base" placeholder="Cari PO sesuai vendor..." autocomplete="off" onfocus="openPoDropdown()" onblur="closePoDropdownSoon()" oninput="handlePoSearchInput(this)" onkeydown="handlePoSearchKeydown(event)" />
-        <button type="button" class="thin-tab rounded-md px-3 py-2 text-[11px] font-extrabold shrink-0" onclick="event.stopPropagation(); addPoFromSearch()">Tambah / Manual</button>
+        <button type="button" class="thin-tab rounded-md px-3 py-2 text-[11px] font-extrabold shrink-0" onclick="event.stopPropagation(); addPoFromSearch()">Tambah</button>
       </div>
       <div id="po-dropdown"
         onpointerdown="window.__poDropdownInteracting=true; setTimeout(()=>window.__poDropdownInteracting=false,500)"
@@ -4365,7 +4335,7 @@ function poMultiSelectInput(value = "") {
         <div id="po-dropdown-list"></div>
       </div>
     </div>
-    <span class="form-help">PO list mengikuti Vendor Name. Jika PO tidak ada, ketik nomor lengkap lalu tekan <b>Tambah / Manual</b> atau Enter.</span>
+    <span class="form-help">PO list otomatis mengikuti Vendor Name. Jika 1 plat memilih banyak PO vendor sama, tetap jadi 1 antrian/mobil.</span>
   </label>`;
 }
 
@@ -7445,7 +7415,9 @@ function securityFormMatchesRowsForPrint(rows = []) {
   window.__waitingListV19Installed = true;
 
   window.doneGrBatchV19 = async function doneGrBatchV19() {
-    const inputs = [...document.querySelectorAll("[data-actual-qty-input-v18]")];
+    const inputs = [
+      ...document.querySelectorAll("[data-actual-qty-input-v18]"),
+    ];
     const byTicket = new Map();
     for (const input of inputs) {
       const quantity = Number(input.value || 0);
@@ -7455,13 +7427,21 @@ function securityFormMatchesRowsForPrint(rows = []) {
         (row.po_rows || []).some((po) => String(po.ticket_po_id) === poId),
       );
       if (!ticket || !poId) continue;
-      if (!byTicket.has(ticket.ticket_id)) byTicket.set(ticket.ticket_id, { ticket, items: [] });
-      byTicket.get(ticket.ticket_id).items.push({ ticket_po_id: poId, actual_quantity: quantity });
+      if (!byTicket.has(ticket.ticket_id))
+        byTicket.set(ticket.ticket_id, { ticket, items: [] });
+      byTicket
+        .get(ticket.ticket_id)
+        .items.push({ ticket_po_id: poId, actual_quantity: quantity });
     }
     if (!byTicket.size) {
-      return showToast("Isi Actual Qty lebih dari 0 pada PO yang ingin di-Done GR.");
+      return showToast(
+        "Isi Actual Qty lebih dari 0 pada PO yang ingin di-Done GR.",
+      );
     }
-    const total = [...byTicket.values()].reduce((sum, item) => sum + item.items.length, 0);
+    const total = [...byTicket.values()].reduce(
+      (sum, item) => sum + item.items.length,
+      0,
+    );
     if (!confirm(`Simpan Actual Qty dan Done GR untuk ${total} PO?`)) return;
     try {
       for (const { ticket, items } of byTicket.values()) {
@@ -7482,7 +7462,82 @@ function securityFormMatchesRowsForPrint(rows = []) {
   };
 
   const LEGACY_OUTPUT_HEADERS_V20 = [
-    "Timestamp", "ticket_id", "queue_no", "ticket_type", "slot", "fleet_type", "plat_number", "driver_name", "phone_number", "ktp_6_digit", "vendor_name", "po_number", "total_po_qty", "actual_quantity", "count_po_sku", "status", "gate", "unload_sla", "source", "created_at", "register_time", "called_at", "updated_at", "completed_at", "start_unloading_at", "driver_waiting_duration", "driver_waiting_minutes", "unloading_duration", "unloading_duration_minutes", "sla_target_hours", "sla_status", "wa_call_status", "wa_call_sent_at", "wa_call_error", "wa_call_provider", "wa_call_target", "call_count", "last_call_attempt_at", "expired_at", "expired_reason", "sla_finished_at", "operational_date", "data_source", "last_call_at", "waiting_gr_at", "done_gr_at", "handover_grn_at", "wa_handover_status", "wa_handover_sent_at", "wa_handover_error", "wa_handover_target", "ticket_po_id", "po_sequence", "ticket_po_count", "ticket_total_qty", "ticket_total_sku", "finish_unloading_at", "checker_id", "checker_name", "checker_status", "checker_started_at", "checker_done_at", "checker_started_by", "checker_done_by", "checker_duration", "checker_duration_minutes", "gr_status", "done_gr_by", "gr_wait_duration", "gr_wait_minutes", "inbound_sla_duration", "inbound_sla_minutes", "wa_ticket_status", "wa_ticket_sent_at", "wa_ticket_error", "wa_ticket_target",
+    "Timestamp",
+    "ticket_id",
+    "queue_no",
+    "ticket_type",
+    "slot",
+    "fleet_type",
+    "plat_number",
+    "driver_name",
+    "phone_number",
+    "ktp_6_digit",
+    "vendor_name",
+    "po_number",
+    "total_po_qty",
+    "actual_quantity",
+    "count_po_sku",
+    "status",
+    "gate",
+    "unload_sla",
+    "source",
+    "created_at",
+    "register_time",
+    "called_at",
+    "updated_at",
+    "completed_at",
+    "start_unloading_at",
+    "driver_waiting_duration",
+    "driver_waiting_minutes",
+    "unloading_duration",
+    "unloading_duration_minutes",
+    "sla_target_hours",
+    "sla_status",
+    "wa_call_status",
+    "wa_call_sent_at",
+    "wa_call_error",
+    "wa_call_provider",
+    "wa_call_target",
+    "call_count",
+    "last_call_attempt_at",
+    "expired_at",
+    "expired_reason",
+    "sla_finished_at",
+    "operational_date",
+    "data_source",
+    "last_call_at",
+    "waiting_gr_at",
+    "done_gr_at",
+    "handover_grn_at",
+    "wa_handover_status",
+    "wa_handover_sent_at",
+    "wa_handover_error",
+    "wa_handover_target",
+    "ticket_po_id",
+    "po_sequence",
+    "ticket_po_count",
+    "ticket_total_qty",
+    "ticket_total_sku",
+    "finish_unloading_at",
+    "checker_id",
+    "checker_name",
+    "checker_status",
+    "checker_started_at",
+    "checker_done_at",
+    "checker_started_by",
+    "checker_done_by",
+    "checker_duration",
+    "checker_duration_minutes",
+    "gr_status",
+    "done_gr_by",
+    "gr_wait_duration",
+    "gr_wait_minutes",
+    "inbound_sla_duration",
+    "inbound_sla_minutes",
+    "wa_ticket_status",
+    "wa_ticket_sent_at",
+    "wa_ticket_error",
+    "wa_ticket_target",
   ];
 
   function durationExportV20(from, to) {
@@ -7491,7 +7546,10 @@ function securityFormMatchesRowsForPrint(rows = []) {
     if (!start || !end || end < start) return { text: "", minutes: "" };
     const minutes = Math.round((end - start) / 60000);
     const hours = String(Math.floor(minutes / 60)).padStart(2, "0");
-    return { text: `${hours}:${String(minutes % 60).padStart(2, "0")}:00`, minutes };
+    return {
+      text: `${hours}:${String(minutes % 60).padStart(2, "0")}:00`,
+      minutes,
+    };
   }
 
   function legacyOutputRowsV20(rows) {
@@ -7503,17 +7561,111 @@ function securityFormMatchesRowsForPrint(rows = []) {
     });
     return rows.map((row) => {
       const pos = byTicket.get(String(row.ticket_id || "")) || [row];
-      const poSequence = Math.max(1, pos.findIndex((item) => item.ticket_po_id === row.ticket_po_id) + 1);
-      const ticketQty = pos.reduce((sum, item) => sum + Number(item.total_po_qty || 0), 0);
-      const ticketSku = pos.reduce((sum, item) => sum + Number(item.count_po_sku || 0), 0);
+      const poSequence = Math.max(
+        1,
+        pos.findIndex((item) => item.ticket_po_id === row.ticket_po_id) + 1,
+      );
+      const ticketQty = pos.reduce(
+        (sum, item) => sum + Number(item.total_po_qty || 0),
+        0,
+      );
+      const ticketSku = pos.reduce(
+        (sum, item) => sum + Number(item.count_po_sku || 0),
+        0,
+      );
       const finish = row.finish_unloading_at || "";
-      const driverWaiting = durationExportV20(row.created_at || row.register_time, row.start_unloading_at || finish);
+      const driverWaiting = durationExportV20(
+        row.created_at || row.register_time,
+        row.start_unloading_at || finish,
+      );
       const unloading = durationExportV20(row.start_unloading_at, finish);
-      const checker = durationExportV20(row.checker_started_at, row.checker_done_at);
+      const checker = durationExportV20(
+        row.checker_started_at,
+        row.checker_done_at,
+      );
       const grWait = durationExportV20(row.checker_done_at, row.done_gr_at);
-      const inboundSla = durationExportV20(row.start_unloading_at, finish || row.done_gr_at);
+      const inboundSla = durationExportV20(
+        row.start_unloading_at,
+        finish || row.done_gr_at,
+      );
       return {
-        Timestamp: row.created_at || row.register_time || "", ticket_id: row.ticket_id || "", queue_no: row.queue_no || "", ticket_type: row.ticket_type || "", slot: row.slot || "", fleet_type: row.fleet_type || "", plat_number: row.plat_number || "", driver_name: row.driver_name || "", phone_number: row.phone_number || "", ktp_6_digit: row.ktp_6_digit || "", vendor_name: row.po_vendor_name || row.vendor_name || "", po_number: row.po_number || "", total_po_qty: row.total_po_qty || 0, actual_quantity: row.actual_quantity || 0, count_po_sku: row.count_po_sku || 0, status: row.status || "", gate: row.gate || "", unload_sla: row.unload_sla || "", source: row.source || "MotherDuck", created_at: row.created_at || "", register_time: row.register_time || row.created_at || "", called_at: row.called_at || "", updated_at: row.updated_at || row.po_updated_at || "", completed_at: String(row.status || "").toUpperCase() === "COMPLETED" ? finish : "", start_unloading_at: row.start_unloading_at || "", driver_waiting_duration: driverWaiting.text, driver_waiting_minutes: driverWaiting.minutes, unloading_duration: unloading.text, unloading_duration_minutes: unloading.minutes, sla_target_hours: "", sla_status: row.unload_sla || "", wa_call_status: "", wa_call_sent_at: "", wa_call_error: "", wa_call_provider: "", wa_call_target: "", call_count: row.call_count || 0, last_call_attempt_at: row.last_call_at || "", expired_at: row.expired_at || "", expired_reason: row.expired_reason || "", sla_finished_at: finish, operational_date: row.operational_date || "", data_source: "MotherDuck", last_call_at: row.last_call_at || "", waiting_gr_at: row.checker_done_at || "", done_gr_at: row.done_gr_at || "", handover_grn_at: row.handover_grn_at || "", wa_handover_status: "", wa_handover_sent_at: "", wa_handover_error: "", wa_handover_target: "", ticket_po_id: row.ticket_po_id || "", po_sequence: poSequence, ticket_po_count: pos.length, ticket_total_qty: ticketQty, ticket_total_sku: ticketSku, finish_unloading_at: finish, checker_id: row.checker_id || "", checker_name: row.checker_name || "", checker_status: row.checker_status || "", checker_started_at: row.checker_started_at || "", checker_done_at: row.checker_done_at || "", checker_started_by: "", checker_done_by: "", checker_duration: checker.text, checker_duration_minutes: checker.minutes, gr_status: row.gr_status || "", done_gr_by: "", gr_wait_duration: grWait.text, gr_wait_minutes: grWait.minutes, inbound_sla_duration: inboundSla.text, inbound_sla_minutes: inboundSla.minutes, wa_ticket_status: "", wa_ticket_sent_at: "", wa_ticket_error: "", wa_ticket_target: "",
+        Timestamp: row.created_at || row.register_time || "",
+        ticket_id: row.ticket_id || "",
+        queue_no: row.queue_no || "",
+        ticket_type: row.ticket_type || "",
+        slot: row.slot || "",
+        fleet_type: row.fleet_type || "",
+        plat_number: row.plat_number || "",
+        driver_name: row.driver_name || "",
+        phone_number: row.phone_number || "",
+        ktp_6_digit: row.ktp_6_digit || "",
+        vendor_name: row.po_vendor_name || row.vendor_name || "",
+        po_number: row.po_number || "",
+        total_po_qty: row.total_po_qty || 0,
+        actual_quantity: row.actual_quantity || 0,
+        count_po_sku: row.count_po_sku || 0,
+        status: row.status || "",
+        gate: row.gate || "",
+        unload_sla: row.unload_sla || "",
+        source: row.source || "MotherDuck",
+        created_at: row.created_at || "",
+        register_time: row.register_time || row.created_at || "",
+        called_at: row.called_at || "",
+        updated_at: row.updated_at || row.po_updated_at || "",
+        completed_at:
+          String(row.status || "").toUpperCase() === "COMPLETED" ? finish : "",
+        start_unloading_at: row.start_unloading_at || "",
+        driver_waiting_duration: driverWaiting.text,
+        driver_waiting_minutes: driverWaiting.minutes,
+        unloading_duration: unloading.text,
+        unloading_duration_minutes: unloading.minutes,
+        sla_target_hours: "",
+        sla_status: row.unload_sla || "",
+        wa_call_status: "",
+        wa_call_sent_at: "",
+        wa_call_error: "",
+        wa_call_provider: "",
+        wa_call_target: "",
+        call_count: row.call_count || 0,
+        last_call_attempt_at: row.last_call_at || "",
+        expired_at: row.expired_at || "",
+        expired_reason: row.expired_reason || "",
+        sla_finished_at: finish,
+        operational_date: row.operational_date || "",
+        data_source: "MotherDuck",
+        last_call_at: row.last_call_at || "",
+        waiting_gr_at: row.checker_done_at || "",
+        done_gr_at: row.done_gr_at || "",
+        handover_grn_at: row.handover_grn_at || "",
+        wa_handover_status: "",
+        wa_handover_sent_at: "",
+        wa_handover_error: "",
+        wa_handover_target: "",
+        ticket_po_id: row.ticket_po_id || "",
+        po_sequence: poSequence,
+        ticket_po_count: pos.length,
+        ticket_total_qty: ticketQty,
+        ticket_total_sku: ticketSku,
+        finish_unloading_at: finish,
+        checker_id: row.checker_id || "",
+        checker_name: row.checker_name || "",
+        checker_status: row.checker_status || "",
+        checker_started_at: row.checker_started_at || "",
+        checker_done_at: row.checker_done_at || "",
+        checker_started_by: "",
+        checker_done_by: "",
+        checker_duration: checker.text,
+        checker_duration_minutes: checker.minutes,
+        gr_status: row.gr_status || "",
+        done_gr_by: "",
+        gr_wait_duration: grWait.text,
+        gr_wait_minutes: grWait.minutes,
+        inbound_sla_duration: inboundSla.text,
+        inbound_sla_minutes: inboundSla.minutes,
+        wa_ticket_status: "",
+        wa_ticket_sent_at: "",
+        wa_ticket_error: "",
+        wa_ticket_target: "",
       };
     });
   }
@@ -7522,33 +7674,50 @@ function securityFormMatchesRowsForPrint(rows = []) {
     try {
       showToast("Menyiapkan CSV detail dari MotherDuck...");
       const allRows = await motherDuckApiGet("export_rows");
-      const visibleTickets = window.__waitingListFilteredRowsV181 || state.dashboard?.report_preview || [];
-      const ticketIds = new Set(visibleTickets.map((ticket) => String(ticket.ticket_id || "")).filter(Boolean));
+      const visibleTickets =
+        window.__waitingListFilteredRowsV181 ||
+        state.dashboard?.report_preview ||
+        [];
+      const ticketIds = new Set(
+        visibleTickets
+          .map((ticket) => String(ticket.ticket_id || ""))
+          .filter(Boolean),
+      );
       const selectedRows = ticketIds.size
         ? allRows.filter((row) => ticketIds.has(String(row.ticket_id || "")))
         : allRows;
-      if (!selectedRows.length) return showToast("Tidak ada data sesuai filter.");
+      if (!selectedRows.length)
+        return showToast("Tidak ada data sesuai filter.");
       const rows = legacyOutputRowsV20(selectedRows);
 
-      const escapeCsv = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+      const escapeCsv = (value) =>
+        `"${String(value ?? "").replaceAll('"', '""')}"`;
       const csv = [
         LEGACY_OUTPUT_HEADERS_V20.map(escapeCsv).join(","),
-        ...rows.map((row) => LEGACY_OUTPUT_HEADERS_V20.map((key) => escapeCsv(row[key])).join(",")),
+        ...rows.map((row) =>
+          LEGACY_OUTPUT_HEADERS_V20.map((key) => escapeCsv(row[key])).join(","),
+        ),
       ].join("\r\n");
-      const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
+      const url = URL.createObjectURL(
+        new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }),
+      );
       const link = document.createElement("a");
       link.href = url;
       link.download = `waiting-list-detail-${new Date().toISOString().slice(0, 10)}.csv`;
       link.click();
       URL.revokeObjectURL(url);
-      showToast(`${rows.length} baris PO dengan header detail berhasil diexport.`);
+      showToast(
+        `${rows.length} baris PO dengan header detail berhasil diexport.`,
+      );
     } catch (error) {
       console.error(error);
       showToast(`Export CSV gagal: ${error.message}`);
     }
   };
   window.__exportCsvV19 = window.exportCsv;
-  try { exportCsv = window.exportCsv; } catch (error) {}
+  try {
+    exportCsv = window.exportCsv;
+  } catch (error) {}
 })();
 
 /* ==========================================================================
@@ -8322,30 +8491,6 @@ function securityFormMatchesRowsForPrint(rows = []) {
 
   let explicitSubmitRunning = false;
 
-  function commitPendingManualSecurityInputs(form) {
-    if (!form) return;
-
-    // Mobile users often type a value and immediately tap Buat Nomor without
-    // pressing Enter or selecting the dropdown action. Preserve both raw texts
-    // before committing Vendor because changing Vendor refreshes the PO search.
-    const pendingVendor = String(
-      document.getElementById("vendor-search-input")?.value || "",
-    )
-      .replace(/\s+/g, " ")
-      .trim();
-    const pendingPo = String(
-      document.getElementById("po-search-input")?.value || "",
-    ).trim();
-    const committedVendor = String(form.vendor_name?.value || "").trim();
-
-    if (!committedVendor && pendingVendor) {
-      setVendorValue(pendingVendor.slice(0, 180), true);
-    }
-    if (pendingPo) {
-      addPoChoice(pendingPo);
-    }
-  }
-
   window.explicitSecuritySubmit = async function explicitSecuritySubmit(
     button,
   ) {
@@ -8357,8 +8502,6 @@ function securityFormMatchesRowsForPrint(rows = []) {
       showToast?.("Form Security tidak ditemukan.");
       return;
     }
-
-    commitPendingManualSecurityInputs(form);
 
     if (explicitSubmitRunning || window.securitySubmitBusy) {
       showToast?.("Submit sedang diproses, tunggu sebentar.");
@@ -10489,10 +10632,13 @@ window.initShader = function initShaderDisabled() {
     const checkerSearch = document.getElementById("checker-mp-search-v15");
     const checkerSelect = document.getElementById("checker-mp-select-v15");
     checkerSearch?.addEventListener("input", () => {
-      const keyword = String(checkerSearch.value || "").trim().toLowerCase();
+      const keyword = String(checkerSearch.value || "")
+        .trim()
+        .toLowerCase();
       [...checkerSelect.options].forEach((option, index) => {
         if (index === 0) return;
-        option.hidden = !!keyword && !option.text.toLowerCase().includes(keyword);
+        option.hidden =
+          !!keyword && !option.text.toLowerCase().includes(keyword);
       });
     });
     document.body.classList.add("mobile-checker-action-sheet-open");
@@ -10527,7 +10673,10 @@ window.initShader = function initShaderDisabled() {
     ]
       .filter((input) => {
         const status = String(
-          input.closest(".checker-po-row-v15")?.querySelector("[data-checker-status]")?.dataset?.checkerStatus || "PENDING",
+          input
+            .closest(".checker-po-row-v15")
+            ?.querySelector("[data-checker-status]")?.dataset?.checkerStatus ||
+            "PENDING",
         ).toUpperCase();
         return status === allowedStatus;
       })
@@ -12429,18 +12578,6 @@ window.initShader = function initShaderDisabled() {
     ).trim();
     const vendorFilter = getSelectedVendorFilter();
     const registeredCount = getRegisteredPoSet().size;
-    const queryKey = normalizeKey(query);
-    const queryIsMaster = (state.options.po_number || []).some(
-      (po) => normalizeKey(po) === queryKey,
-    );
-    const queryIsRegistered = queryKey && getRegisteredPoSet().has(queryKey);
-    const manualAction =
-      query && !queryIsMaster && !queryIsRegistered
-        ? `<button type="button" onpointerdown="preventDropdownBlurSelect(event)" onclick="event.preventDefault(); event.stopPropagation(); addPoFromSearch(); closePoDropdownV162()" class="w-full mb-2 px-3 py-3 rounded-lg bg-warning/10 border border-warning/30 hover:bg-warning/20 text-left touch-manipulation">
-            <span class="block text-[10px] text-warning font-extrabold uppercase">PO tidak ada di master?</span>
-            <span class="block mt-1 font-queue-id text-[12px] sm:text-[13px] text-on-surface break-all">Gunakan PO manual: ${esc(query)}</span>
-          </button>`
-        : "";
 
     // Hapus pilihan yang sudah tidak ada di list aktif/vendor sekarang.
     const available = new Set(options.map((po) => normalizeKey(po)));
@@ -12456,11 +12593,11 @@ window.initShader = function initShaderDisabled() {
           ? "PO tidak ada untuk vendor/filter tersebut, atau PO sudah pernah daftar."
           : "Belum ada PO available untuk vendor ini."
         : "Pilih Vendor Name dulu supaya list PO terfilter.";
-      list.innerHTML = `${manualAction}<div class="px-3 py-3 text-[12px] text-on-surface-variant">${message}${registeredCount ? `<div class="mt-1 text-warning font-bold">${registeredCount} PO sudah terdaftar dan disembunyikan.</div>` : ""}</div>`;
+      list.innerHTML = `<div class="px-3 py-3 text-[12px] text-on-surface-variant">${message}${registeredCount ? `<div class="mt-1 text-warning font-bold">${registeredCount} PO sudah terdaftar dan disembunyikan.</div>` : ""}</div>`;
       return;
     }
 
-    list.innerHTML = `${manualAction}<div class="space-y-1 pb-14">
+    list.innerHTML = `<div class="space-y-1 pb-14">
       ${options
         .map((po) => {
           const meta = getPoMeta(po);
@@ -13561,7 +13698,8 @@ window.initShader = function initShaderDisabled() {
       }
 
       const rowDate = operationalDateV181(row);
-      if (filters.dateFrom && rowDate && rowDate < filters.dateFrom) return false;
+      if (filters.dateFrom && rowDate && rowDate < filters.dateFrom)
+        return false;
       if (filters.dateTo && rowDate && rowDate > filters.dateTo) return false;
 
       if (
@@ -13575,7 +13713,9 @@ window.initShader = function initShaderDisabled() {
 
       if (filters.grStatus) {
         const poRows = Array.isArray(row.po_rows) ? row.po_rows : [];
-        const grStatuses = poRows.map((po) => String(po.gr_status || "PENDING").toUpperCase());
+        const grStatuses = poRows.map((po) =>
+          String(po.gr_status || "PENDING").toUpperCase(),
+        );
         const wanted = String(filters.grStatus).toUpperCase();
         if (wanted === "BELUM DONE GR") {
           if (!grStatuses.some((status) => status !== "DONE GR")) return false;
@@ -13719,8 +13859,10 @@ window.initShader = function initShaderDisabled() {
       "";
     f.operationalDate =
       document.getElementById("waiting-filter-date-v181")?.value || "";
-    f.dateFrom = document.getElementById("waiting-filter-date-from-v181")?.value || "";
-    f.dateTo = document.getElementById("waiting-filter-date-to-v181")?.value || "";
+    f.dateFrom =
+      document.getElementById("waiting-filter-date-from-v181")?.value || "";
+    f.dateTo =
+      document.getElementById("waiting-filter-date-to-v181")?.value || "";
     f.status =
       document.getElementById("waiting-filter-status-v181")?.value || "";
     f.grStatus = document.getElementById("waiting-filter-gr-v181")?.value || "";
@@ -13836,7 +13978,9 @@ window.initShader = function initShaderDisabled() {
 // V19 export must win over legacy exports registered earlier in this file.
 if (window.__exportCsvV19) {
   window.exportCsv = window.__exportCsvV19;
-  try { exportCsv = window.exportCsv; } catch (error) {}
+  try {
+    exportCsv = window.exportCsv;
+  } catch (error) {}
 }
 
 /* ==========================================================================
@@ -13847,28 +13991,46 @@ if (window.__exportCsvV19) {
   if (window.__waitingMonitorCommandCenterV19Installed) return;
   window.__waitingMonitorCommandCenterV19Installed = true;
 
-  const safeStatus = (row = {}) => String(row.status || "WAITING").toUpperCase();
+  const safeStatus = (row = {}) =>
+    String(row.status || "WAITING").toUpperCase();
   const isTerminal = (status) => ["COMPLETED", "EXPIRED"].includes(status);
   const displayStatus = (status) =>
-    ({ UNLOADING: "BONGKAR", "WAITING GR": "WAITING GR", "DONE GR": "DONE GR" }[status] || status);
+    ({
+      UNLOADING: "BONGKAR",
+      "WAITING GR": "WAITING GR",
+      "DONE GR": "DONE GR",
+    })[status] || status;
   const statusStyle = (status) => {
-    if (status === "UNLOADING") return "background:rgb(var(--primary) / .12);color:rgb(var(--primary));";
-    if (status === "WAITING GR" || status === "DONE GR") return "background:rgb(var(--success) / .12);color:rgb(var(--success));";
-    if (status === "CALLED") return "background:rgb(var(--warning) / .14);color:rgb(var(--warning));";
-    if (status === "EXPIRED") return "background:rgb(var(--error) / .12);color:rgb(var(--error));";
+    if (status === "UNLOADING")
+      return "background:rgb(var(--primary) / .12);color:rgb(var(--primary));";
+    if (status === "WAITING GR" || status === "DONE GR")
+      return "background:rgb(var(--success) / .12);color:rgb(var(--success));";
+    if (status === "CALLED")
+      return "background:rgb(var(--warning) / .14);color:rgb(var(--warning));";
+    if (status === "EXPIRED")
+      return "background:rgb(var(--error) / .12);color:rgb(var(--error));";
     return "background:rgb(var(--outline-variant) / .22);color:rgb(var(--on-surface-variant));";
   };
-  const countStatus = (rows, status) => rows.filter((row) => safeStatus(row) === status).length;
-  const numV19 = (value) => new Intl.NumberFormat("id-ID").format(Number(value || 0));
+  const countStatus = (rows, status) =>
+    rows.filter((row) => safeStatus(row) === status).length;
+  const numV19 = (value) =>
+    new Intl.NumberFormat("id-ID").format(Number(value || 0));
   const rowWaiting = (row) => {
     const start = row.register_time || row.created_at || "";
-    const end = isTerminal(safeStatus(row)) ? (row.completed_at || row.expired_at || row.updated_at || "") : "";
-    return typeof liveWaitingText === "function" ? liveWaitingText(start, end) : "-";
+    const end = isTerminal(safeStatus(row))
+      ? row.completed_at || row.expired_at || row.updated_at || ""
+      : "";
+    return typeof liveWaitingText === "function"
+      ? liveWaitingText(start, end)
+      : "-";
   };
   const riskSort = (a, b) => {
     const aSla = getInboundSlaInfo(a);
     const bSla = getInboundSlaInfo(b);
-    return Number(aSla.delta_minutes ?? 999999) - Number(bSla.delta_minutes ?? 999999);
+    return (
+      Number(aSla.delta_minutes ?? 999999) -
+      Number(bSla.delta_minutes ?? 999999)
+    );
   };
 
   function metricV19(label, value, note, tone = "") {
@@ -13885,61 +14047,7 @@ if (window.__exportCsvV19) {
     ];
     const active = rows.filter((row) => !isTerminal(safeStatus(row)));
     const total = Math.max(active.length, 1);
-    return `<article class="wm19-card"><header class="wm19-card-head"><div><h3>Alur Antrian</h3><p>Distribusi kendaraan aktif berdasarkan status aktual.</p></div><span class="wm19-chip">${numV19(active.length)} aktif</span></header><div class="wm19-flow"><div class="wm19-flow-top"><b>Queue live</b><span>Realtime</span></div><div class="wm19-bar">${statuses.map(([status,,color]) => `<i style="width:${(countStatus(active, status) / total) * 100}%;background:${color}"></i>`).join("")}</div><div class="wm19-legend">${statuses.map(([status,label,color]) => `<span><i style="display:inline-block;width:7px;height:7px;margin-right:4px;border-radius:50%;background:${color}"></i>${label}<b>${numV19(countStatus(active,status))}</b></span>`).join("")}</div></div></article>`;
-  }
-
-  function gateListV22(row = {}) {
-    if (typeof parseGateList === "function") return parseGateList(row.gate || "");
-    return String(row.gate || "")
-      .split(",")
-      .map((gate) => gate.trim())
-      .filter(Boolean);
-  }
-
-  function gateLabelV22(gate = "") {
-    const text = String(gate || "");
-    const site = text.startsWith("STL-") ? "STL" : "CBT";
-    const number = text.match(/(\d{2})$/)?.[1] || text.match(/\d+/)?.[0] || "-";
-    return `${site} ${number}`;
-  }
-
-  function gatePanelV22(rows) {
-    const configured = Array.isArray(state.options?.gate) && state.options.gate.length
-      ? state.options.gate
-      : typeof getCibitungGateOptions === "function"
-        ? getCibitungGateOptions()
-        : [];
-    const gates = [...new Set(configured.map((gate) => String(gate || "").trim()).filter(Boolean))];
-    const activeRows = rows.filter((row) => ["CALLED", "UNLOADING"].includes(safeStatus(row)));
-    const assignments = gates.map((gate) => {
-      const tickets = activeRows.filter((row) =>
-        gateListV22(row).some((item) => item.toUpperCase() === gate.toUpperCase()),
-      );
-      tickets.sort((a, b) => Number(safeStatus(b) === "UNLOADING") - Number(safeStatus(a) === "UNLOADING"));
-      return { gate, tickets };
-    });
-    const used = assignments.filter((item) => item.tickets.length).length;
-    const unloading = assignments.filter((item) => item.tickets.some((row) => safeStatus(row) === "UNLOADING")).length;
-    const called = assignments.filter((item) => item.tickets.length && !item.tickets.some((row) => safeStatus(row) === "UNLOADING")).length;
-    const cards = assignments.map(({ gate, tickets }) => {
-      if (!tickets.length) {
-        return `<article class="wm19-gate-card is-empty" aria-label="${esc(gate)} kosong"><div class="wm19-gate-top"><b>${esc(gateLabelV22(gate))}</b><span>KOSONG</span></div><small>${esc(gate)}</small><div class="wm19-gate-empty-label">Siap digunakan</div></article>`;
-      }
-      const first = tickets[0];
-      const status = tickets.some((row) => safeStatus(row) === "UNLOADING") ? "UNLOADING" : "CALLED";
-      const statusLabel = status === "UNLOADING" ? "BONGKAR" : "DIPANGGIL";
-      let timing = status === "UNLOADING" ? "Sedang bongkar" : "Menunggu masuk gate";
-      if (status === "UNLOADING") {
-        const estimate = getUnloadingEstimateInfo(first);
-        if (estimate.diffMinutes !== null) {
-          timing = estimate.diffMinutes >= 0
-            ? `Sisa ${formatMinutesCompact(estimate.diffMinutes)}`
-            : `Lewat ${formatMinutesCompact(Math.abs(estimate.diffMinutes))}`;
-        }
-      }
-      return `<button type="button" class="wm19-gate-card ${status === "UNLOADING" ? "is-unloading" : "is-called"}" data-gate="${esc(gate)}" onclick="wmFilterGateV22(this.dataset.gate)" aria-label="Filter Queue Operasional untuk ${esc(gate)}"><div class="wm19-gate-top"><b>${esc(gateLabelV22(gate))}</b><span>${statusLabel}</span></div><small>${esc(gate)}</small><strong>${esc(first.queue_no || "-")}</strong><div class="wm19-gate-vehicle"><b>${esc(first.plat_number || "-")}</b><span>${esc(first.driver_name || first.vendor_name || "-")}</span></div><div class="wm19-gate-bottom"><em>${esc(timing)}</em>${tickets.length > 1 ? `<span>+${tickets.length - 1} unit</span>` : ""}</div></button>`;
-    }).join("");
-    return `<article class="wm19-card wm19-gate-panel"><header class="wm19-card-head wm19-gate-head"><div><h3>Visibilitas Gate Bongkar</h3><p>Klik gate aktif untuk memfilter Queue Operasional. Tiket Drop-Off tetap terpisah.</p></div><div class="wm19-gate-summary"><span><i class="is-unloading"></i>${numV19(unloading)} bongkar</span><span><i class="is-called"></i>${numV19(called)} dipanggil</span><b>${numV19(used)}/${numV19(gates.length)} digunakan</b></div></header><div class="wm19-gate-grid">${cards || `<div class="wm19-empty">Konfigurasi gate belum tersedia.</div>`}</div></article>`;
+    return `<article class="wm19-card"><header class="wm19-card-head"><div><h3>Alur Antrian Saat Ini</h3><p>Breakdown kendaraan aktif berdasarkan status operasional.</p></div><span class="wm19-chip">${numV19(active.length)} aktif</span></header><div class="wm19-flow"><div class="wm19-flow-top"><b>Distribusi queue live</b><span>Click filter untuk drill-down</span></div><div class="wm19-bar">${statuses.map(([status, , color]) => `<i style="width:${(countStatus(active, status) / total) * 100}%;background:${color}"></i>`).join("")}</div><div class="wm19-legend">${statuses.map(([status, label, color]) => `<span><i style="display:inline-block;width:7px;height:7px;margin-right:4px;border-radius:50%;background:${color}"></i>${label}<b>${numV19(countStatus(active, status))}</b></span>`).join("")}</div></div><div class="wm19-trend"><div class="wm19-flow-top"><b>Volume queue saat ini</b><span>Peak berdasarkan urutan slot</span></div><svg viewBox="0 0 600 114" aria-label="Visual trend queue"><line x1="0" y1="87" x2="600" y2="87" stroke="rgb(var(--outline-variant) / .45)"/><path d="M0,76 L85,66 L170,71 L255,42 L340,57 L425,28 L510,48 L600,35 L600,87 L0,87 Z" fill="rgb(var(--primary) / .10)"/><path d="M0,76 L85,66 L170,71 L255,42 L340,57 L425,28 L510,48 L600,35" fill="none" stroke="rgb(var(--primary-container))" stroke-width="3"/><circle cx="600" cy="35" r="4" fill="rgb(var(--surface))" stroke="rgb(var(--primary-container))" stroke-width="3"/><text class="wm19-axis" x="0" y="106">Awal shift</text><text class="wm19-axis" x="250" y="106">Tengah shift</text><text class="wm19-axis" x="530" y="106">Sekarang</text></svg></div></article>`;
   }
 
   function riskListV19(rows) {
@@ -13947,385 +14055,418 @@ if (window.__exportCsvV19) {
       .filter((row) => {
         const status = safeStatus(row);
         const sla = getInboundSlaInfo(row);
-        return !isTerminal(status) && (sla.status === "SLA MISS" || Number(sla.delta_minutes) <= 60);
+        return (
+          !isTerminal(status) &&
+          (sla.status === "SLA MISS" || Number(sla.delta_minutes) <= 60)
+        );
       })
       .sort(riskSort)
       .slice(0, 4);
-    return `<article class="wm19-card"><header class="wm19-card-head"><div><h3>Prioritas SLA</h3><p>Unit yang perlu diproses lebih dulu.</p></div><span class="wm19-chip danger">${numV19(riskRows.length)} berisiko</span></header><div class="wm19-risk-list">${riskRows.length ? riskRows.map((row) => { const sla = getInboundSlaInfo(row); const delta = Number(sla.delta_minutes); const label = delta < 0 ? `+${formatMinutesCompact(Math.abs(delta))}` : formatMinutesCompact(delta); return `<div class="wm19-risk-row"><div class="wm19-queue">${esc(row.queue_no || "-")}</div><div><b>${esc(row.vendor_name || "-")}</b><small>${esc(displayStatus(safeStatus(row)))} · ${esc(row.plat_number || "-")} · ${esc(row.checker_progress || `${row.ticket_po_count || 0} PO`)}</small></div><div class="wm19-risk-sla">${esc(label)}<small>${delta < 0 ? "LEWAT SLA" : "TERSISA"}</small></div></div>`; }).join("") : `<div class="wm19-empty">Belum ada kendaraan dalam zona risiko SLA.</div>`}</div></article>`;
+    return `<article class="wm19-card"><header class="wm19-card-head"><div><h3>Prioritas SLA</h3><p>Unit yang perlu diproses lebih dulu.</p></div><span class="wm19-chip danger">${numV19(riskRows.length)} berisiko</span></header><div class="wm19-risk-list">${
+      riskRows.length
+        ? riskRows
+            .map((row) => {
+              const sla = getInboundSlaInfo(row);
+              const delta = Number(sla.delta_minutes);
+              const label =
+                delta < 0
+                  ? `+${formatMinutesCompact(Math.abs(delta))}`
+                  : formatMinutesCompact(delta);
+              return `<div class="wm19-risk-row"><div class="wm19-queue">${esc(row.queue_no || "-")}</div><div><b>${esc(row.vendor_name || "-")}</b><small>${esc(displayStatus(safeStatus(row)))} · ${esc(row.plat_number || "-")} · ${esc(row.checker_progress || `${row.ticket_po_count || 0} PO`)}</small></div><div class="wm19-risk-sla">${esc(label)}<small>${delta < 0 ? "LEWAT SLA" : "TERSISA"}</small></div></div>`;
+            })
+            .join("")
+        : `<div class="wm19-empty">Belum ada kendaraan dalam zona risiko SLA.</div>`
+    }</div></article>`;
   }
 
   function breakdownV19(rows) {
     const active = rows.filter((row) => !isTerminal(safeStatus(row)));
     const breakdown = [
       ["Menunggu panggil", countStatus(active, "WAITING"), "blue"],
-      ["Menunggu checker", active.filter((row) => ["WAITING CHECKER", "CHECKING"].includes(safeStatus(row))).length, "purple"],
+      [
+        "Menunggu checker",
+        active.filter((row) =>
+          ["WAITING CHECKER", "CHECKING"].includes(safeStatus(row)),
+        ).length,
+        "purple",
+      ],
       ["Menunggu Done GR", countStatus(active, "WAITING GR"), "orange"],
-      ["Gate digunakan", active.filter((row) => ["CALLED", "UNLOADING"].includes(safeStatus(row))).length, "green"],
+      [
+        "Gate digunakan",
+        active.filter((row) =>
+          ["CALLED", "UNLOADING"].includes(safeStatus(row)),
+        ).length,
+        "green",
+      ],
     ];
     const max = Math.max(...breakdown.map((item) => item[1]), 1);
-    const bottleneck = [...breakdown].sort((a,b) => b[1] - a[1])[0];
-    return `<article class="wm19-card"><header class="wm19-card-head"><div><h3>Breakdown Bottleneck</h3><p>Tahap yang paling menahan aliran inbound.</p></div><span class="wm19-chip">live</span></header><div class="wm19-breakdown">${breakdown.map(([label,value,tone]) => `<div class="wm19-break-row"><span>${label}</span><div class="wm19-mini"><i style="width:${(value / max) * 100}%;${tone === "purple" ? "background:linear-gradient(90deg,#a78bfa,#6d28d9)" : tone === "orange" ? "background:linear-gradient(90deg,#fbbf24,#d97706)" : tone === "green" ? "background:linear-gradient(90deg,#4ade80,#16a34a)" : ""}"></i></div><b>${numV19(value)}</b></div>`).join("")}<div class="wm19-insight"><b>Insight operasional</b><br/>Bottleneck terbesar ada di tahap <b>${esc(bottleneck[0])}</b> (${numV19(bottleneck[1])} unit). Gunakan filter status untuk langsung follow-up unit terkait.</div></div></article>`;
+    const bottleneck = [...breakdown].sort((a, b) => b[1] - a[1])[0];
+    return `<article class="wm19-card" style="margin-top:14px"><header class="wm19-card-head"><div><h3>Breakdown Bottleneck</h3><p>Tahap yang paling menahan aliran inbound.</p></div><span class="wm19-chip">live</span></header><div class="wm19-breakdown">${breakdown.map(([label, value, tone]) => `<div class="wm19-break-row"><span>${label}</span><div class="wm19-mini"><i style="width:${(value / max) * 100}%;${tone === "purple" ? "background:linear-gradient(90deg,#a78bfa,#6d28d9)" : tone === "orange" ? "background:linear-gradient(90deg,#fbbf24,#d97706)" : tone === "green" ? "background:linear-gradient(90deg,#4ade80,#16a34a)" : ""}"></i></div><b>${numV19(value)}</b></div>`).join("")}<div class="wm19-insight"><b>Insight operasional</b><br/>Bottleneck terbesar ada di tahap <b>${esc(bottleneck[0])}</b> (${numV19(bottleneck[1])} unit). Gunakan filter status untuk langsung follow-up unit terkait.</div></div></article>`;
   }
 
   function tableV19(rows) {
-    const sorted = [...rows].sort((a,b) => riskSort(a,b) || String(a.queue_no || "").localeCompare(String(b.queue_no || "")));
-    return `<article class="wm19-card wm19-table-card"><header class="wm19-card-head"><div><h3>Queue Operasional</h3><p>Panel utama untuk action SPV. Prioritas SLA tertinggi berada paling atas.</p></div><span class="wm19-chip">${numV19(rows.length)} total</span></header><div class="wm19-table-wrap"><table id="monitor-unified-table" class="wm19-table"><thead><tr><th>QUEUE</th><th>VENDOR / PLAT</th><th>STATUS</th><th>GATE</th><th>MENUNGGU</th><th>SLA</th><th>PROGRESS PO</th></tr></thead><tbody>${sorted.map((row) => { const status = safeStatus(row); const sla = getInboundSlaInfo(row); const slaText = sla.status === "SLA MISS" || sla.status === "LATE" ? sla.label : (sla.label || "On track"); const slaColor = (sla.status === "SLA MISS" || sla.status === "LATE") ? "color:rgb(var(--error))" : sla.status === "ON PROCESS" ? "color:rgb(var(--warning))" : "color:rgb(var(--success))"; return `<tr data-wm19-row="1"><td class="wm19-queue">${esc(row.queue_no || "-")}</td><td><b style="display:block;color:rgb(var(--on-surface));font-size:12px">${esc(row.vendor_name || "-")}</b>${esc(row.plat_number || "-")}</td><td><span class="wm19-status" style="${statusStyle(status)}">${esc(displayStatus(status))}</span></td><td>${esc(row.gate || "-")}</td><td>${esc(rowWaiting(row))}</td><td style="font-weight:800;${slaColor}">${esc(slaText)}</td><td>${esc(row.checker_progress || row.gr_progress || `${row.ticket_po_count || 0} PO`)}</td></tr>`; }).join("") || `<tr><td colspan="7" class="wm19-empty">Belum ada data antrian.</td></tr>`}</tbody></table></div><footer class="wm19-foot">Menampilkan seluruh <b>${numV19(rows.length)} kendaraan</b> · scroll di dalam panel · urutan berdasarkan risiko SLA.</footer></article>`;
+    const sorted = [...rows]
+      .sort(
+        (a, b) =>
+          riskSort(a, b) ||
+          String(a.queue_no || "").localeCompare(String(b.queue_no || "")),
+      )
+      .slice(0, 12);
+    return `<article class="wm19-card wm19-table-card"><header class="wm19-card-head"><div><h3>Queue Operasional</h3><p>Prioritas tertinggi tampil paling atas untuk action SPV.</p></div><span class="wm19-chip">${numV19(rows.length)} total</span></header><div class="wm19-table-wrap"><table id="monitor-unified-table" class="wm19-table"><thead><tr><th>QUEUE</th><th>VENDOR / PLAT</th><th>STATUS</th><th>GATE</th><th>MENUNGGU</th><th>SLA</th><th>PROGRESS PO</th></tr></thead><tbody>${
+      sorted
+        .map((row) => {
+          const status = safeStatus(row);
+          const sla = getInboundSlaInfo(row);
+          const slaText =
+            sla.status === "SLA MISS" || sla.status === "LATE"
+              ? sla.label
+              : sla.label || "On track";
+          const slaColor =
+            sla.status === "SLA MISS" || sla.status === "LATE"
+              ? "color:rgb(var(--error))"
+              : sla.status === "ON PROCESS"
+                ? "color:rgb(var(--warning))"
+                : "color:rgb(var(--success))";
+          return `<tr data-wm19-row="1"><td class="wm19-queue">${esc(row.queue_no || "-")}</td><td><b style="display:block;color:rgb(var(--on-surface));font-size:11px">${esc(row.vendor_name || "-")}</b>${esc(row.plat_number || "-")}</td><td><span class="wm19-status" style="${statusStyle(status)}">${esc(displayStatus(status))}</span></td><td>${esc(row.gate || "-")}</td><td>${esc(rowWaiting(row))}</td><td style="font-weight:800;${slaColor}">${esc(slaText)}</td><td>${esc(row.checker_progress || row.gr_progress || `${row.ticket_po_count || 0} PO`)}</td></tr>`;
+        })
+        .join("") ||
+      `<tr><td colspan="7" class="wm19-empty">Belum ada data antrian.</td></tr>`
+    }</tbody></table></div><footer class="wm19-foot">Menampilkan ${numV19(Math.min(sorted.length, 12))} dari <b>${numV19(rows.length)} kendaraan</b> · urutan berdasarkan risiko SLA.</footer></article>`;
   }
 
   window.wmFilterV19 = function wmFilterV19(input) {
-    const query = String(input?.value || "").trim().toLowerCase();
-    let visible = 0;
+    const query = String(input?.value || "")
+      .trim()
+      .toLowerCase();
     document.querySelectorAll("[data-wm19-row]").forEach((row) => {
-      const show = !query || row.textContent.toLowerCase().includes(query);
-      row.style.display = show ? "" : "none";
-      if (show) visible += 1;
+      row.style.display =
+        !query || row.textContent.toLowerCase().includes(query) ? "" : "none";
     });
-    const result = document.getElementById("wm19-result-count");
-    if (result) result.textContent = `${numV19(visible)} kendaraan tampil`;
-  };
-
-  window.wmFilterGateV22 = function wmFilterGateV22(gate) {
-    const input = document.getElementById("wm19-search");
-    if (!input) return;
-    input.value = String(gate || "");
-    window.wmFilterV19(input);
-    document.querySelector(".wm19-table-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   window.pageMonitor = function pageMonitorCommandCenterV19() {
-    const rows = Array.isArray(state.dashboard?.queue) ? state.dashboard.queue : [];
+    const rows = Array.isArray(state.dashboard?.queue)
+      ? state.dashboard.queue
+      : [];
     const active = rows.filter((row) => !isTerminal(safeStatus(row)));
-    const slaMiss = active.filter((row) => ["SLA MISS", "LATE"].includes(getInboundSlaInfo(row).status)).length;
+    const slaMiss = active.filter((row) =>
+      ["SLA MISS", "LATE"].includes(getInboundSlaInfo(row).status),
+    ).length;
     const waiting = countStatus(active, "WAITING");
     const unloading = countStatus(active, "UNLOADING");
     const waitingGr = countStatus(active, "WAITING GR");
     const completed = countStatus(rows, "COMPLETED");
-    const riskCount = active.filter((row) => { const delta = Number(getInboundSlaInfo(row).delta_minutes); return getInboundSlaInfo(row).status === "SLA MISS" || delta <= 60; }).length;
+    const riskCount = active.filter((row) => {
+      const delta = Number(getInboundSlaInfo(row).delta_minutes);
+      return getInboundSlaInfo(row).status === "SLA MISS" || delta <= 60;
+    }).length;
     setTimeout(() => window.wmRefreshLiveSlaCells?.(), 0);
-    return `<div class="wm-command-v19"><section class="wm19-hero"><div><div class="wm19-eyebrow">OPERASIONAL / WAITING MONITOR</div><h2 class="wm19-title">Waiting Monitor</h2><p class="wm19-subtitle">SLA, gate, bottleneck, dan queue prioritas dari data inbound yang sedang berjalan.</p></div><div class="flex items-center gap-3"><span class="wm19-live"><i></i>LIVE DATA</span><button type="button" onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-2 text-xs font-bold">↻ Refresh data</button></div></section>${riskCount ? `<div class="wm19-alert"><strong>⚠ ${numV19(riskCount)} kendaraan mendekati atau melewati batas SLA.</strong><span>Prioritaskan unit pada panel Prioritas SLA.</span><button type="button" onclick="document.querySelector('.wm19-risk-list')?.scrollIntoView({behavior:'smooth'})">Lihat prioritas →</button></div>` : ""}<section class="wm19-kpis">${metricV19("ANTRIAN AKTIF",active.length,"Waiting · Called · Bongkar · GR","blue")}${metricV19("MENUNGGU PANGGIL",waiting,"Butuh follow-up security","warning")}${metricV19("SEDANG BONGKAR",unloading,"Checker dan gate berjalan","blue")}${metricV19("SLA BERISIKO",slaMiss, slaMiss ? "Butuh action segera" : "Tidak ada SLA miss",slaMiss ? "danger" : "good")}${metricV19("SELESAI HARI INI",completed,"Ticket completed","good")}</section><section class="wm19-filter"><span class="material-symbols-outlined text-on-surface-variant">search</span><input id="wm19-search" oninput="wmFilterV19(this)" placeholder="Cari queue, plat, vendor, gate, PO, atau checker…"/><span id="wm19-result-count" class="wm19-result">${numV19(rows.length)} kendaraan tampil</span></section>${gatePanelV22(rows)}<section class="wm19-layout"><div class="wm19-main">${tableV19(rows)}</div><aside class="wm19-side">${riskListV19(rows)}${flowV19(rows)}${breakdownV19(rows)}</aside></section></div>`;
+    return `<div class="wm-command-v19"><section class="wm19-hero"><div><div class="wm19-eyebrow">OPERASIONAL / WAITING MONITOR</div><h2 class="wm19-title">Waiting Monitor</h2><p class="wm19-subtitle">SLA, bottleneck, dan queue prioritas dari data inbound yang sedang berjalan.</p></div><div class="flex items-center gap-3"><span class="wm19-live"><i></i>LIVE DATA</span><button type="button" onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-2 text-xs font-bold">↻ Refresh data</button></div></section>${riskCount ? `<div class="wm19-alert"><strong>⚠ ${numV19(riskCount)} kendaraan mendekati atau melewati batas SLA.</strong><span>Prioritaskan unit pada panel Prioritas SLA.</span><button type="button" onclick="document.querySelector('.wm19-risk-list')?.scrollIntoView({behavior:'smooth'})">Lihat prioritas →</button></div>` : ""}<section class="wm19-kpis">${metricV19("ANTRIAN AKTIF", active.length, "Waiting · Called · Bongkar · GR", "blue")}${metricV19("MENUNGGU PANGGIL", waiting, "Butuh follow-up security", "warning")}${metricV19("SEDANG BONGKAR", unloading, "Checker dan gate berjalan", "blue")}${metricV19("SLA BERISIKO", slaMiss, slaMiss ? "Butuh action segera" : "Tidak ada SLA miss", slaMiss ? "danger" : "good")}${metricV19("SELESAI HARI INI", completed, "Ticket completed", "good")}</section><section class="wm19-filter"><span class="material-symbols-outlined text-on-surface-variant">search</span><input oninput="wmFilterV19(this)" placeholder="Cari queue, plat, vendor, PO, atau checker…"/><span class="wm19-result">${numV19(rows.length)} kendaraan tampil</span></section><section class="wm19-grid"><div>${flowV19(rows)}${tableV19(rows)}</div><div>${riskListV19(rows)}${breakdownV19(rows)}</div></section></div>`;
   };
-  try { pageMonitor = window.pageMonitor; } catch (error) {}
+  try {
+    pageMonitor = window.pageMonitor;
+  } catch (error) {}
 })();
 
 /* V20 — Modul BA Reject mandiri: lookup product, preview A4, simpan, cetak. */
 (function installBaRejectV20() {
-  const BA_REASONS = ["MSLOR","BARANG RUSAK","KURANG KIRIM","TIDAK DATANG","LEBIH KIRIM","BARANG TIDAK ADA DI PO","TOLAK BEDA SKU","TOLAK BEDA GRAMASI","SALAH BAWA BARANG"];
-  const ba = { items: [{ sku_number:"", product_id:"", product_name:"", quantity:"", reason:"" }], docs:[], selected:null };
-  const e = (v) => String(v ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-  const wibDate = () => new Date().toLocaleDateString("en-CA", { timeZone:"Asia/Jakarta" });
-  const day = (date) => ["MINGGU","SENIN","SELASA","RABU","KAMIS","JUMAT","SABTU"][new Date(`${date}T12:00:00Z`).getUTCDay()] || "";
-  const val = (field) => document.querySelector(`[data-ba-field="${field}"]`)?.value || "";
-  const setVal = (field, value) => { const input=document.querySelector(`[data-ba-field="${field}"]`); if(input) input.value=value||""; };
-  const opts = () => BA_REASONS.map((x)=>`<option value="${e(x)}">${e(x)}</option>`).join("");
+  const BA_REASONS = [
+    "MSLOR",
+    "BARANG RUSAK",
+    "KURANG KIRIM",
+    "TIDAK DATANG",
+    "LEBIH KIRIM",
+    "BARANG TIDAK ADA DI PO",
+    "TOLAK BEDA SKU",
+    "TOLAK BEDA GRAMASI",
+    "SALAH BAWA BARANG",
+  ];
+  const ba = {
+    items: [
+      {
+        sku_number: "",
+        product_id: "",
+        product_name: "",
+        quantity: "",
+        reason: "",
+      },
+    ],
+    docs: [],
+    selected: null,
+  };
+  const e = (v) =>
+    String(v ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  const wibDate = () =>
+    new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+  const day = (date) =>
+    ["MINGGU", "SENIN", "SELASA", "RABU", "KAMIS", "JUMAT", "SABTU"][
+      new Date(`${date}T12:00:00Z`).getUTCDay()
+    ] || "";
+  const val = (field) =>
+    document.querySelector(`[data-ba-field="${field}"]`)?.value || "";
+  const setVal = (field, value) => {
+    const input = document.querySelector(`[data-ba-field="${field}"]`);
+    if (input) input.value = value || "";
+  };
+  const opts = () =>
+    BA_REASONS.map((x) => `<option value="${e(x)}">${e(x)}</option>`).join("");
   const master = () => state.dashboard?.raw?.tablev2 || [];
 
-  function poOptions() { const seen=new Set(); return master().filter((r)=>{const po=String(r.po_number||r.po||"").trim();if(!po||seen.has(po))return false;seen.add(po);return true;}).slice(0,5000).map((r)=>`<option value="${e(r.po_number||r.po)}"></option>`).join(""); }
-  function preview(doc=null, items=null) {
-    const d=doc||{ba_number:"Nomor otomatis setelah Simpan BA",ba_date:val("ba_date"),day_name:day(val("ba_date")),po_number:val("po_number"),supplier_name:val("supplier_name"),note:val("note")};
-    const rows=(items||ba.items).filter((x)=>x.sku_number||x.product_name).map((x)=>`<tr><td>${e(x.sku_number||"-")}</td><td>${e(x.product_name||"-")}</td><td>${e(x.quantity||"-")}</td><td>${e(x.reason||"-")}</td></tr>`).join("")||"<tr><td>-</td><td>-</td><td>-</td><td>-</td></tr>";
-    const date=String(d.ba_date||"").split("-").reverse().join("/")||"__/__/____";
-    return `<article class="bg-white text-black rounded-xl border border-outline-variant shadow-sm overflow-hidden font-serif"><div class="relative p-6 sm:p-9"><div class="absolute right-0 top-0 w-28 h-20 bg-[#193d73]" style="clip-path:polygon(36% 0,100% 0,100% 100%)"></div><div class="absolute right-0 top-0 w-20 h-16 bg-[#d82308]" style="clip-path:polygon(0 0,100% 0,100% 100%)"></div><div class="border-b-[3px] border-[#193d73] pb-3 pr-24 text-[10px] leading-4"><b>PT Astro Technologies Indonesia</b><br/>Graha Antero 5th-6th floor, Jl. Tomang Raya no. 27, Tomang, West Jakarta, 11440<br/>Ph. +6221 58909787 &nbsp;|&nbsp; Em: info@astronauts.id</div><div class="mt-4 text-center text-xs leading-5"><b class="uppercase">Form Berita Acara Penolakan Barang</b><br/>PT Astro Technologies Indonesia<br/><b>Tanggal ${e(date)}</b><br/><b>Nomor: ${e(d.ba_number||"-")}</b></div><div class="mt-5 text-[11px] leading-5"><b>Pada hari ${e(d.day_name||"-")}, ${e(date)}, terdapat BARANG REJECT / KURANG KIRIM / BARANG LEBIH, berikut detailnya :</b><br/><b>NOMOR PO : ${e(d.po_number||"-")}</b><br/><b>NOTE : ${e(d.note||"-")}</b></div><div class="mt-3 overflow-x-auto"><table class="w-full border-collapse text-[10px]"><thead><tr class="bg-slate-100"><th>SKU</th><th>DESKRIPSI</th><th>QTY</th><th>REASON</th></tr></thead><tbody>${rows}</tbody></table></div><p class="mt-3 text-[10px]">Surat ini akan diberikan secara fisik dan digital file ${e(d.supplier_name||"-")}</p><p class="mt-4 text-[10px]">Demikian berita acara penolakan barang ini kami sampaikan. Atas perhatian dan kerjasamanya kami ucapkan terimakasih.</p><div class="mt-5 grid grid-cols-2 sm:grid-cols-4 text-center text-[10px] font-bold"><div class="border border-black h-20 flex items-end justify-center pb-2">Admin</div><div class="border border-l-0 border-black h-20 flex items-end justify-center pb-2">Admin LP</div><div class="border border-black sm:border-l-0 h-20 flex items-end justify-center pb-2">SPV / Leader</div><div class="border border-l-0 border-black h-20 flex items-end justify-center pb-2">Supplier/Principal</div></div></div></article>`;
+  function poOptions() {
+    const seen = new Set();
+    return master()
+      .filter((r) => {
+        const po = String(r.po_number || r.po || "").trim();
+        if (!po || seen.has(po)) return false;
+        seen.add(po);
+        return true;
+      })
+      .slice(0, 5000)
+      .map((r) => `<option value="${e(r.po_number || r.po)}"></option>`)
+      .join("");
   }
-  function renderPreview(){const target=document.getElementById("ba-preview-v20");if(target)target.innerHTML=preview(ba.selected?.document||null,ba.selected?.items||null);}
-  async function lookup(index, query){query=String(query||"").trim();if(!query)return;try{const product=await motherDuckApiGet("product_lookup",{q:query});if(!product)return showToast("SKU / Product ID tidak ditemukan. Isi deskripsi manual bila perlu.","error");ba.items[index]={...ba.items[index],...product};renderItems();renderPreview();showToast("Produk ditemukan: "+product.product_name,"success");}catch(err){showToast(err.message||"Lookup produk gagal","error");}}
-  function renderItems(){const root=document.getElementById("ba-items-v20");if(!root)return;root.innerHTML=ba.items.map((x,i)=>`<div class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1.7fr_.75fr_1.3fr_auto] gap-2 rounded-xl border border-outline-variant bg-surface-container-low p-3" data-ba-item="${i}"><input data-ba-item-field="sku_number" class="form-input" placeholder="Scan / SKU" value="${e(x.sku_number)}"/><input data-ba-item-field="product_id" class="form-input" placeholder="Product ID" value="${e(x.product_id)}"/><input data-ba-item-field="product_name" class="form-input" placeholder="Deskripsi (boleh edit manual)" value="${e(x.product_name)}"/><input data-ba-item-field="quantity" class="form-input" placeholder="Qty" value="${e(x.quantity)}"/><select data-ba-item-field="reason" class="form-input"><option value="">- Pilih reason -</option>${opts()}</select><button type="button" data-ba-remove="${i}" class="rounded-lg px-3 py-2 text-error hover:bg-error-container"><span class="material-symbols-outlined">close</span></button></div>`).join("");ba.items.forEach((x,i)=>{const s=root.querySelector(`[data-ba-item="${i}"] select`);if(s)s.value=x.reason||"";});root.querySelectorAll("[data-ba-item-field]").forEach((input)=>input.addEventListener("input",(event)=>{const i=Number(event.target.closest("[data-ba-item]").dataset.baItem);ba.items[i][event.target.dataset.baItemField]=event.target.value;renderPreview();}));root.querySelectorAll("[data-ba-remove]").forEach((button)=>button.addEventListener("click",()=>{ba.items.splice(Number(button.dataset.baRemove),1);if(!ba.items.length)ba.items.push({sku_number:"",product_id:"",product_name:"",quantity:"",reason:""});renderItems();renderPreview();}));root.querySelectorAll('[data-ba-item-field="sku_number"],[data-ba-item-field="product_id"]').forEach((input)=>input.addEventListener("keydown",(event)=>{if(event.key==="Enter"){event.preventDefault();lookup(Number(event.target.closest("[data-ba-item]").dataset.baItem),event.target.value);}}));}
-  function syncSupplier(){const po=val("po_number");const match=master().find((r)=>String(r.po_number||r.po||"").trim()===po.trim());if(match&&!val("supplier_name"))setVal("supplier_name",match.vendor_name||match.company_name||"");renderPreview();}
-  async function loadHistory(){try{ba.docs=await motherDuckApiGet("ba_list");}catch{ba.docs=[];}const root=document.getElementById("ba-history-v20");if(!root)return;root.innerHTML=`<h3 class="font-extrabold">BA terakhir</h3><div class="mt-2 space-y-2">${ba.docs.length?ba.docs.slice(0,8).map((d)=>`<button type="button" data-ba-open="${e(d.ba_id)}" class="w-full text-left rounded-xl border border-outline-variant p-3 hover:bg-surface-container"><b>${e(d.ba_number)}</b><span class="block text-xs text-on-surface-variant">${e(d.po_number||"Tanpa PO")} · ${e(d.supplier_name||"-")} · ${d.item_count||0} item</span></button>`).join(""):'<p class="text-sm text-on-surface-variant">Belum ada BA tersimpan.</p>'}</div>`;root.querySelectorAll("[data-ba-open]").forEach((button)=>button.addEventListener("click",async()=>{try{ba.selected=await motherDuckApiGet("ba_detail",{ba_id:button.dataset.baOpen});renderPreview();showToast("Preview BA "+ba.selected.document.ba_number,"success");}catch(err){showToast(err.message||"Gagal membuka BA","error");}}));}
-  async function save(){const button=document.getElementById("ba-save-v20"),payload={ba_date:val("ba_date"),day_name:val("day_name"),po_number:val("po_number"),supplier_name:val("supplier_name"),note:val("note"),items:ba.items};if(!payload.supplier_name)return showToast("Supplier / Principal wajib diisi.","error");if(!payload.items.some((x)=>x.sku_number||x.product_name))return showToast("Isi minimal satu barang.","error");try{button.disabled=true;ba.selected=await motherDuckApiPost("create_ba",payload);renderPreview();await loadHistory();showToast("BA tersimpan: "+ba.selected.document.ba_number,"success");}catch(err){showToast(err.message||"Gagal menyimpan BA","error");}finally{button.disabled=false;}}
-  function print(){const source=document.getElementById("ba-preview-v20");const win=window.open("","_blank","width=960,height=760");if(!win)return showToast("Izinkan popup untuk mencetak BA.","error");win.document.write(`<!doctype html><html><head><title>BA Reject</title><script src="https://cdn.tailwindcss.com"><\/script><style>@page{size:A4;margin:0}body{background:#fff}table{border-collapse:collapse}th,td{border:1px solid #555;padding:5px}th{text-align:center;background:#f0f0f0}</style></head><body>${source.innerHTML}<script>window.onload=()=>window.print()<\/script></body></html>`);win.document.close();}
-  window.pageBaRejectV20=()=>`<div class="max-w-[1500px] mx-auto space-y-5"><div class="rounded-2xl bg-gradient-to-r from-primary to-[#193d73] text-on-primary p-6 shadow-lg"><div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><div class="text-[11px] font-bold tracking-[.18em] uppercase opacity-80">Dokumen terpisah</div><h2 class="mt-1 text-2xl font-extrabold">BA Reject / Penolakan Barang</h2><p class="mt-1 text-sm opacity-85">Tidak mengubah status ticket atau proses Checker. Data BA tersimpan di MotherDuck.</p></div><button type="button" id="ba-print-v20" class="rounded-xl bg-white px-4 py-3 font-bold text-primary"><span class="material-symbols-outlined align-middle mr-1">print</span>Cetak BA</button></div></div><div class="grid grid-cols-1 xl:grid-cols-[minmax(390px,.9fr)_minmax(0,1.3fr)] gap-5"><section class="rounded-2xl bg-surface-container-lowest border border-outline-variant p-5 shadow-sm"><div class="flex items-center justify-between"><h3 class="font-extrabold text-lg">Informasi dokumen</h3><span class="text-xs text-on-surface-variant">Nomor dibuat server saat simpan</span></div><div class="mt-4 grid sm:grid-cols-2 gap-3"><label class="field-label">Tanggal<input data-ba-field="ba_date" type="date" class="form-input mt-1" value="${wibDate()}"/></label><label class="field-label">Hari<input data-ba-field="day_name" class="form-input mt-1 bg-surface-container" readonly value="${day(wibDate())}"/></label><label class="field-label sm:col-span-2">Nomor PO<input data-ba-field="po_number" list="ba-po-options-v20" class="form-input mt-1" placeholder="Pilih / ketik manual nomor PO"/><datalist id="ba-po-options-v20">${poOptions()}</datalist></label><label class="field-label sm:col-span-2">Supplier / Principal<input data-ba-field="supplier_name" class="form-input mt-1" placeholder="Auto dari PO, tetap bisa diketik manual"/></label><label class="field-label sm:col-span-2">Note<textarea data-ba-field="note" class="form-input mt-1 min-h-20" placeholder="Opsional..."></textarea></label></div><div class="mt-6 flex items-center justify-between"><h3 class="font-extrabold text-lg">Daftar barang reject</h3><button type="button" id="ba-add-item-v20" class="rounded-lg border border-primary px-3 py-2 text-sm font-bold text-primary">+ Tambah barang</button></div><p class="mt-1 text-xs text-on-surface-variant">Scan SKU atau isi Product ID lalu tekan Enter. Deskripsi otomatis terisi dan tetap dapat diedit.</p><div id="ba-items-v20" class="mt-3 space-y-2"></div><button type="button" id="ba-save-v20" class="mt-5 w-full rounded-xl bg-primary px-4 py-3 font-bold text-on-primary"><span class="material-symbols-outlined align-middle mr-1">save</span>Simpan BA & buat nomor</button><div id="ba-history-v20" class="mt-6 border-t border-outline-variant pt-5"></div></section><section><div id="ba-preview-v20" class="sticky top-4"></div></section></div></div>`;
-  window.initBaRejectV20=()=>{ba.selected=null;renderItems();renderPreview();document.querySelectorAll("[data-ba-field]").forEach((input)=>input.addEventListener("input",()=>{if(input.dataset.baField==="ba_date")setVal("day_name",day(input.value));renderPreview();}));document.querySelector('[data-ba-field="po_number"]')?.addEventListener("change",syncSupplier);document.getElementById("ba-add-item-v20")?.addEventListener("click",()=>{ba.items.push({sku_number:"",product_id:"",product_name:"",quantity:"",reason:""});renderItems();});document.getElementById("ba-save-v20")?.addEventListener("click",save);document.getElementById("ba-print-v20")?.addEventListener("click",print);loadHistory();};
-  pageMeta.ba_reject={title:"BA Reject",subtitle:"Buat, simpan, dan cetak berita acara penolakan barang"};["SPV","ADMIN","DEVELOPER"].forEach((role)=>{ROLE_ACCESS[role]=Array.isArray(ROLE_ACCESS[role])?ROLE_ACCESS[role]:[];if(!ROLE_ACCESS[role].includes("ba_reject"))ROLE_ACCESS[role].push("ba_reject");});
-  const previousRender=renderPage;renderPage=function(page,toast=true){if(String(page||"")!=="ba_reject")return previousRender.call(this,page,toast);if(!isLoggedIn()||!canAccessPage("ba_reject"))return previousRender.call(this,getDefaultPageForRole(),toast);state.page="ba_reject";document.getElementById("page-title").textContent=pageMeta.ba_reject.title;document.getElementById("page-subtitle").textContent=pageMeta.ba_reject.subtitle;document.getElementById("page-root").innerHTML=window.pageBaRejectV20();applyRoleAccessUI();updateActiveNav("ba_reject");history.replaceState(null,"","#ba_reject");setTimeout(window.initBaRejectV20,0);if(toast)showToast("Buka menu BA Reject");};window.renderPage=renderPage;
-})();
-
-/* ==========================================================================
- * V21 - DROP-OFF WORKSPACE
- * DROP-OFF tetap memakai tabel ticket yang sama, tetapi seluruh proyeksi UI
- * REG/VIP melewati satu seam domain agar antrean lintas hari tidak bercampur.
- * ========================================================================== */
-(function installDropoffWorkspaceV21() {
-  if (window.__dropoffWorkspaceV21Installed) return;
-  window.__dropoffWorkspaceV21Installed = true;
-
-  const domain = window.DropoffDomain;
-  if (!domain) {
-    console.error("DropoffDomain tidak tersedia");
-    return;
+  function preview(doc = null, items = null) {
+    const d = doc || {
+      ba_number: "Nomor otomatis setelah Simpan BA",
+      ba_date: val("ba_date"),
+      day_name: day(val("ba_date")),
+      po_number: val("po_number"),
+      supplier_name: val("supplier_name"),
+      note: val("note"),
+    };
+    const rows =
+      (items || ba.items)
+        .filter((x) => x.sku_number || x.product_name)
+        .map(
+          (x) =>
+            `<tr><td>${e(x.sku_number || "-")}</td><td>${e(x.product_name || "-")}</td><td>${e(x.quantity || "-")}</td><td>${e(x.reason || "-")}</td></tr>`,
+        )
+        .join("") || "<tr><td>-</td><td>-</td><td>-</td><td>-</td></tr>";
+    const date =
+      String(d.ba_date || "")
+        .split("-")
+        .reverse()
+        .join("/") || "__/__/____";
+    return `<article class="bg-white text-black rounded-xl border border-outline-variant shadow-sm overflow-hidden font-serif"><div class="relative p-6 sm:p-9"><div class="absolute right-0 top-0 w-28 h-20 bg-[#193d73]" style="clip-path:polygon(36% 0,100% 0,100% 100%)"></div><div class="absolute right-0 top-0 w-20 h-16 bg-[#d82308]" style="clip-path:polygon(0 0,100% 0,100% 100%)"></div><div class="border-b-[3px] border-[#193d73] pb-3 pr-24 text-[10px] leading-4"><b>PT Astro Technologies Indonesia</b><br/>Graha Antero 5th-6th floor, Jl. Tomang Raya no. 27, Tomang, West Jakarta, 11440<br/>Ph. +6221 58909787 &nbsp;|&nbsp; Em: info@astronauts.id</div><div class="mt-4 text-center text-xs leading-5"><b class="uppercase">Form Berita Acara Penolakan Barang</b><br/>PT Astro Technologies Indonesia<br/><b>Tanggal ${e(date)}</b><br/><b>Nomor: ${e(d.ba_number || "-")}</b></div><div class="mt-5 text-[11px] leading-5"><b>Pada hari ${e(d.day_name || "-")}, ${e(date)}, terdapat BARANG REJECT / KURANG KIRIM / BARANG LEBIH, berikut detailnya :</b><br/><b>NOMOR PO : ${e(d.po_number || "-")}</b><br/><b>NOTE : ${e(d.note || "-")}</b></div><div class="mt-3 overflow-x-auto"><table class="w-full border-collapse text-[10px]"><thead><tr class="bg-slate-100"><th>SKU</th><th>DESKRIPSI</th><th>QTY</th><th>REASON</th></tr></thead><tbody>${rows}</tbody></table></div><p class="mt-3 text-[10px]">Surat ini akan diberikan secara fisik dan digital file ${e(d.supplier_name || "-")}</p><p class="mt-4 text-[10px]">Demikian berita acara penolakan barang ini kami sampaikan. Atas perhatian dan kerjasamanya kami ucapkan terimakasih.</p><div class="mt-5 grid grid-cols-2 sm:grid-cols-4 text-center text-[10px] font-bold"><div class="border border-black h-20 flex items-end justify-center pb-2">Admin</div><div class="border border-l-0 border-black h-20 flex items-end justify-center pb-2">Admin LP</div><div class="border border-black sm:border-l-0 h-20 flex items-end justify-center pb-2">SPV / Leader</div><div class="border border-l-0 border-black h-20 flex items-end justify-center pb-2">Supplier/Principal</div></div></div></article>`;
   }
-
-  function mainRowsV21(rows = []) {
-    return domain.mainQueueRows(rows);
+  function renderPreview() {
+    const target = document.getElementById("ba-preview-v20");
+    if (target)
+      target.innerHTML = preview(
+        ba.selected?.document || null,
+        ba.selected?.items || null,
+      );
   }
-
-  function withMainDashboardV21(callback) {
-    if (!state.dashboard) return callback();
-    const keys = [
-      "queue",
-      "report_preview",
-      "history_queue",
-      "all_queue",
-      "priority",
-    ];
-    const saved = {};
-    keys.forEach((key) => {
-      saved[key] = state.dashboard[key];
-      if (Array.isArray(state.dashboard[key])) {
-        state.dashboard[key] = mainRowsV21(state.dashboard[key]);
-      }
-    });
+  async function lookup(index, query) {
+    query = String(query || "").trim();
+    if (!query) return;
     try {
-      return callback();
+      const product = await motherDuckApiGet("product_lookup", { q: query });
+      if (!product)
+        return showToast(
+          "SKU / Product ID tidak ditemukan. Isi deskripsi manual bila perlu.",
+          "error",
+        );
+      ba.items[index] = { ...ba.items[index], ...product };
+      renderItems();
+      renderPreview();
+      showToast("Produk ditemukan: " + product.product_name, "success");
+    } catch (err) {
+      showToast(err.message || "Lookup produk gagal", "error");
+    }
+  }
+  function renderItems() {
+    const root = document.getElementById("ba-items-v20");
+    if (!root) return;
+    root.innerHTML = ba.items
+      .map(
+        (x, i) =>
+          `<div class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1.7fr_.75fr_1.3fr_auto] gap-2 rounded-xl border border-outline-variant bg-surface-container-low p-3" data-ba-item="${i}"><input data-ba-item-field="sku_number" class="form-input" placeholder="Scan / SKU" value="${e(x.sku_number)}"/><input data-ba-item-field="product_id" class="form-input" placeholder="Product ID" value="${e(x.product_id)}"/><input data-ba-item-field="product_name" class="form-input" placeholder="Deskripsi (boleh edit manual)" value="${e(x.product_name)}"/><input data-ba-item-field="quantity" class="form-input" placeholder="Qty" value="${e(x.quantity)}"/><select data-ba-item-field="reason" class="form-input"><option value="">- Pilih reason -</option>${opts()}</select><button type="button" data-ba-remove="${i}" class="rounded-lg px-3 py-2 text-error hover:bg-error-container"><span class="material-symbols-outlined">close</span></button></div>`,
+      )
+      .join("");
+    ba.items.forEach((x, i) => {
+      const s = root.querySelector(`[data-ba-item="${i}"] select`);
+      if (s) s.value = x.reason || "";
+    });
+    root.querySelectorAll("[data-ba-item-field]").forEach((input) =>
+      input.addEventListener("input", (event) => {
+        const i = Number(event.target.closest("[data-ba-item]").dataset.baItem);
+        ba.items[i][event.target.dataset.baItemField] = event.target.value;
+        renderPreview();
+      }),
+    );
+    root.querySelectorAll("[data-ba-remove]").forEach((button) =>
+      button.addEventListener("click", () => {
+        ba.items.splice(Number(button.dataset.baRemove), 1);
+        if (!ba.items.length)
+          ba.items.push({
+            sku_number: "",
+            product_id: "",
+            product_name: "",
+            quantity: "",
+            reason: "",
+          });
+        renderItems();
+        renderPreview();
+      }),
+    );
+    root
+      .querySelectorAll(
+        '[data-ba-item-field="sku_number"],[data-ba-item-field="product_id"]',
+      )
+      .forEach((input) =>
+        input.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            lookup(
+              Number(event.target.closest("[data-ba-item]").dataset.baItem),
+              event.target.value,
+            );
+          }
+        }),
+      );
+  }
+  function syncSupplier() {
+    const po = val("po_number");
+    const match = master().find(
+      (r) => String(r.po_number || r.po || "").trim() === po.trim(),
+    );
+    if (match && !val("supplier_name"))
+      setVal("supplier_name", match.vendor_name || match.company_name || "");
+    renderPreview();
+  }
+  async function loadHistory() {
+    try {
+      ba.docs = await motherDuckApiGet("ba_list");
+    } catch {
+      ba.docs = [];
+    }
+    const root = document.getElementById("ba-history-v20");
+    if (!root) return;
+    root.innerHTML = `<h3 class="font-extrabold">BA terakhir</h3><div class="mt-2 space-y-2">${
+      ba.docs.length
+        ? ba.docs
+            .slice(0, 8)
+            .map(
+              (d) =>
+                `<button type="button" data-ba-open="${e(d.ba_id)}" class="w-full text-left rounded-xl border border-outline-variant p-3 hover:bg-surface-container"><b>${e(d.ba_number)}</b><span class="block text-xs text-on-surface-variant">${e(d.po_number || "Tanpa PO")} · ${e(d.supplier_name || "-")} · ${d.item_count || 0} item</span></button>`,
+            )
+            .join("")
+        : '<p class="text-sm text-on-surface-variant">Belum ada BA tersimpan.</p>'
+    }</div>`;
+    root.querySelectorAll("[data-ba-open]").forEach((button) =>
+      button.addEventListener("click", async () => {
+        try {
+          ba.selected = await motherDuckApiGet("ba_detail", {
+            ba_id: button.dataset.baOpen,
+          });
+          renderPreview();
+          showToast("Preview BA " + ba.selected.document.ba_number, "success");
+        } catch (err) {
+          showToast(err.message || "Gagal membuka BA", "error");
+        }
+      }),
+    );
+  }
+  async function save() {
+    const button = document.getElementById("ba-save-v20"),
+      payload = {
+        ba_date: val("ba_date"),
+        day_name: val("day_name"),
+        po_number: val("po_number"),
+        supplier_name: val("supplier_name"),
+        note: val("note"),
+        items: ba.items,
+      };
+    if (!payload.supplier_name)
+      return showToast("Supplier / Principal wajib diisi.", "error");
+    if (!payload.items.some((x) => x.sku_number || x.product_name))
+      return showToast("Isi minimal satu barang.", "error");
+    try {
+      button.disabled = true;
+      ba.selected = await motherDuckApiPost("create_ba", payload);
+      renderPreview();
+      await loadHistory();
+      showToast("BA tersimpan: " + ba.selected.document.ba_number, "success");
+    } catch (err) {
+      showToast(err.message || "Gagal menyimpan BA", "error");
     } finally {
-      keys.forEach((key) => {
-        state.dashboard[key] = saved[key];
+      button.disabled = false;
+    }
+  }
+  function print() {
+    const source = document.getElementById("ba-preview-v20");
+    const win = window.open("", "_blank", "width=960,height=760");
+    if (!win) return showToast("Izinkan popup untuk mencetak BA.", "error");
+    win.document.write(
+      `<!doctype html><html><head><title>BA Reject</title><script src="https://cdn.tailwindcss.com"><\/script><style>@page{size:A4;margin:0}body{background:#fff}table{border-collapse:collapse}th,td{border:1px solid #555;padding:5px}th{text-align:center;background:#f0f0f0}</style></head><body>${source.innerHTML}<script>window.onload=()=>window.print()<\/script></body></html>`,
+    );
+    win.document.close();
+  }
+  window.pageBaRejectV20 = () =>
+    `<div class="max-w-[1500px] mx-auto space-y-5"><div class="rounded-2xl bg-gradient-to-r from-primary to-[#193d73] text-on-primary p-6 shadow-lg"><div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><div class="text-[11px] font-bold tracking-[.18em] uppercase opacity-80">Dokumen terpisah</div><h2 class="mt-1 text-2xl font-extrabold">BA Reject / Penolakan Barang</h2><p class="mt-1 text-sm opacity-85">Tidak mengubah status ticket atau proses Checker. Data BA tersimpan di MotherDuck.</p></div><button type="button" id="ba-print-v20" class="rounded-xl bg-white px-4 py-3 font-bold text-primary"><span class="material-symbols-outlined align-middle mr-1">print</span>Cetak BA</button></div></div><div class="grid grid-cols-1 xl:grid-cols-[minmax(390px,.9fr)_minmax(0,1.3fr)] gap-5"><section class="rounded-2xl bg-surface-container-lowest border border-outline-variant p-5 shadow-sm"><div class="flex items-center justify-between"><h3 class="font-extrabold text-lg">Informasi dokumen</h3><span class="text-xs text-on-surface-variant">Nomor dibuat server saat simpan</span></div><div class="mt-4 grid sm:grid-cols-2 gap-3"><label class="field-label">Tanggal<input data-ba-field="ba_date" type="date" class="form-input mt-1" value="${wibDate()}"/></label><label class="field-label">Hari<input data-ba-field="day_name" class="form-input mt-1 bg-surface-container" readonly value="${day(wibDate())}"/></label><label class="field-label sm:col-span-2">Nomor PO<input data-ba-field="po_number" list="ba-po-options-v20" class="form-input mt-1" placeholder="Pilih / ketik manual nomor PO"/><datalist id="ba-po-options-v20">${poOptions()}</datalist></label><label class="field-label sm:col-span-2">Supplier / Principal<input data-ba-field="supplier_name" class="form-input mt-1" placeholder="Auto dari PO, tetap bisa diketik manual"/></label><label class="field-label sm:col-span-2">Note<textarea data-ba-field="note" class="form-input mt-1 min-h-20" placeholder="Opsional..."></textarea></label></div><div class="mt-6 flex items-center justify-between"><h3 class="font-extrabold text-lg">Daftar barang reject</h3><button type="button" id="ba-add-item-v20" class="rounded-lg border border-primary px-3 py-2 text-sm font-bold text-primary">+ Tambah barang</button></div><p class="mt-1 text-xs text-on-surface-variant">Scan SKU atau isi Product ID lalu tekan Enter. Deskripsi otomatis terisi dan tetap dapat diedit.</p><div id="ba-items-v20" class="mt-3 space-y-2"></div><button type="button" id="ba-save-v20" class="mt-5 w-full rounded-xl bg-primary px-4 py-3 font-bold text-on-primary"><span class="material-symbols-outlined align-middle mr-1">save</span>Simpan BA & buat nomor</button><div id="ba-history-v20" class="mt-6 border-t border-outline-variant pt-5"></div></section><section><div id="ba-preview-v20" class="sticky top-4"></div></section></div></div>`;
+  window.initBaRejectV20 = () => {
+    ba.selected = null;
+    renderItems();
+    renderPreview();
+    document.querySelectorAll("[data-ba-field]").forEach((input) =>
+      input.addEventListener("input", () => {
+        if (input.dataset.baField === "ba_date")
+          setVal("day_name", day(input.value));
+        renderPreview();
+      }),
+    );
+    document
+      .querySelector('[data-ba-field="po_number"]')
+      ?.addEventListener("change", syncSupplier);
+    document
+      .getElementById("ba-add-item-v20")
+      ?.addEventListener("click", () => {
+        ba.items.push({
+          sku_number: "",
+          product_id: "",
+          product_name: "",
+          quantity: "",
+          reason: "",
+        });
+        renderItems();
       });
-    }
-  }
-
-  const checkerRowsBeforeV21 = window.getCheckerSectionRows;
-  if (typeof checkerRowsBeforeV21 === "function") {
-    window.getCheckerSectionRows = function getCheckerSectionRowsV21() {
-      return withMainDashboardV21(() =>
-        mainRowsV21(checkerRowsBeforeV21.apply(this, arguments)),
-      );
-    };
-    try { getCheckerSectionRows = window.getCheckerSectionRows; } catch (error) {}
-  }
-
-  const checkerCountsBeforeV21 = window.checkerSectionCounts;
-  if (typeof checkerCountsBeforeV21 === "function") {
-    window.checkerSectionCounts = function checkerSectionCountsV21() {
-      return withMainDashboardV21(() => checkerCountsBeforeV21.apply(this, arguments));
-    };
-    try { checkerSectionCounts = window.checkerSectionCounts; } catch (error) {}
-  }
-
-  const checkerActiveBeforeV21 = window.getCheckerActiveRows;
-  if (typeof checkerActiveBeforeV21 === "function") {
-    window.getCheckerActiveRows = function getCheckerActiveRowsV21() {
-      return withMainDashboardV21(() =>
-        mainRowsV21(checkerActiveBeforeV21.apply(this, arguments)),
-      );
-    };
-    try { getCheckerActiveRows = window.getCheckerActiveRows; } catch (error) {}
-  }
-
-  const monitorBeforeV21 = window.pageMonitor;
-  if (typeof monitorBeforeV21 === "function") {
-    window.pageMonitor = function pageMonitorWithoutDropoffV21() {
-      return withMainDashboardV21(() => monitorBeforeV21.apply(this, arguments));
-    };
-    try { pageMonitor = window.pageMonitor; } catch (error) {}
-  }
-
-  const reportBeforeV21 = window.pageLaporan;
-  if (typeof reportBeforeV21 === "function") {
-    window.pageLaporan = function pageLaporanWithoutDropoffV21() {
-      return withMainDashboardV21(() => reportBeforeV21.apply(this, arguments));
-    };
-    try { pageLaporan = window.pageLaporan; } catch (error) {}
-  }
-
-  const latestCallBeforeV21 = window.getLatestCallTicket;
-  if (typeof latestCallBeforeV21 === "function") {
-    window.getLatestCallTicket = function getLatestMainCallTicketV21(queue) {
-      const source = Array.isArray(queue) ? queue : state.dashboard?.queue || [];
-      return latestCallBeforeV21.call(this, mainRowsV21(source));
-    };
-    try { getLatestCallTicket = window.getLatestCallTicket; } catch (error) {}
-  }
-
-  function dropoffSourceRowsV21() {
-    const historyRows = state.dashboard?.history_queue;
-    const source = Array.isArray(historyRows) && historyRows.length
-      ? historyRows
-      : state.dashboard?.queue || [];
-    const now = Date.now();
-    return domain.sortDropoffs(source).filter((row) => {
-      if (!domain.isTerminal(row)) return true;
-      const end = parseInboundDateSafe(
-        row.completed_at || row.expired_at || row.updated_at || "",
-      );
-      return end && now - end.getTime() <= 48 * 60 * 60 * 1000;
-    });
-  }
-
-  function dropoffCanActV21() {
-    const role = normalizeRole(getAuthUser?.()?.role || "");
-    return ["SPV", "ADMIN", "CHECKER", "DEVELOPER"].includes(role);
-  }
-
-  function dropoffGateOptionsV21(selected = "") {
-    const current = String(selected || "").trim();
-    const gates = typeof getCibitungGateOptions === "function"
-      ? getCibitungGateOptions()
-      : state.options?.gate || [];
-    return `<option value="">Pilih Gate</option>${gates
-      .map((gate) => `<option value="${esc(gate)}" ${String(gate) === current ? "selected" : ""}>${esc(gate)}</option>`)
-      .join("")}`;
-  }
-
-  function dropoffStatusToneV21(status = "WAITING") {
-    const safe = String(status || "WAITING").toUpperCase();
-    if (safe === "COMPLETED") return "bg-success/15 text-success border-success/30";
-    if (safe === "EXPIRED") return "bg-error/15 text-error border-error/30";
-    if (safe === "UNLOADING") return "bg-warning/15 text-warning border-warning/30";
-    if (safe === "CALLED") return "bg-primary/15 text-primary border-primary/30";
-    return "bg-surface-container-high text-on-surface-variant border-outline-variant";
-  }
-
-  function dropoffCardV21(row = {}) {
-    const status = domain.statusOf(row);
-    const terminal = domain.isTerminal(row);
-    const canAct = dropoffCanActV21();
-    const ticketId = String(row.ticket_id || "");
-    const safeId = ticketId.replace(/[^A-Za-z0-9_-]/g, "_");
-    const nextLabel = status === "WAITING"
-      ? "Panggil Drop-Off"
-      : status === "CALLED"
-        ? "Mulai Bongkar"
-        : status === "UNLOADING"
-          ? "Selesai Bongkar"
-          : "";
-    const nextIcon = status === "WAITING"
-      ? "campaign"
-      : status === "CALLED"
-        ? "warehouse"
-        : "task_alt";
-    const age = terminal
-      ? `Selesai ${esc(row.completed_at || row.expired_at || row.updated_at || "-")}`
-      : `Aktif ${esc(domain.ageLabel(row))}`;
-    const action = !terminal && canAct
-      ? `<div class="mt-4 flex flex-col sm:flex-row gap-2">
-          ${status === "WAITING" ? `<select id="dropoff-gate-${safeId}" class="form-select sm:max-w-56">${dropoffGateOptionsV21(row.gate)}</select>` : ""}
-          <button type="button" onclick="advanceDropoffTicketV21('${esc(ticketId)}', this)" class="bg-primary-container text-on-primary-container rounded-xl px-4 py-3 font-bold inline-flex items-center justify-center gap-2 flex-1"><span class="material-symbols-outlined">${nextIcon}</span>${esc(nextLabel)}</button>
-        </div>`
-      : !terminal
-        ? `<div class="mt-4 rounded-xl bg-surface-container p-3 text-xs text-on-surface-variant">Mode lihat. Perubahan status dilakukan Checker, Admin, atau SPV.</div>`
-        : "";
-
-    return `<article class="dropoff-card-v21 rounded-2xl border border-outline-variant/50 bg-surface-container-lowest p-5 shadow-sm" data-dropoff-search="${esc([row.queue_no,row.plat_number,row.vendor_name,row.driver_name,status,row.gate].join(" ").toLowerCase())}">
-      <div class="flex items-start justify-between gap-3">
-        <div><div class="font-queue-id text-primary text-2xl">${esc(row.queue_no || "-")}</div><div class="mt-1 text-xs font-bold uppercase text-on-surface-variant">${esc(row.vendor_name || "-")}</div></div>
-        <span class="rounded-full border px-3 py-1 text-[10px] font-extrabold ${dropoffStatusToneV21(status)}">${esc(status)}</span>
-      </div>
-      <div class="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
-        <div class="rounded-xl bg-surface-container p-3"><span class="block text-[10px] uppercase font-bold text-on-surface-variant">Plat</span><b class="mt-1 block">${esc(row.plat_number || "-")}</b></div>
-        <div class="rounded-xl bg-surface-container p-3"><span class="block text-[10px] uppercase font-bold text-on-surface-variant">Driver</span><b class="mt-1 block truncate">${esc(row.driver_name || "-")}</b></div>
-        <div class="rounded-xl bg-surface-container p-3"><span class="block text-[10px] uppercase font-bold text-on-surface-variant">Gate</span><b class="mt-1 block">${esc(row.gate || "-")}</b></div>
-        <div class="rounded-xl bg-surface-container p-3"><span class="block text-[10px] uppercase font-bold text-on-surface-variant">Umur Tiket</span><b class="mt-1 block">${age}</b></div>
-      </div>
-      <div class="mt-3 text-xs text-on-surface-variant"><b>Operasional:</b> ${esc(row.operational_date || "-")} &middot; <b>Slot:</b> ${esc(row.slot || "-")} &middot; tanpa Checker PO / Done GR</div>
-      ${action}
-    </article>`;
-  }
-
-  window.filterDropoffCardsV21 = function filterDropoffCardsV21(input) {
-    const query = String(input?.value || "").trim().toLowerCase();
-    document.querySelectorAll(".dropoff-card-v21").forEach((card) => {
-      card.style.display = !query || String(card.dataset.dropoffSearch || "").includes(query) ? "" : "none";
-    });
+    document.getElementById("ba-save-v20")?.addEventListener("click", save);
+    document.getElementById("ba-print-v20")?.addEventListener("click", print);
+    loadHistory();
   };
-
-  window.advanceDropoffTicketV21 = async function advanceDropoffTicketV21(ticketId, button) {
-    if (!dropoffCanActV21()) return showToast("Role ini hanya dapat melihat Drop-Off.");
-    const row = dropoffSourceRowsV21().find((item) => String(item.ticket_id || "") === String(ticketId || ""));
-    if (!row) return showToast("Tiket Drop-Off tidak ditemukan. Refresh data.");
-
-    const status = domain.statusOf(row);
-    const nextStatus = { WAITING: "CALLED", CALLED: "UNLOADING", UNLOADING: "COMPLETED" }[status];
-    if (!nextStatus) return showToast(`Status ${status} sudah selesai.`);
-
-    const safeId = String(ticketId).replace(/[^A-Za-z0-9_-]/g, "_");
-    const gateInput = document.getElementById(`dropoff-gate-${safeId}`);
-    const currentGate = String(row.gate || "").trim() === "-" ? "" : String(row.gate || "").trim();
-    const selectedGate = String(gateInput ? gateInput.value : currentGate).trim();
-    if (status === "WAITING" && !selectedGate) return showToast("Pilih Gate terlebih dahulu.");
-    if (nextStatus === "COMPLETED" && !confirm(`Selesaikan bongkar ${row.queue_no || "Drop-Off"}?`)) return;
-
-    const actor = getAuthUser?.() || {};
-    const now = typeof formatDateTimeLocal === "function" ? formatDateTimeLocal(new Date()) : new Date().toISOString();
-    const payload = {
-      ticket_id: row.ticket_id,
-      queue_no: row.original_queue_no || row.queue_no,
-      vendor_name: row.vendor_name || "",
-      fleet_type: row.fleet_type || "DROP-OFF",
-      plat_number: row.plat_number || "",
-      gate: selectedGate,
-      operational_date: row.operational_date || "",
-      status: nextStatus,
-      unload_sla: "ON PROCESS",
-      updated_at: now,
-      actor_role: normalizeRole(actor.role || ""),
-      actor_name: actor.display_name || actor.username || "",
-      actor_username: actor.username || "",
-    };
-    if (nextStatus === "CALLED") payload.called_at = now;
-    if (nextStatus === "UNLOADING") payload.start_unloading_at = now;
-    if (nextStatus === "COMPLETED") {
-      payload.finish_unloading_at = now;
-      payload.completed_at = now;
-    }
-
-    const oldHtml = button?.innerHTML || "";
-    try {
-      if (button) {
-        button.disabled = true;
-        button.innerHTML = '<span class="material-symbols-outlined animate-spin">progress_activity</span>Menyimpan...';
-      }
-      const result = await updateCheckerToBackend(payload);
-      if (typeof applyBackendActionResult === "function") applyBackendActionResult(result);
-      showToast(`Drop-Off berubah menjadi ${nextStatus}.`);
-      await refreshDashboard();
-      renderPage("dropoff", false);
-    } catch (error) {
-      console.error(error);
-      showToast(`Update Drop-Off gagal: ${error.message}`);
-    } finally {
-      if (button && document.body.contains(button)) {
-        button.disabled = false;
-        button.innerHTML = oldHtml;
-      }
-    }
+  pageMeta.ba_reject = {
+    title: "BA Reject",
+    subtitle: "Buat, simpan, dan cetak berita acara penolakan barang",
   };
-
-  window.pageDropoffV21 = function pageDropoffV21() {
-    const rows = dropoffSourceRowsV21();
-    const summary = domain.summarizeDropoffs(rows);
-    return `<div class="max-w-[1500px] mx-auto space-y-5">
-      <section class="rounded-2xl bg-gradient-to-r from-[#4c1d95] via-[#6d28d9] to-primary text-white p-6 shadow-lg">
-        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4"><div><div class="text-[11px] font-bold tracking-[.2em] uppercase opacity-80">Antrean terpisah</div><h2 class="mt-1 text-3xl font-extrabold">Drop-Off Workspace</h2><p class="mt-2 text-sm opacity-90">Tiket lintas hari tidak masuk sequence, KPI, Waiting List, Checker, atau monitor REG/VIP.</p></div><button type="button" onclick="refreshDashboard()" class="rounded-xl bg-white/15 border border-white/30 px-4 py-3 font-bold inline-flex items-center justify-center gap-2"><span class="material-symbols-outlined">refresh</span>Refresh</button></div>
-      </section>
-      <section class="grid grid-cols-2 md:grid-cols-5 gap-3">${miniMetric("Aktif", summary.active, "text-primary")}${miniMetric("Waiting", summary.waiting, "text-tertiary")}${miniMetric("Called", summary.called, "text-primary")}${miniMetric("Bongkar", summary.unloading, "text-warning")}${miniMetric("Selesai 48 Jam", summary.completed, "text-success")}</section>
-      <section class="glass-card rounded-2xl p-4 sm:p-6"><div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4"><div><h3 class="font-headline-md text-headline-md">Daftar Drop-Off</h3><p class="text-on-surface-variant">Tiket aktif selalu dibawa lintas hari sampai selesai. Riwayat selesai tampil selama 48 jam.</p></div><input oninput="filterDropoffCardsV21(this)" class="form-input md:max-w-sm" placeholder="Cari queue, plat, vendor, driver..." /></div><div class="grid grid-cols-1 xl:grid-cols-2 gap-4">${rows.map(dropoffCardV21).join("") || '<div class="xl:col-span-2 rounded-xl border border-dashed border-outline-variant p-10 text-center text-on-surface-variant">Belum ada tiket Drop-Off.</div>'}</div></section>
-    </div>`;
-  };
-
-  pageMeta.dropoff = {
-    title: "Drop-Off",
-    subtitle: "Antrean lintas hari terpisah dari REG dan VIP",
-  };
-  ["SPV", "ADMIN", "CHECKER", "SECURITY", "DEVELOPER"].forEach((role) => {
-    ROLE_ACCESS[role] = Array.isArray(ROLE_ACCESS[role]) ? ROLE_ACCESS[role] : [];
-    if (!ROLE_ACCESS[role].includes("dropoff")) ROLE_ACCESS[role].push("dropoff");
+  ["SPV", "ADMIN", "DEVELOPER"].forEach((role) => {
+    ROLE_ACCESS[role] = Array.isArray(ROLE_ACCESS[role])
+      ? ROLE_ACCESS[role]
+      : [];
+    if (!ROLE_ACCESS[role].includes("ba_reject"))
+      ROLE_ACCESS[role].push("ba_reject");
   });
-
-  const renderBeforeV21 = renderPage;
-  renderPage = function renderPageWithDropoffV21(page, toast = true) {
-    if (String(page || "") !== "dropoff") return renderBeforeV21.call(this, page, toast);
-    if (!isLoggedIn() || !canAccessPage("dropoff")) {
-      return renderBeforeV21.call(this, getDefaultPageForRole(), toast);
-    }
-    state.page = "dropoff";
-    document.getElementById("page-title").textContent = pageMeta.dropoff.title;
-    document.getElementById("page-subtitle").textContent = pageMeta.dropoff.subtitle;
-    document.getElementById("page-root").innerHTML = window.pageDropoffV21();
+  const previousRender = renderPage;
+  renderPage = function (page, toast = true) {
+    if (String(page || "") !== "ba_reject")
+      return previousRender.call(this, page, toast);
+    if (!isLoggedIn() || !canAccessPage("ba_reject"))
+      return previousRender.call(this, getDefaultPageForRole(), toast);
+    state.page = "ba_reject";
+    document.getElementById("page-title").textContent =
+      pageMeta.ba_reject.title;
+    document.getElementById("page-subtitle").textContent =
+      pageMeta.ba_reject.subtitle;
+    document.getElementById("page-root").innerHTML = window.pageBaRejectV20();
     applyRoleAccessUI();
-    updateActiveNav("dropoff");
-    history.replaceState(null, "", "#dropoff");
-    if (toast) showToast("Buka menu Drop-Off");
+    updateActiveNav("ba_reject");
+    history.replaceState(null, "", "#ba_reject");
+    setTimeout(window.initBaRejectV20, 0);
+    if (toast) showToast("Buka menu BA Reject");
   };
   window.renderPage = renderPage;
-  applyRoleAccessUI?.();
 })();
