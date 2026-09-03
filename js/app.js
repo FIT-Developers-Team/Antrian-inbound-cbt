@@ -16913,7 +16913,21 @@ if (window.__exportCsvV19) {
       ),
     ].map((gate) => wmGateIdleStatsV27(rows, gate));
   }
+  function wmIdleDateTimeShortV30(value) {
+    const date = value instanceof Date ? value : parseInboundDateSafe(value);
 
+    if (!date || Number.isNaN(date.getTime())) return "-";
+
+    return new Intl.DateTimeFormat("id-ID", {
+      timeZone: "Asia/Jakarta",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).format(date);
+  }
   function wmIdleModalV27(rows = []) {
     const gate = wmIdleStateV27.gate;
     if (!gate) return "";
@@ -17068,8 +17082,8 @@ if (window.__exportCsvV19) {
                     .map(
                       (item) => `<tr>
                 <td>${esc(item.dateKey || "-")}</td>
-                <td>${esc(formatDateTimeShort(item.idleStart))}</td>
-                <td>${esc(formatDateTimeShort(item.idleEnd))}</td>
+                <td>${esc(wmIdleDateTimeShortV30(item.idleStart))}</td>
+<td>${esc(wmIdleDateTimeShortV30(item.idleEnd))}</td>
                 <td class="wm19-queue">${esc(
                   item.previous?.row?.queue_no || "-",
                 )}</td>
