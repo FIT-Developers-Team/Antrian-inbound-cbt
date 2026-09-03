@@ -16615,52 +16615,160 @@ if (window.__exportCsvV19) {
     const gateKey = String(gate || "")
       .trim()
       .toUpperCase();
-    const sessions = wmIdleRowsForRangeV27(rows)
-      .filter((row) =>
-        gateListV22(row).some(
-          (item) => String(item).trim().toUpperCase() === gateKey,
-        ),
-      )
+    const now = new Date();
+    const todayKey = wmIdleTodayKeyV27();
+
+    const jakartaDayStart = (dateKey) =>
+      dateKey ? new Date(`${dateKey}T00:00:00+07:00`) : null;
+    const jakartaNextDayStart = (dateKey) => {
+      const start = jakartaDayStart(dateKey);
+      return start ? new Date(start.getTime() + 24 * 60 * 60 * 1000) : null;
+    };
+
+    const gateRows = rows.filter((row) =>
+      gateListV22(row).some(
+        (item) => String(item).trim().toUpperCase() === gateKey,
+      ),
+    );
+
+    let sessions = gateRows
       .map((row) => {
         const startValue = wmIdleStartV27(row);
         const endValue = wmIdleEndV27(row);
         const start = parseInboundDateSafe(startValue);
-        const end = parseInboundDateSafe(endValue);
+        const parsedEnd = parseInboundDateSafe(endValue);
         return {
           row,
           start,
-          end,
+          end: parsedEnd,
           startValue,
           endValue,
+          dateKey: wmIdleDateKeyV27(
+            startValue ||
+              row.operational_date ||
+              row.register_time ||
+              row.created_at ||
+              row.Timestamp ||
+              "",
+          ),
         };
       })
       .filter((item) => item.start)
       .sort((a, b) => a.start.getTime() - b.start.getTime());
 
+    let periodStart;
+    let periodEnd;
+
+    if (wmIdleStateV27.range === "today") {
+      periodStart = jakartaDayStart(todayKey);
+      periodEnd = now;
+      sessions = sessions.filter((item) => item.dateKey === todayKey);
+    } else {
+      const keys = sessions
+        .map((item) => item.dateKey)
+        .filter(Boolean)
+        .sort();
+      const firstKey = keys[0] || todayKey;
+      const lastKey = keys[keys.length - 1] || todayKey;
+      periodStart = jakartaDayStart(firstKey);
+      periodEnd = lastKey === todayKey ? now : jakartaNextDayStart(lastKey);
+    }
+
+    if (!periodStart || !periodEnd || periodEnd <= periodStart) {
+      periodStart = jakartaDayStart(todayKey);
+      periodEnd = now;
+    }
+
+    // BUSY = start unloading sampai selesai bongkar.
+    // Jika unit masih UNLOADING dan belum punya timestamp selesai,
+    // gate dianggap BUSY sampai akhir periode / waktu sekarang.
+    const busy = sessions
+      .map((item) => {
+        const startMs = Math.max(item.start.getTime(), periodStart.getTime());
+        let endMs = item.end ? item.end.getTime() : periodEnd.getTime();
+        endMs = Math.min(endMs, periodEnd.getTime());
+        if (endMs <= startMs) return null;
+        return { startMs, endMs, sessions: [item] };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.startMs - b.startMs);
+
+    // Merge overlap supaya dua record yang overlap tidak membuat busy time dobel.
+    const mergedBusy = [];
+    busy.forEach((item) => {
+      const last = mergedBusy[mergedBusy.length - 1];
+      if (!last || item.startMs > last.endMs) {
+        mergedBusy.push({
+          startMs: item.startMs,
+          endMs: item.endMs,
+          sessions: [...item.sessions],
+        });
+      } else {
+        last.endMs = Math.max(last.endMs, item.endMs);
+        last.sessions.push(...item.sessions);
+      }
+    });
+
+    // IDLE = komplemen dari BUSY di seluruh window pengamatan.
+    // Termasuk: sebelum unit pertama, antar unit, setelah unit terakhir,
+    // dan FULL WINDOW jika gate tidak dipakai sama sekali.
     const intervals = [];
-    for (let i = 1; i < sessions.length; i += 1) {
-      const previous = sessions[i - 1];
-      const current = sessions[i];
-      if (!previous.end || current.start <= previous.end) continue;
+    let cursor = periodStart.getTime();
+
+    const pushIdle = (fromMs, toMs, previous = null, current = null) => {
+      if (toMs <= fromMs) return;
       intervals.push({
         gate,
-        previous,
-        current,
-        idleMinutes: (current.start.getTime() - previous.end.getTime()) / 60000,
+        previous: previous || {
+          row: {},
+          end: new Date(fromMs),
+          endValue: new Date(fromMs).toISOString(),
+        },
+        current: current || {
+          row: {},
+          start: new Date(toMs),
+          startValue: new Date(toMs).toISOString(),
+        },
+        idleStart: new Date(fromMs),
+        idleEnd: new Date(toMs),
+        idleMinutes: (toMs - fromMs) / 60000,
       });
+    };
+
+    mergedBusy.forEach((block, index) => {
+      if (block.startMs > cursor) {
+        const previousBlock = mergedBusy[index - 1];
+        const previousSession = previousBlock
+          ? previousBlock.sessions[previousBlock.sessions.length - 1]
+          : null;
+        const currentSession = block.sessions[0] || null;
+        pushIdle(cursor, block.startMs, previousSession, currentSession);
+      }
+      cursor = Math.max(cursor, block.endMs);
+    });
+
+    if (cursor < periodEnd.getTime()) {
+      const previousBlock = mergedBusy[mergedBusy.length - 1];
+      const previousSession = previousBlock
+        ? previousBlock.sessions[previousBlock.sessions.length - 1]
+        : null;
+      pushIdle(cursor, periodEnd.getTime(), previousSession, null);
     }
 
     const totalIdle = intervals.reduce(
       (sum, item) => sum + item.idleMinutes,
       0,
     );
-    const avgIdle = intervals.length ? totalIdle / intervals.length : null;
+    const totalWindowMinutes =
+      (periodEnd.getTime() - periodStart.getTime()) / 60000;
+    const busyMinutes = Math.max(0, totalWindowMinutes - totalIdle);
+    const avgIdle = intervals.length ? totalIdle / intervals.length : 0;
     const maxIdle = intervals.length
       ? Math.max(...intervals.map((item) => item.idleMinutes))
-      : null;
+      : 0;
     const minIdle = intervals.length
       ? Math.min(...intervals.map((item) => item.idleMinutes))
-      : null;
+      : 0;
 
     return {
       gate,
@@ -16670,7 +16778,17 @@ if (window.__exportCsvV19) {
       maxIdle,
       minIdle,
       totalIdle,
+      busyMinutes,
+      totalWindowMinutes,
+      idlePercentage: totalWindowMinutes
+        ? (totalIdle / totalWindowMinutes) * 100
+        : 0,
+      utilizationPercentage: totalWindowMinutes
+        ? (busyMinutes / totalWindowMinutes) * 100
+        : 0,
       sampleCount: intervals.length,
+      periodStart,
+      periodEnd,
     };
   }
 
@@ -16711,7 +16829,7 @@ if (window.__exportCsvV19) {
             <h3>${esc(gateLabelV22(gate))}</h3>
             <p>${esc(
               gate,
-            )} · idle dihitung dari gate selesai bongkar sampai kendaraan berikutnya mulai bongkar.</p>
+            )} · idle dihitung sebagai seluruh waktu gate kosong / tidak digunakan pada periode pengamatan.</p>
           </div>
           <button type="button" class="wm27-close" onclick="wmCloseGateIdleV27()" aria-label="Tutup">×</button>
         </header>
@@ -16784,7 +16902,7 @@ if (window.__exportCsvV19) {
             }</tbody>
           </table>
         </div>
-        <footer class="wm27-modal-foot">Catatan: interval tanpa timestamp selesai bongkar atau start unloading tidak dipaksakan masuk perhitungan.</footer>
+        <footer class="wm27-modal-foot">Catatan: idle mencakup waktu sebelum unit pertama, antar unit, dan setelah unit terakhir. Gate tanpa aktivitas dihitung idle penuh.</footer>
       </section>
     </div>`;
   }
