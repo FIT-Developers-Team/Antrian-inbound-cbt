@@ -16617,13 +16617,60 @@ if (window.__exportCsvV19) {
       .toUpperCase();
     const now = new Date();
     const todayKey = wmIdleTodayKeyV27();
+    const OP_START_HOUR = 9;
+    const OP_END_HOUR = 20;
 
-    const jakartaDayStart = (dateKey) =>
-      dateKey ? new Date(`${dateKey}T00:00:00+07:00`) : null;
-    const jakartaNextDayStart = (dateKey) => {
-      const start = jakartaDayStart(dateKey);
-      return start ? new Date(start.getTime() + 24 * 60 * 60 * 1000) : null;
-    };
+    const jakartaPoint = (dateKey, hour) =>
+      dateKey
+        ? new Date(`${dateKey}T${String(hour).padStart(2, "0")}:00:00+07:00`)
+        : null;
+
+    const allObservedDateKeys = [
+      ...new Set(
+        rows
+          .map((row) =>
+            wmIdleDateKeyV27(
+              wmIdleStartV27(row) ||
+                row.operational_date ||
+                row.register_time ||
+                row.created_at ||
+                row.Timestamp ||
+                "",
+            ),
+          )
+          .filter(Boolean),
+      ),
+    ].sort();
+
+    const requestedDateKeys =
+      wmIdleStateV27.range === "today"
+        ? [todayKey]
+        : allObservedDateKeys.length
+        ? allObservedDateKeys
+        : [todayKey];
+
+    // Satu window per hari. Jam di luar 09:00-20:00 WIB TIDAK masuk denominator idle/utilization.
+    const windows = requestedDateKeys
+      .map((dateKey) => {
+        const start = jakartaPoint(dateKey, OP_START_HOUR);
+        const hardEnd = jakartaPoint(dateKey, OP_END_HOUR);
+        if (!start || !hardEnd) return null;
+
+        let end = hardEnd;
+        if (dateKey === todayKey) {
+          if (now <= start) end = start; // operasional belum mulai
+          else if (now < hardEnd) end = now; // berjalan sampai saat ini
+        }
+
+        return {
+          dateKey,
+          start,
+          end,
+          hardEnd,
+          minutes: Math.max(0, (end.getTime() - start.getTime()) / 60000),
+        };
+      })
+      .filter(Boolean);
 
     const gateRows = rows.filter((row) =>
       gateListV22(row).some(
@@ -16631,7 +16678,7 @@ if (window.__exportCsvV19) {
       ),
     );
 
-    let sessions = gateRows
+    const rawSessions = gateRows
       .map((row) => {
         const startValue = wmIdleStartV27(row);
         const endValue = wmIdleEndV27(row);
@@ -16656,112 +16703,119 @@ if (window.__exportCsvV19) {
       .filter((item) => item.start)
       .sort((a, b) => a.start.getTime() - b.start.getTime());
 
-    let periodStart;
-    let periodEnd;
-
-    if (wmIdleStateV27.range === "today") {
-      periodStart = jakartaDayStart(todayKey);
-      periodEnd = now;
-      sessions = sessions.filter((item) => item.dateKey === todayKey);
-    } else {
-      const keys = sessions
-        .map((item) => item.dateKey)
-        .filter(Boolean)
-        .sort();
-      const firstKey = keys[0] || todayKey;
-      const lastKey = keys[keys.length - 1] || todayKey;
-      periodStart = jakartaDayStart(firstKey);
-      periodEnd = lastKey === todayKey ? now : jakartaNextDayStart(lastKey);
-    }
-
-    if (!periodStart || !periodEnd || periodEnd <= periodStart) {
-      periodStart = jakartaDayStart(todayKey);
-      periodEnd = now;
-    }
-
-    // BUSY = start unloading sampai selesai bongkar.
-    // Jika unit masih UNLOADING dan belum punya timestamp selesai,
-    // gate dianggap BUSY sampai akhir periode / waktu sekarang.
-    const busy = sessions
-      .map((item) => {
-        const startMs = Math.max(item.start.getTime(), periodStart.getTime());
-        let endMs = item.end ? item.end.getTime() : periodEnd.getTime();
-        endMs = Math.min(endMs, periodEnd.getTime());
-        if (endMs <= startMs) return null;
-        return { startMs, endMs, sessions: [item] };
-      })
-      .filter(Boolean)
-      .sort((a, b) => a.startMs - b.startMs);
-
-    // Merge overlap supaya dua record yang overlap tidak membuat busy time dobel.
-    const mergedBusy = [];
-    busy.forEach((item) => {
-      const last = mergedBusy[mergedBusy.length - 1];
-      if (!last || item.startMs > last.endMs) {
-        mergedBusy.push({
-          startMs: item.startMs,
-          endMs: item.endMs,
-          sessions: [...item.sessions],
-        });
-      } else {
-        last.endMs = Math.max(last.endMs, item.endMs);
-        last.sessions.push(...item.sessions);
-      }
-    });
-
-    // IDLE = komplemen dari BUSY di seluruh window pengamatan.
-    // Termasuk: sebelum unit pertama, antar unit, setelah unit terakhir,
-    // dan FULL WINDOW jika gate tidak dipakai sama sekali.
     const intervals = [];
-    let cursor = periodStart.getTime();
+    const mergedBusyAll = [];
+    const operationalSessions = [];
 
-    const pushIdle = (fromMs, toMs, previous = null, current = null) => {
-      if (toMs <= fromMs) return;
-      intervals.push({
-        gate,
-        previous: previous || {
-          row: {},
-          end: new Date(fromMs),
-          endValue: new Date(fromMs).toISOString(),
-        },
-        current: current || {
-          row: {},
-          start: new Date(toMs),
-          startValue: new Date(toMs).toISOString(),
-        },
-        idleStart: new Date(fromMs),
-        idleEnd: new Date(toMs),
-        idleMinutes: (toMs - fromMs) / 60000,
+    windows.forEach((windowInfo) => {
+      if (windowInfo.minutes <= 0) return;
+
+      const windowStartMs = windowInfo.start.getTime();
+      const windowEndMs = windowInfo.end.getTime();
+
+      const dayBusy = rawSessions
+        .map((item) => {
+          const rawStartMs = item.start.getTime();
+          // Tanpa timestamp selesai, hanya anggap masih busy bila statusnya memang masih aktif.
+          const status = safeStatus(item.row);
+          let rawEndMs = item.end
+            ? item.end.getTime()
+            : status === "UNLOADING"
+            ? windowEndMs
+            : rawStartMs;
+
+          const startMs = Math.max(rawStartMs, windowStartMs);
+          const endMs = Math.min(rawEndMs, windowEndMs);
+          if (endMs <= startMs) return null;
+
+          return {
+            startMs,
+            endMs,
+            sessions: [item],
+            dateKey: windowInfo.dateKey,
+          };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.startMs - b.startMs);
+
+      const mergedBusy = [];
+      dayBusy.forEach((item) => {
+        const last = mergedBusy[mergedBusy.length - 1];
+        if (!last || item.startMs > last.endMs) {
+          mergedBusy.push({
+            startMs: item.startMs,
+            endMs: item.endMs,
+            sessions: [...item.sessions],
+            dateKey: item.dateKey,
+          });
+        } else {
+          last.endMs = Math.max(last.endMs, item.endMs);
+          last.sessions.push(...item.sessions);
+        }
       });
-    };
 
-    mergedBusy.forEach((block, index) => {
-      if (block.startMs > cursor) {
-        const previousBlock = mergedBusy[index - 1];
+      mergedBusyAll.push(...mergedBusy);
+      mergedBusy.forEach((block) => {
+        block.sessions.forEach((session) => {
+          if (!operationalSessions.includes(session))
+            operationalSessions.push(session);
+        });
+      });
+
+      let cursor = windowStartMs;
+
+      const pushIdle = (fromMs, toMs, previous = null, current = null) => {
+        if (toMs <= fromMs) return;
+        intervals.push({
+          gate,
+          dateKey: windowInfo.dateKey,
+          previous: previous || {
+            row: {},
+            end: new Date(fromMs),
+            endValue: new Date(fromMs).toISOString(),
+          },
+          current: current || {
+            row: {},
+            start: new Date(toMs),
+            startValue: new Date(toMs).toISOString(),
+          },
+          idleStart: new Date(fromMs),
+          idleEnd: new Date(toMs),
+          idleMinutes: (toMs - fromMs) / 60000,
+        });
+      };
+
+      mergedBusy.forEach((block, index) => {
+        if (block.startMs > cursor) {
+          const previousBlock = mergedBusy[index - 1];
+          const previousSession = previousBlock
+            ? previousBlock.sessions[previousBlock.sessions.length - 1]
+            : null;
+          const currentSession = block.sessions[0] || null;
+          pushIdle(cursor, block.startMs, previousSession, currentSession);
+        }
+        cursor = Math.max(cursor, block.endMs);
+      });
+
+      // Gate kosong seluruh window juga masuk sini karena cursor masih = 09:00.
+      if (cursor < windowEndMs) {
+        const previousBlock = mergedBusy[mergedBusy.length - 1];
         const previousSession = previousBlock
           ? previousBlock.sessions[previousBlock.sessions.length - 1]
           : null;
-        const currentSession = block.sessions[0] || null;
-        pushIdle(cursor, block.startMs, previousSession, currentSession);
+        pushIdle(cursor, windowEndMs, previousSession, null);
       }
-      cursor = Math.max(cursor, block.endMs);
     });
 
-    if (cursor < periodEnd.getTime()) {
-      const previousBlock = mergedBusy[mergedBusy.length - 1];
-      const previousSession = previousBlock
-        ? previousBlock.sessions[previousBlock.sessions.length - 1]
-        : null;
-      pushIdle(cursor, periodEnd.getTime(), previousSession, null);
-    }
-
-    const totalIdle = intervals.reduce(
-      (sum, item) => sum + item.idleMinutes,
+    const totalWindowMinutes = windows.reduce(
+      (sum, item) => sum + item.minutes,
       0,
     );
-    const totalWindowMinutes =
-      (periodEnd.getTime() - periodStart.getTime()) / 60000;
-    const busyMinutes = Math.max(0, totalWindowMinutes - totalIdle);
+    const busyMinutes = mergedBusyAll.reduce(
+      (sum, item) => sum + (item.endMs - item.startMs) / 60000,
+      0,
+    );
+    const totalIdle = Math.max(0, totalWindowMinutes - busyMinutes);
     const avgIdle = intervals.length ? totalIdle / intervals.length : 0;
     const maxIdle = intervals.length
       ? Math.max(...intervals.map((item) => item.idleMinutes))
@@ -16770,10 +16824,60 @@ if (window.__exportCsvV19) {
       ? Math.min(...intervals.map((item) => item.idleMinutes))
       : 0;
 
+    // Breakdown start unloading per jam hanya jam operasional 09-19.
+    const hourly = Array.from(
+      { length: OP_END_HOUR - OP_START_HOUR },
+      (_, idx) => {
+        const hour = OP_START_HOUR + idx;
+        return {
+          hour,
+          label: `${String(hour).padStart(2, "0")}:00–${String(
+            hour + 1,
+          ).padStart(2, "0")}:00`,
+          count: 0,
+        };
+      },
+    );
+
+    operationalSessions.forEach((item) => {
+      const hour = wmBusyHourWibV28(item.startValue);
+      if (hour >= OP_START_HOUR && hour < OP_END_HOUR) {
+        const bucket = hourly.find((entry) => entry.hour === hour);
+        if (bucket) bucket.count += 1;
+      }
+    });
+
+    const peakHour = hourly.reduce(
+      (best, item) => (item.count > best.count ? item : best),
+      hourly[0] || { hour: OP_START_HOUR, label: "09:00–10:00", count: 0 },
+    );
+
+    const activeNow = gateRows
+      .filter((row) => ["CALLED", "UNLOADING"].includes(safeStatus(row)))
+      .sort(
+        (a, b) =>
+          Number(safeStatus(b) === "UNLOADING") -
+          Number(safeStatus(a) === "UNLOADING"),
+      );
+    const currentStatus = activeNow.some(
+      (row) => safeStatus(row) === "UNLOADING",
+    )
+      ? "BONGKAR"
+      : activeNow.length
+      ? "DIPANGGIL"
+      : "KOSONG";
+
     return {
       gate,
-      sessions,
+      sessions: operationalSessions,
+      rawSessions,
       intervals,
+      busyBlocks: mergedBusyAll,
+      windows,
+      hourly,
+      peakHour,
+      currentStatus,
+      activeNow,
       avgIdle,
       maxIdle,
       minIdle,
@@ -16787,8 +16891,10 @@ if (window.__exportCsvV19) {
         ? (busyMinutes / totalWindowMinutes) * 100
         : 0,
       sampleCount: intervals.length,
-      periodStart,
-      periodEnd,
+      periodStart: windows[0]?.start || null,
+      periodEnd: windows[windows.length - 1]?.end || null,
+      operationalStartHour: OP_START_HOUR,
+      operationalEndHour: OP_END_HOUR,
     };
   }
 
@@ -16819,36 +16925,97 @@ if (window.__exportCsvV19) {
       if (wmIdleStateV27.status === "low") return item.idleMinutes < 15;
       return true;
     });
+
+    const periodLabel =
+      wmIdleStateV27.range === "today"
+        ? `${wmIdleTodayKeyV27()} · 09:00–${
+            stats.periodEnd
+              ? new Intl.DateTimeFormat("id-ID", {
+                  timeZone: "Asia/Jakarta",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hourCycle: "h23",
+                }).format(stats.periodEnd)
+              : "09:00"
+          } WIB`
+        : `Semua data · hanya window 09:00–20:00 WIB`;
+
+    const busyRows = stats.hourly
+      .map(
+        (item) => `<tr>
+          <td><b>${esc(item.label)}</b></td>
+          <td>${numV19(item.count)} unit</td>
+          <td>${
+            item.count === stats.peakHour.count && item.count > 0
+              ? '<span class="wm19-chip danger">PEAK</span>'
+              : "-"
+          }</td>
+        </tr>`,
+      )
+      .join("");
+
+    const activeDetail = stats.activeNow.length
+      ? stats.activeNow
+          .map(
+            (row) => `<div class="wm27-active-unit">
+              <b>${esc(row.queue_no || "-")}</b>
+              <span>${esc(row.plat_number || "-")}</span>
+              <small>${esc(safeStatus(row))}</small>
+            </div>`,
+          )
+          .join("")
+      : `<div class="wm19-empty">Gate sedang kosong.</div>`;
+
     return `<div class="wm27-modal-backdrop" id="wm27-idle-modal" onclick="if(event.target===this)wmCloseGateIdleV27()">
-      <section class="wm27-modal" role="dialog" aria-modal="true" aria-label="Monitoring idle ${esc(
+      <section class="wm27-modal" role="dialog" aria-modal="true" aria-label="Detail utilisasi ${esc(
         gate,
       )}">
         <header class="wm27-modal-head">
           <div>
-            <div class="wm19-eyebrow">GATE IDLE MONITORING</div>
+            <div class="wm19-eyebrow">DETAIL UTILISASI GATE</div>
             <h3>${esc(gateLabelV22(gate))}</h3>
-            <p>${esc(
-              gate,
-            )} · idle dihitung sebagai seluruh waktu gate kosong / tidak digunakan pada periode pengamatan.</p>
+            <p>${esc(gate)} · ${esc(periodLabel)} · status saat ini: <b>${esc(
+      stats.currentStatus,
+    )}</b></p>
           </div>
           <button type="button" class="wm27-close" onclick="wmCloseGateIdleV27()" aria-label="Tutup">×</button>
         </header>
+
         <div class="wm27-idle-kpis">
+          <article><span>UNIT BONGKAR</span><b>${numV19(
+            stats.sessions.length,
+          )}</b><small>Aktivitas di window operasional</small></article>
+          <article><span>BUSY TIME</span><b>${esc(
+            wmIdleFormatV27(stats.busyMinutes),
+          )}</b><small>Gate sedang digunakan</small></article>
+          <article><span>IDLE TIME</span><b>${esc(
+            wmIdleFormatV27(stats.totalIdle),
+          )}</b><small>Gate kosong 09:00–20:00</small></article>
+          <article><span>UTILIZATION</span><b>${esc(
+            wmBusyNumberV28(stats.utilizationPercentage, 1),
+          )}%</b><small>Busy ÷ waktu operasional</small></article>
           <article><span>AVERAGE IDLE</span><b>${esc(
             wmIdleFormatV27(stats.avgIdle),
           )}</b><small>${numV19(
       stats.sampleCount,
-    )} interval valid</small></article>
-          <article><span>MAX IDLE</span><b>${esc(
+    )} interval idle</small></article>
+          <article><span>LONGEST IDLE</span><b>${esc(
             wmIdleFormatV27(stats.maxIdle),
           )}</b><small>Idle terlama</small></article>
-          <article><span>TOTAL IDLE</span><b>${esc(
-            wmIdleFormatV27(stats.totalIdle),
-          )}</b><small>Akumulasi periode</small></article>
-          <article><span>UNIT BONGKAR</span><b>${numV19(
-            stats.sessions.length,
-          )}</b><small>Memiliki start unloading</small></article>
+          <article><span>PEAK HOUR</span><b>${
+            stats.peakHour?.count ? esc(stats.peakHour.label) : "-"
+          }</b><small>${numV19(
+      stats.peakHour?.count || 0,
+    )} start unloading</small></article>
+          <article><span>STATUS</span><b>${esc(
+            stats.currentStatus,
+          )}</b><small>${
+      stats.activeNow.length
+        ? `${numV19(stats.activeNow.length)} unit aktif`
+        : "Siap digunakan"
+    }</small></article>
         </div>
+
         <div class="wm27-toolbar">
           <label>Periode
             <select onchange="wmSetIdleRangeV27(this.value)">
@@ -16878,31 +17045,46 @@ if (window.__exportCsvV19) {
           </label>
           <button type="button" class="wm27-download" onclick="wmDownloadGateIdleCsvV27()">Download CSV</button>
         </div>
+
+        <div class="wm27-detail-grid-v30" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin:14px 0;">
+          <article class="wm19-card" style="padding:14px;">
+            <header class="wm19-card-head"><div><h3>Jam Sibuk</h3><p>Jumlah start unloading per jam, hanya 09:00–20:00 WIB.</p></div></header>
+            <div class="wm27-table-wrap">
+              <table class="wm27-table"><thead><tr><th>JAM</th><th>UNIT</th><th>STATUS</th></tr></thead><tbody>${busyRows}</tbody></table>
+            </div>
+          </article>
+          <article class="wm19-card" style="padding:14px;">
+            <header class="wm19-card-head"><div><h3>Unit Aktif Saat Ini</h3><p>Kondisi gate realtime dari CALLED / UNLOADING.</p></div></header>
+            <div style="display:grid;gap:8px;">${activeDetail}</div>
+          </article>
+        </div>
+
         <div class="wm27-table-wrap">
           <table class="wm27-table">
-            <thead><tr><th>SELESAI UNIT SEBELUMNYA</th><th>QUEUE SEBELUMNYA</th><th>MULAI UNIT BERIKUTNYA</th><th>QUEUE BERIKUTNYA</th><th>IDLE</th></tr></thead>
+            <thead><tr><th>TANGGAL</th><th>IDLE MULAI</th><th>IDLE SELESAI</th><th>QUEUE SEBELUMNYA</th><th>QUEUE BERIKUTNYA</th><th>IDLE</th></tr></thead>
             <tbody>${
               intervals.length
                 ? intervals
                     .map(
                       (item) => `<tr>
-              <td>${esc(formatDateTimeShort(item.previous.endValue))}</td>
-              <td class="wm19-queue">${esc(
-                item.previous.row.queue_no || "-",
-              )}</td>
-              <td>${esc(formatDateTimeShort(item.current.startValue))}</td>
-              <td class="wm19-queue">${esc(
-                item.current.row.queue_no || "-",
-              )}</td>
-              <td><b>${esc(wmIdleFormatV27(item.idleMinutes))}</b></td>
-            </tr>`,
+                <td>${esc(item.dateKey || "-")}</td>
+                <td>${esc(formatDateTimeShort(item.idleStart))}</td>
+                <td>${esc(formatDateTimeShort(item.idleEnd))}</td>
+                <td class="wm19-queue">${esc(
+                  item.previous?.row?.queue_no || "-",
+                )}</td>
+                <td class="wm19-queue">${esc(
+                  item.current?.row?.queue_no || "-",
+                )}</td>
+                <td><b>${esc(wmIdleFormatV27(item.idleMinutes))}</b></td>
+              </tr>`,
                     )
                     .join("")
-                : `<tr><td colspan="5" class="wm19-empty">Belum ada interval idle yang valid pada filter ini.</td></tr>`
+                : `<tr><td colspan="6" class="wm19-empty">Belum ada interval idle pada window operasional ini.</td></tr>`
             }</tbody>
           </table>
         </div>
-        <footer class="wm27-modal-foot">Catatan: idle mencakup waktu sebelum unit pertama, antar unit, dan setelah unit terakhir. Gate tanpa aktivitas dihitung idle penuh.</footer>
+        <footer class="wm27-modal-foot">Idle hanya dihitung ketika gate kosong pada jam operasional 09:00–20:00 WIB. Waktu di luar jam tersebut tidak masuk idle maupun utilization.</footer>
       </section>
     </div>`;
   }
@@ -16956,20 +17138,34 @@ if (window.__exportCsvV19) {
     const headers = [
       "Gate",
       "Periode",
+      "Jam Operasional",
+      "Status Gate",
+      "Unit Bongkar",
+      "Busy Time",
+      "Idle Time",
+      "Utilization %",
+      "Tanggal Idle",
+      "Idle Mulai",
+      "Idle Selesai",
       "Queue Sebelumnya",
-      "Selesai Bongkar",
       "Queue Berikutnya",
-      "Mulai Bongkar",
       "Idle Menit",
       "Idle",
     ];
     const body = intervals.map((item) => [
       stats.gate,
       wmIdleStateV27.range === "today" ? wmIdleTodayKeyV27() : "ALL",
-      item.previous.row.queue_no || "",
-      item.previous.endValue || "",
-      item.current.row.queue_no || "",
-      item.current.startValue || "",
+      "09:00-20:00 WIB",
+      stats.currentStatus,
+      stats.sessions.length,
+      wmIdleFormatV27(stats.busyMinutes),
+      wmIdleFormatV27(stats.totalIdle),
+      Math.round(stats.utilizationPercentage * 100) / 100,
+      item.dateKey || "",
+      item.idleStart ? item.idleStart.toISOString() : "",
+      item.idleEnd ? item.idleEnd.toISOString() : "",
+      item.previous?.row?.queue_no || "",
+      item.current?.row?.queue_no || "",
       Math.round(item.idleMinutes * 100) / 100,
       wmIdleFormatV27(item.idleMinutes),
     ]);
@@ -17541,9 +17737,11 @@ if (window.__exportCsvV19) {
     ).length;
     const cards = assignments
       .map(({ gate, tickets, idle }) => {
-        const idleLine = `<div class="wm27-gate-idle"><span>Avg idle</span><b>${esc(
-          wmIdleFormatV27(idle.avgIdle),
-        )}</b><small>${numV19(idle.sampleCount)} interval</small></div>`;
+        const idleLine = `<div class="wm27-gate-idle"><span>Idle gate</span><b>${esc(
+          wmIdleFormatV27(idle.totalIdle),
+        )}</b><small>${esc(
+          wmBusyNumberV28(idle.utilizationPercentage, 1),
+        )}% utilization</small></div>`;
         if (!tickets.length) {
           return `<button type="button" class="wm19-gate-card is-empty" data-gate="${esc(
             gate,
@@ -17594,7 +17792,7 @@ if (window.__exportCsvV19) {
         }</div>${idleLine}</button>`;
       })
       .join("");
-    return `<article class="wm19-card wm19-gate-panel"><header class="wm19-card-head wm19-gate-head"><div><h3>Visibilitas Gate Bongkar</h3><p>Klik card gate untuk melihat average idle, detail interval, filter, dan download data.</p></div><div class="wm19-gate-summary"><span><i class="is-unloading"></i>${numV19(
+    return `<article class="wm19-card wm19-gate-panel"><header class="wm19-card-head wm19-gate-head"><div><h3>Visibilitas Gate Bongkar</h3><p>Klik card gate untuk melihat unit bongkar, busy time, idle time, utilization, jam sibuk, riwayat idle, dan download data.</p></div><div class="wm19-gate-summary"><span><i class="is-unloading"></i>${numV19(
       unloading,
     )} bongkar</span><span><i class="is-called"></i>${numV19(
       called,
