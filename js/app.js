@@ -7176,11 +7176,33 @@ function vehicleRowInput(vehicle = {}, index = 0) {
           )}" oninput="this.value=this.value.replace(/\\D/g,'').slice(0,6); syncVehicleMultiInput();" />
         </label>
         <label class="flex flex-col gap-2">
-          <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Jumlah TKBM</span>
-          <input data-vehicle-field="tkbm_count" type="number" min="0" max="2147483647" step="1" inputmode="numeric" class="form-input" value="${esc(
-            vehicle.tkbm_count ?? 0,
-          )}" placeholder="Contoh: 3" required oninput="syncVehicleMultiInput();" />
-          <span class="text-[11px] text-on-surface-variant">Jumlah orang yang dibawa driver untuk mobil ini. Isi 0 jika tidak membawa TKBM.</span>
+          <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Apakah Memakai TKBM?</span>
+          <select
+            data-vehicle-field="tkbm_count"
+            class="form-input"
+            required
+            onchange="syncVehicleMultiInput();"
+          >
+            <option value="NO" ${
+              !["YES", "1"].includes(
+                String(vehicle.tkbm_count ?? "NO")
+                  .trim()
+                  .toUpperCase(),
+              )
+                ? "selected"
+                : ""
+            }>NO</option>
+            <option value="YES" ${
+              ["YES", "1"].includes(
+                String(vehicle.tkbm_count ?? "NO")
+                  .trim()
+                  .toUpperCase(),
+              )
+                ? "selected"
+                : ""
+            }>YES</option>
+          </select>
+          <span class="text-[11px] text-on-surface-variant">Pilih YES jika kendaraan menggunakan TKBM, atau NO jika tidak.</span>
         </label>
       </div>
     </div>
@@ -7290,9 +7312,15 @@ function collectVehicleRows() {
         row.querySelector('[data-vehicle-plate-part="suffix"]')?.value || "";
       const rawPhone =
         row.querySelector('[data-vehicle-field="phone_number"]')?.value || "";
-      const tkbmResult = window.InboundTicketContracts?.normalizeTkbm(
-        row.querySelector('[data-vehicle-field="tkbm_count"]')?.value || "",
-      ) || { valid: false, count: 0 };
+      const tkbmChoice = String(
+        row.querySelector('[data-vehicle-field="tkbm_count"]')?.value || "NO",
+      )
+        .trim()
+        .toUpperCase();
+      const tkbmResult = {
+        valid: ["YES", "NO"].includes(tkbmChoice),
+        count: tkbmChoice === "YES" ? 1 : 0,
+      };
       const normalizedPhones =
         typeof parseAndNormalizePhones === "function"
           ? parseAndNormalizePhones(rawPhone)
@@ -7396,9 +7424,13 @@ function validateVehicleRows() {
     const driverOk = !!String(driverEl?.value || "").trim();
     const phoneOk = !!phone;
     const ktpOk = !ktp || /^\d{6}$/.test(ktp);
-    const tkbmResult = window.InboundTicketContracts?.normalizeTkbm(
-      tkbmEl?.value || "",
-    ) || { valid: false };
+    const tkbmChoice = String(tkbmEl?.value || "NO")
+      .trim()
+      .toUpperCase();
+    const tkbmResult = {
+      valid: ["YES", "NO"].includes(tkbmChoice),
+      count: tkbmChoice === "YES" ? 1 : 0,
+    };
 
     if (plate) plateSet.add(plate);
     if (fleetEl) fleetEl.classList.toggle("invalid", !fleetOk);
@@ -8970,8 +9002,8 @@ function securityFormMatchesRowsForPrint(rows = []) {
       row.plat_number || "-",
     )}</b></div><div><small>Fleet</small><b>${esc(
       row.fleet_type || "-",
-    )}</b></div><div><small>Jumlah TKBM</small><b>${esc(
-      Number(row.tkbm_count || 0),
+    )}</b></div><div><small>Memakai TKBM?</small><b>${esc(
+      Number(row.tkbm_count || 0) > 0 ? "YES" : "NO",
     )}</b></div><div><small>Jenis Tiket</small><b>${esc(
       typeOf(row),
     )}</b></div><div><small>Last Update</small><b>${esc(
