@@ -1562,14 +1562,28 @@ function shouldUseOutputOnlyInitialLoad() {
       ? normalizeRole(getAuthUser()?.role || "")
       : "";
 
-  if (role === "CHECKER" || role === "ADMIN") return true;
   if (
-    ["checker", "monitor", "laporan", "panggil", "antrian"].includes(page) &&
-    role !== "SECURITY"
+    ["CHECKER", "ADMIN", "ASTRONAUTS", "COMERCIAL", "SPV", "DEVELOPER"].includes(
+      role,
+    )
+  )
+    return true;
+  if (
+    [
+      "checker",
+      "monitor",
+      "laporan",
+      "panggil",
+      "antrian",
+      "commercial",
+      "dropoff",
+      "ba_reject",
+      "login",
+    ].includes(page)
   )
     return true;
 
-  return false;
+  return true;
 }
 
 async function initApi() {
