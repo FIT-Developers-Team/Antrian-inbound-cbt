@@ -123,6 +123,14 @@ const pageMeta = {
     title: "Waiting List",
     subtitle: "List input security, update gate/status dari checker",
   },
+  dropoff: {
+    title: "Drop-Off",
+    subtitle: "Tracking PO & Surat Jalan Drop-Off",
+  },
+  ba_reject: {
+    title: "BA Reject",
+    subtitle: "Berita Acara Penolakan Barang",
+  },
   setting: { title: "Setting", subtitle: "Set API URL dan refresh data" },
   debug: {
     title: "Debug",
@@ -162,6 +170,11 @@ const AUTH_USERS = [
     role: "SECURITY",
     display_name: "Security",
   },
+  {
+    username: "Astronauts",
+    role: "ASTRONAUTS",
+    display_name: "Astronauts",
+  },
 ];
 
 const ROLE_ACCESS = {
@@ -177,6 +190,13 @@ const ROLE_ACCESS = {
   ADMIN: ["checker", "panggil", "laporan"],
   CHECKER: ["checker"],
   SECURITY: ["daftar", "laporan"],
+  ASTRONAUTS: [
+    "monitor",
+    "commercial",
+    "laporan",
+    "dropoff",
+    "ba_reject",
+  ],
 };
 
 const ROLE_DEFAULT_PAGE = {
@@ -184,6 +204,7 @@ const ROLE_DEFAULT_PAGE = {
   ADMIN: "checker",
   CHECKER: "checker",
   SECURITY: "daftar",
+  ASTRONAUTS: "monitor",
 };
 
 function normalizeRole(role = "") {
