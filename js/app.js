@@ -287,7 +287,8 @@ async function submitLogin(e) {
     });
     const result = await response.json();
     const found = result?.data?.user;
-    if (!response.ok || !found) throw new Error(result?.message || "Username / password salah.");
+    if (!response.ok || !found)
+      throw new Error(result?.message || "Username / password salah.");
 
     window.setInboundSessionToken?.(result?.data?.token || "");
     setAuthUser(found);
@@ -311,7 +312,9 @@ function logoutUser() {
   const user = getAuthUser();
   fetch(`${window.INBOUND_BACKEND_URL}?action=logout`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${window.getInboundSessionToken?.() || ""}` },
+    headers: {
+      Authorization: `Bearer ${window.getInboundSessionToken?.() || ""}`,
+    },
   }).catch(() => {});
   window.stopInboundRealtime?.();
   window.clearInboundSessionToken?.();
@@ -398,7 +401,9 @@ function renderAuthHeader() {
       <span class="material-symbols-outlined text-sm">refresh</span>Refresh Data
     </button>
     <span class="material-symbols-outlined text-sm text-primary">verified_user</span>
-    <span class="font-bold text-on-surface">${esc(user.display_name || user.username)}</span>
+    <span class="font-bold text-on-surface">${esc(
+      user.display_name || user.username,
+    )}</span>
     <span class="text-on-surface-variant">· ${esc(role)}</span>
     <button onclick="logoutUser()" class="ml-1 text-error font-bold hover:underline">Logout</button>
   </div>
@@ -437,10 +442,18 @@ function kpiCard(k) {
       error: "text-error",
     }[k.color] || "text-primary";
   return `<div class="glass-card p-5 rounded-xl flex flex-col gap-2 relative overflow-hidden group">
-    <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><span class="material-symbols-outlined text-4xl">${k.icon || "analytics"}</span></div>
-    <span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">${esc(k.label)}</span>
-    <span class="font-headline-md text-3xl ${cls}">${esc(k.display_value ?? k.value ?? 0)}</span>
-    <span class="text-[11px] text-on-surface-variant">${esc(k.source || "api")}.${esc(k.metric || "metric")}</span>
+    <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><span class="material-symbols-outlined text-4xl">${
+      k.icon || "analytics"
+    }</span></div>
+    <span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">${esc(
+      k.label,
+    )}</span>
+    <span class="font-headline-md text-3xl ${cls}">${esc(
+    k.display_value ?? k.value ?? 0,
+  )}</span>
+    <span class="text-[11px] text-on-surface-variant">${esc(
+      k.source || "api",
+    )}.${esc(k.metric || "metric")}</span>
   </div>`;
 }
 
@@ -457,21 +470,27 @@ function renderPoLookupSummary(lookup) {
   const chips = found
     .map(
       (x) =>
-        `<span class="inline-flex items-center rounded-full bg-primary/10 border border-primary/20 text-primary px-2 py-1 mr-1 mb-1 text-[11px] font-bold">${esc(x.po_number || "-")}</span>`,
+        `<span class="inline-flex items-center rounded-full bg-primary/10 border border-primary/20 text-primary px-2 py-1 mr-1 mb-1 text-[11px] font-bold">${esc(
+          x.po_number || "-",
+        )}</span>`,
     )
     .join("");
 
   const missingChips = missing
     .map(
       (x) =>
-        `<span class="inline-flex items-center rounded-full bg-error/10 border border-error/20 text-error px-2 py-1 mr-1 mb-1 text-[11px] font-bold">${esc(x)}</span>`,
+        `<span class="inline-flex items-center rounded-full bg-error/10 border border-error/20 text-error px-2 py-1 mr-1 mb-1 text-[11px] font-bold">${esc(
+          x,
+        )}</span>`,
     )
     .join("");
 
   const mismatchChips = vendorMismatch
     .map(
       (x) =>
-        `<span class="inline-flex items-center rounded-full bg-warning/10 border border-warning/20 text-warning px-2 py-1 mr-1 mb-1 text-[11px] font-bold">${esc(x.po_number || x.po_input || "-")} ≠ ${esc(x.vendor_name || "-")}</span>`,
+        `<span class="inline-flex items-center rounded-full bg-warning/10 border border-warning/20 text-warning px-2 py-1 mr-1 mb-1 text-[11px] font-bold">${esc(
+          x.po_number || x.po_input || "-",
+        )} ≠ ${esc(x.vendor_name || "-")}</span>`,
     )
     .join("");
 
@@ -480,11 +499,17 @@ function renderPoLookupSummary(lookup) {
     .map((item) => {
       const po = String(item.po_number || item.po_input || "").trim();
       const encoded = encodeURIComponent(po);
-      return `<div class="mt-3 rounded-lg border border-warning/35 bg-warning/5 p-3" data-manual-po-metrics="${esc(po)}">
+      return `<div class="mt-3 rounded-lg border border-warning/35 bg-warning/5 p-3" data-manual-po-metrics="${esc(
+        po,
+      )}">
         <div class="font-bold text-on-surface">Data PO manual · ${esc(po)}</div>
         <div class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <label class="flex flex-col gap-1"><span class="font-bold">Total Qty PO</span><input type="number" min="1" step="1" inputmode="numeric" class="form-input" value="${esc(item.total_po_qty || "")}" placeholder="Wajib diisi" oninput="updateManualPoMetricV24(decodeURIComponent('${encoded}'),'total_po_qty',this.value)" /></label>
-          <label class="flex flex-col gap-1"><span class="font-bold">Total SKU PO</span><input type="number" min="1" step="1" inputmode="numeric" class="form-input" value="${esc(item.count_po_sku || "")}" placeholder="Wajib diisi" oninput="updateManualPoMetricV24(decodeURIComponent('${encoded}'),'count_po_sku',this.value)" /></label>
+          <label class="flex flex-col gap-1"><span class="font-bold">Total Qty PO</span><input type="number" min="1" step="1" inputmode="numeric" class="form-input" value="${esc(
+            item.total_po_qty || "",
+          )}" placeholder="Wajib diisi" oninput="updateManualPoMetricV24(decodeURIComponent('${encoded}'),'total_po_qty',this.value)" /></label>
+          <label class="flex flex-col gap-1"><span class="font-bold">Total SKU PO</span><input type="number" min="1" step="1" inputmode="numeric" class="form-input" value="${esc(
+            item.count_po_sku || "",
+          )}" placeholder="Wajib diisi" oninput="updateManualPoMetricV24(decodeURIComponent('${encoded}'),'count_po_sku',this.value)" /></label>
         </div>
         <div class="mt-1 text-[11px] text-warning">Wajib diisi karena PO tidak ditemukan di master.</div>
       </div>`;
@@ -492,16 +517,35 @@ function renderPoLookupSummary(lookup) {
     .join("");
 
   return `<div id="po-lookup-summary" class="mt-3 rounded-lg border border-outline-variant/40 bg-surface-container/35 p-3 text-[12px] text-on-surface-variant">
-    <div class="font-bold text-on-surface mb-2">PO terdeteksi: ${num(found.length)} valid${missing.length ? `, ${num(missing.length)} tidak ketemu` : ""}${vendorMismatch.length ? `, ${num(vendorMismatch.length)} beda vendor` : ""}</div>
-    <div>${chips || `<span class="text-on-surface-variant">Belum ada PO valid.</span>`}</div>
-    ${missing.length ? `<div class="mt-2"><span class="font-bold text-error">Missing:</span> ${missingChips}</div>` : ""}
-    ${vendorMismatch.length ? `<div class="mt-2"><span class="font-bold text-warning">Beda vendor:</span> ${mismatchChips}</div>` : ""}
+    <div class="font-bold text-on-surface mb-2">PO terdeteksi: ${num(
+      found.length,
+    )} valid${missing.length ? `, ${num(missing.length)} tidak ketemu` : ""}${
+    vendorMismatch.length ? `, ${num(vendorMismatch.length)} beda vendor` : ""
+  }</div>
+    <div>${
+      chips ||
+      `<span class="text-on-surface-variant">Belum ada PO valid.</span>`
+    }</div>
+    ${
+      missing.length
+        ? `<div class="mt-2"><span class="font-bold text-error">Missing:</span> ${missingChips}</div>`
+        : ""
+    }
+    ${
+      vendorMismatch.length
+        ? `<div class="mt-2"><span class="font-bold text-warning">Beda vendor:</span> ${mismatchChips}</div>`
+        : ""
+    }
     ${manualMetrics}
     <div class="mt-2">Submit: 1 plat = 1 mobil/antrian. Banyak PO dengan vendor sama di 1 plat akan digabung di 1 baris Output form.</div>
   </div>`;
 }
 
-window.updateManualPoMetricV24 = function updateManualPoMetricV24(poNumber, field, value) {
+window.updateManualPoMetricV24 = function updateManualPoMetricV24(
+  poNumber,
+  field,
+  value,
+) {
   const po = String(poNumber || "").trim();
   if (!po || !["total_po_qty", "count_po_sku"].includes(field)) return;
   window.__manualPoMetricsV24 = window.__manualPoMetricsV24 || {};
@@ -509,11 +553,19 @@ window.updateManualPoMetricV24 = function updateManualPoMetricV24(poNumber, fiel
   current[field] = String(value ?? "").trim();
   window.__manualPoMetricsV24[po] = current;
   const lookup = state.poLookup;
-  const item = lookup?.items?.find((row) => String(row.po_number || row.po_input || "").trim() === po);
+  const item = lookup?.items?.find(
+    (row) => String(row.po_number || row.po_input || "").trim() === po,
+  );
   if (item) item[field] = Number(value || 0);
   if (lookup?.summary) {
-    lookup.summary.total_po_qty = (lookup.items || []).reduce((sum, row) => sum + Number(row.total_po_qty || 0), 0);
-    lookup.summary.count_po_sku = (lookup.items || []).reduce((sum, row) => sum + Number(row.count_po_sku || 0), 0);
+    lookup.summary.total_po_qty = (lookup.items || []).reduce(
+      (sum, row) => sum + Number(row.total_po_qty || 0),
+      0,
+    );
+    lookup.summary.count_po_sku = (lookup.items || []).reduce(
+      (sum, row) => sum + Number(row.count_po_sku || 0),
+      0,
+    );
     const total = document.getElementById("security-total-qty");
     const sku = document.getElementById("security-count-sku");
     if (total) total.textContent = num(lookup.summary.total_po_qty);
@@ -557,7 +609,9 @@ function plateMultiInput(value = "") {
         <span class="material-symbols-outlined text-sm">add</span>Tambah Plat
       </button>
     </div>
-    <input type="hidden" id="plat-number-hidden" name="plat_number" value="${esc(initial.filter(Boolean).join(", "))}" />
+    <input type="hidden" id="plat-number-hidden" name="plat_number" value="${esc(
+      initial.filter(Boolean).join(", "),
+    )}" />
     <div id="plate-multi-rows" class="space-y-2">
       ${initial.map((plate, idx) => plateRowInput(plate, idx)).join("")}
     </div>
@@ -921,9 +975,13 @@ function makeDriverTrackUrl(row = {}) {
         gate: row.gate || "-",
         status: row.status || "WAITING",
         register_time:
-          row.register_time || row.created_at || formatDateTimeLocal(new Date()),
+          row.register_time ||
+          row.created_at ||
+          formatDateTimeLocal(new Date()),
         created_at:
-          row.created_at || row.register_time || formatDateTimeLocal(new Date()),
+          row.created_at ||
+          row.register_time ||
+          formatDateTimeLocal(new Date()),
       }
     : {
         ticket_id: ticketId,
@@ -1121,14 +1179,14 @@ function pageDriverTrack() {
     !showBongkarEstimate || estimate.diffMinutes === null
       ? "-"
       : estimate.diffMinutes >= 0
-        ? "Sisa " + formatMinutesCompact(estimate.diffMinutes)
-        : "Lewat " + formatMinutesCompact(Math.abs(estimate.diffMinutes));
+      ? "Sisa " + formatMinutesCompact(estimate.diffMinutes)
+      : "Lewat " + formatMinutesCompact(Math.abs(estimate.diffMinutes));
   const deltaClass =
     !showBongkarEstimate || estimate.diffMinutes === null
       ? "text-on-surface-variant"
       : estimate.diffMinutes >= 0
-        ? "text-success"
-        : "text-error";
+      ? "text-success"
+      : "text-error";
   const expiredNote = status.includes("EXPIRED")
     ? `<div class="mt-5 rounded-xl border border-error/30 bg-error/10 p-4 text-sm text-error font-bold">Tiket antrian dibatalkan / expired. Driver wajib membuat nomor antrian baru.</div>`
     : "";
@@ -1137,16 +1195,46 @@ function pageDriverTrack() {
       <div class="text-center mb-6">
         <div class="text-[12px] uppercase tracking-[0.35em] text-on-surface-variant font-extrabold">Inbound CBT</div>
         <h1 class="text-2xl font-extrabold text-on-surface mt-2">Status Antrian Driver</h1>
-        <div id="driver-track-live-badge" class="mt-3 inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${found ? "bg-success/10 text-success border border-success/30" : "bg-warning/10 text-warning border border-warning/30"}">${found ? "LIVE DATA" : "PREVIEW / BELUM SYNC"}</div>
+        <div id="driver-track-live-badge" class="mt-3 inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${
+          found
+            ? "bg-success/10 text-success border border-success/30"
+            : "bg-warning/10 text-warning border border-warning/30"
+        }">${found ? "LIVE DATA" : "PREVIEW / BELUM SYNC"}</div>
       </div>
-      <div class="text-center border-y border-outline-variant/40 py-6"><div class="text-[12px] uppercase tracking-[0.45em] text-on-surface-variant font-extrabold">Nomor Antrian Anda</div><div class="font-queue-id text-[56px] sm:text-[76px] leading-none text-primary font-black mt-3">${esc(row.queue_no || "-")}</div></div>
+      <div class="text-center border-y border-outline-variant/40 py-6"><div class="text-[12px] uppercase tracking-[0.45em] text-on-surface-variant font-extrabold">Nomor Antrian Anda</div><div class="font-queue-id text-[56px] sm:text-[76px] leading-none text-primary font-black mt-3">${esc(
+        row.queue_no || "-",
+      )}</div></div>
       <div class="mt-5 rounded-2xl border border-primary/30 bg-primary/10 p-4 shadow-sm"><div class="text-[11px] uppercase tracking-[0.28em] text-on-surface-variant font-extrabold mb-3">Informasi Tiket Anda</div><div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div class="rounded-xl bg-surface-container/50 border border-primary/20 p-4"><div class="text-[10px] uppercase tracking-[0.2em] font-bold text-on-surface-variant">Status Anda</div><div id="driver-track-status" class="font-bold text-2xl mt-2">${esc(status)}</div><div class="mt-1 text-xs font-bold text-on-surface-variant">Gate: <span id="driver-track-gate">${esc(row.gate || "-")}</span></div></div>
-        <div class="rounded-xl bg-surface-container/50 border border-tertiary/20 p-4"><div class="text-[10px] uppercase tracking-[0.2em] font-bold text-on-surface-variant">Estimasi Selesai Bongkar</div><div id="driver-track-est-finish" class="font-queue-id text-2xl text-tertiary mt-2">${esc(estimateText)}</div><div id="driver-track-est-note" class="mt-1 text-xs font-bold text-on-surface-variant">${esc(estimateNote)}</div></div>
-        <div class="rounded-xl bg-surface-container/50 border border-outline-variant/30 p-4 sm:col-span-2"><div class="text-[10px] uppercase tracking-[0.2em] font-bold text-on-surface-variant">Sisa / Lewat SLA Bongkar</div><div id="driver-track-sla-delta" class="font-queue-id text-xl ${deltaClass} mt-2">${esc(deltaText)}</div></div>
+        <div class="rounded-xl bg-surface-container/50 border border-primary/20 p-4"><div class="text-[10px] uppercase tracking-[0.2em] font-bold text-on-surface-variant">Status Anda</div><div id="driver-track-status" class="font-bold text-2xl mt-2">${esc(
+          status,
+        )}</div><div class="mt-1 text-xs font-bold text-on-surface-variant">Gate: <span id="driver-track-gate">${esc(
+    row.gate || "-",
+  )}</span></div></div>
+        <div class="rounded-xl bg-surface-container/50 border border-tertiary/20 p-4"><div class="text-[10px] uppercase tracking-[0.2em] font-bold text-on-surface-variant">Estimasi Selesai Bongkar</div><div id="driver-track-est-finish" class="font-queue-id text-2xl text-tertiary mt-2">${esc(
+          estimateText,
+        )}</div><div id="driver-track-est-note" class="mt-1 text-xs font-bold text-on-surface-variant">${esc(
+    estimateNote,
+  )}</div></div>
+        <div class="rounded-xl bg-surface-container/50 border border-outline-variant/30 p-4 sm:col-span-2"><div class="text-[10px] uppercase tracking-[0.2em] font-bold text-on-surface-variant">Sisa / Lewat SLA Bongkar</div><div id="driver-track-sla-delta" class="font-queue-id text-xl ${deltaClass} mt-2">${esc(
+    deltaText,
+  )}</div></div>
       </div><div class="mt-3 text-[11px] text-on-surface-variant">Halaman ini hanya menampilkan informasi ticket driver ini. Estimasi selesai bongkar baru muncul saat status <b>UNLOADING</b>.</div></div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-6"><div class="rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Jam Menunggu</div><div id="driver-track-waiting" class="font-queue-id text-2xl text-tertiary mt-2">${esc(driverWaitingLabel(row))}</div></div><div class="rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Plat</div><div class="font-queue-id text-xl mt-2">${esc(row.plat_number || "-")}</div></div></div>
-      <div class="mt-4 rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4 space-y-2"><div><b class="text-xs uppercase text-on-surface-variant">Driver</b><div class="font-bold">${esc(row.driver_name || "-")}</div></div><div><b class="text-xs uppercase text-on-surface-variant">Vendor</b><div class="font-bold">${esc(row.vendor_name || "-")}</div></div><div><b class="text-xs uppercase text-on-surface-variant">PO</b><div class="font-bold break-all">${esc(row.po_number || "-")}</div></div><div><b class="text-xs uppercase text-on-surface-variant">Register</b><div class="font-bold">${esc(row.register_time || row.created_at || "-")}</div></div><div><b class="text-xs uppercase text-on-surface-variant">Auto Refresh</b><div class="font-bold">Setiap 1 menit</div></div><div><b class="text-xs uppercase text-on-surface-variant">Last Refresh</b><div id="driver-track-last-refresh" class="font-bold">${esc(driverTrackLastRefreshAt || "-")}</div></div></div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-6"><div class="rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Jam Menunggu</div><div id="driver-track-waiting" class="font-queue-id text-2xl text-tertiary mt-2">${esc(
+        driverWaitingLabel(row),
+      )}</div></div><div class="rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Plat</div><div class="font-queue-id text-xl mt-2">${esc(
+    row.plat_number || "-",
+  )}</div></div></div>
+      <div class="mt-4 rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4 space-y-2"><div><b class="text-xs uppercase text-on-surface-variant">Driver</b><div class="font-bold">${esc(
+        row.driver_name || "-",
+      )}</div></div><div><b class="text-xs uppercase text-on-surface-variant">Vendor</b><div class="font-bold">${esc(
+    row.vendor_name || "-",
+  )}</div></div><div><b class="text-xs uppercase text-on-surface-variant">PO</b><div class="font-bold break-all">${esc(
+    row.po_number || "-",
+  )}</div></div><div><b class="text-xs uppercase text-on-surface-variant">Register</b><div class="font-bold">${esc(
+    row.register_time || row.created_at || "-",
+  )}</div></div><div><b class="text-xs uppercase text-on-surface-variant">Auto Refresh</b><div class="font-bold">Setiap 1 menit</div></div><div><b class="text-xs uppercase text-on-surface-variant">Last Refresh</b><div id="driver-track-last-refresh" class="font-bold">${esc(
+    driverTrackLastRefreshAt || "-",
+  )}</div></div></div>
       ${expiredNote}<button onclick="refreshDriverTrackLiveData(false)" class="mt-5 w-full bg-primary-container text-on-primary-container rounded-lg px-5 py-3 font-bold flex items-center justify-center gap-2"><span class="material-symbols-outlined">refresh</span>Refresh Status Sekarang</button>
     </div>
   </div>`;
@@ -1458,15 +1546,25 @@ function printSecurityTickets(rowsOverride = null, winOverride = null) {
             <div><b>Driver</b><span>${esc(r.driver_name || "-")}</span></div>
             <div><b>Fleet</b><span>${esc(r.fleet_type || "-")}</span></div>
             <div><b>Slot</b><span>${esc(r.slot || "-")}</span></div>
-            <div><b>Total Qty</b><span>${esc(num(r.total_po_qty || 0))}</span></div>
-            <div><b>Count SKU</b><span>${esc(num(r.count_po_sku || 0))}</span></div>
-            <div><b>Register</b><span>${esc(r.register_time || r.created_at || "-")}</span></div>
+            <div><b>Total Qty</b><span>${esc(
+              num(r.total_po_qty || 0),
+            )}</span></div>
+            <div><b>Count SKU</b><span>${esc(
+              num(r.count_po_sku || 0),
+            )}</span></div>
+            <div><b>Register</b><span>${esc(
+              r.register_time || r.created_at || "-",
+            )}</span></div>
             <div><b>Print Time</b><span>${esc(now)}</span></div>
           </div>
           <div class="qrbox">
             <img src="${esc(qrUrl)}" alt="QR Driver Status" />
             <div>Scan untuk lihat status antrian & jam menunggu</div>
-            <div class="driver-contact"><b>No. Telp Driver</b><span>${esc(String(r.phone_number || "").trim() || String(r.driver_phone || "").trim() || "-")}</span></div>
+            <div class="driver-contact"><b>No. Telp Driver</b><span>${esc(
+              String(r.phone_number || "").trim() ||
+                String(r.driver_phone || "").trim() ||
+                "-",
+            )}</span></div>
           </div>
         </div>
       </div>`;
@@ -1540,23 +1638,67 @@ function pageDaftar() {
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           ${vendorCustomSelectInput(lookup?.summary?.vendor_name || "")}
           ${poMultiSelectInput(lookup?.summary?.po_number || "")}
-          ${selectInput("ticket_type", "Tipe Tiket", ["REG", "VIP", "DROP-OFF"], "REG", 'required onchange="handleTicketTypeChange()"')}
-          ${selectInput("slot", "Slot", buildSlotOptions(lookup?.summary?.slot), lookup?.summary?.slot || "3", "required")}
-          ${selectInput("fleet_type", "Fleet Type", getFleetTypeOptions(), getFleetDefaultType(), 'required onchange="updateFleetPreview()"')}
+          ${selectInput(
+            "ticket_type",
+            "Tipe Tiket",
+            ["REG", "VIP", "DROP-OFF"],
+            "REG",
+            'required onchange="handleTicketTypeChange()"',
+          )}
+          ${selectInput(
+            "slot",
+            "Slot",
+            buildSlotOptions(lookup?.summary?.slot),
+            lookup?.summary?.slot || "3",
+            "required",
+          )}
+          ${selectInput(
+            "fleet_type",
+            "Fleet Type",
+            getFleetTypeOptions(),
+            getFleetDefaultType(),
+            'required onchange="updateFleetPreview()"',
+          )}
           ${fleetPreviewCard(getFleetDefaultType())}
           ${plateMultiInput()}
-          ${textInput("driver_name", "Driver's Name", "Nama driver", "", "", "required")}
-          ${textInput("ktp_6_digit", "6 Digit No KTP", "Optional. Contoh: 123456", "", "", 'maxlength="6" inputmode="numeric" pattern="[0-9]{6}" oninput="this.value=this.value.replace(/\\D/g, \'\').slice(0,6)"')}
-          ${textareaInput("phone_number", "Phone Number", "0812xxxx atau 62812xxxx. Multiple: pisahkan koma / baris", "", 'required inputmode="tel" onblur="normalizePhoneFieldOnBlur(this)"')}
-          <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Register Time</span><input name="register_time" class="form-input opacity-80" value="${esc(nowText)}" readonly /></label>
+          ${textInput(
+            "driver_name",
+            "Driver's Name",
+            "Nama driver",
+            "",
+            "",
+            "required",
+          )}
+          ${textInput(
+            "ktp_6_digit",
+            "6 Digit No KTP",
+            "Optional. Contoh: 123456",
+            "",
+            "",
+            'maxlength="6" inputmode="numeric" pattern="[0-9]{6}" oninput="this.value=this.value.replace(/\\D/g, \'\').slice(0,6)"',
+          )}
+          ${textareaInput(
+            "phone_number",
+            "Phone Number",
+            "0812xxxx atau 62812xxxx. Multiple: pisahkan koma / baris",
+            "",
+            'required inputmode="tel" onblur="normalizePhoneFieldOnBlur(this)"',
+          )}
+          <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Register Time</span><input name="register_time" class="form-input opacity-80" value="${esc(
+            nowText,
+          )}" readonly /></label>
           <label class="flex flex-col gap-2">
             <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Status Security</span>
             <input type="hidden" name="status" value="WAITING" />
             <div class="bg-tertiary/15 border border-tertiary/30 rounded-lg px-4 py-3 text-tertiary font-bold">WAITING</div>
           </label>
           <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Auto Summary</span><div class="grid grid-cols-2 gap-2">
-            <div class="bg-surface-container/60 border border-outline-variant rounded-lg p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Total PO Qty</div><div id="security-total-qty" class="font-queue-id text-primary">${num(lookup?.summary?.total_po_qty || 0)}</div></div>
-            <div class="bg-surface-container/60 border border-outline-variant rounded-lg p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Count SKU</div><div id="security-count-sku" class="font-queue-id text-primary">${num(lookup?.summary?.count_po_sku || 0)}</div></div>
+            <div class="bg-surface-container/60 border border-outline-variant rounded-lg p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Total PO Qty</div><div id="security-total-qty" class="font-queue-id text-primary">${num(
+              lookup?.summary?.total_po_qty || 0,
+            )}</div></div>
+            <div class="bg-surface-container/60 border border-outline-variant rounded-lg p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Count SKU</div><div id="security-count-sku" class="font-queue-id text-primary">${num(
+              lookup?.summary?.count_po_sku || 0,
+            )}</div></div>
           </div></label>
         </div>
         ${renderPoLookupSummary(lookup)}
@@ -1574,7 +1716,9 @@ function pageDaftar() {
     </div>
     <div class="glass-card rounded-xl p-6 flex flex-col justify-center items-center text-center">
       <span class="text-on-surface-variant uppercase font-label-sm">Nomor Terakhir</span>
-      <div id="new-queue-number" class="font-queue-id text-[64px] md:text-[78px] leading-none text-primary my-6">${esc(state.lastCalled.queue_no || "REG 3-0")}</div>
+      <div id="new-queue-number" class="font-queue-id text-[64px] md:text-[78px] leading-none text-primary my-6">${esc(
+        state.lastCalled.queue_no || "REG 3-0",
+      )}</div>
       <p class="text-on-surface-variant">Format: REG 3-12 = reguler, VIP 3-12 = prioritas, dan DROP-OFF untuk kendaraan tanpa PO.</p>
     </div>
   </div>`;
@@ -1627,7 +1771,9 @@ function gateSelectOptions(selected = "", allowBlank = false) {
         const isSelected =
           selectedSet.has(gateText) || String(gate) === String(selected);
         const isActive = activeSet.has(gateText) && !isSelected;
-        return `<option value="${esc(gate)}" ${isSelected ? "selected" : ""}>${esc(gate)}${isActive ? " — aktif (bisa dipilih)" : ""}</option>`;
+        return `<option value="${esc(gate)}" ${
+          isSelected ? "selected" : ""
+        }>${esc(gate)}${isActive ? " — aktif (bisa dipilih)" : ""}</option>`;
       })
       .join("")
   );
@@ -1664,7 +1810,9 @@ function renderCheckerGatePicker(
       ${[0, 1, 2]
         .map(
           (idx) => `<div class="flex flex-col gap-1">
-            <span class="text-[10px] uppercase font-bold text-on-surface-variant">${idx === 0 ? "Gate 1" : `Gate ${idx + 1} Optional`}</span>
+            <span class="text-[10px] uppercase font-bold text-on-surface-variant">${
+              idx === 0 ? "Gate 1" : `Gate ${idx + 1} Optional`
+            }</span>
             <select data-wingbox-gate="${idx}" class="form-select ${lockedClass}" ${disabled} onchange="syncCheckerGateInput()">
               ${gateSelectOptions(selected[idx], true)}
             </select>
@@ -1772,7 +1920,11 @@ function setCheckerSubmitButtonState(stateName = "ready", label = "") {
 function getCheckerActiveRows() {
   return (state.dashboard?.queue || []).filter((r) => {
     const st = String(r.status || "").toUpperCase();
-    return !st.includes("COMPLETED") && !st.includes("EXPIRED") && !st.includes("CANCELLED");
+    return (
+      !st.includes("COMPLETED") &&
+      !st.includes("EXPIRED") &&
+      !st.includes("CANCELLED")
+    );
   });
 }
 
@@ -1860,10 +2012,29 @@ function pageChecker() {
       <div class="overflow-x-auto max-h-[520px] overflow-y-auto border border-outline-variant/30 rounded-lg">
         <table id="checker-security-table" class="w-full text-left">
           <thead class="bg-surface-container text-on-surface-variant sticky top-0 z-10">
-            <tr>${["Pilih", "Queue", "Vendor", "Type Mobil", "PO", "Plat", "Driver", "Gate", "Status", "Menunggu"].map((h) => `<th class="px-4 py-3 font-label-sm uppercase">${h}</th>`).join("")}</tr>
+            <tr>${[
+              "Pilih",
+              "Queue",
+              "Vendor",
+              "Type Mobil",
+              "PO",
+              "Plat",
+              "Driver",
+              "Gate",
+              "Status",
+              "Menunggu",
+            ]
+              .map(
+                (h) =>
+                  `<th class="px-4 py-3 font-label-sm uppercase">${h}</th>`,
+              )
+              .join("")}</tr>
           </thead>
           <tbody class="divide-y divide-outline-variant/10">
-            ${rows.map((r, i) => checkerListRow(r, i)).join("") || `<tr><td colspan="10" class="px-6 py-8 text-center text-on-surface-variant">Belum ada data aktif untuk Checker. Data selesai pindah ke Waiting List.</td></tr>`}
+            ${
+              rows.map((r, i) => checkerListRow(r, i)).join("") ||
+              `<tr><td colspan="10" class="px-6 py-8 text-center text-on-surface-variant">Belum ada data aktif untuk Checker. Data selesai pindah ke Waiting List.</td></tr>`
+            }
           </tbody>
         </table>
       </div>
@@ -1877,9 +2048,30 @@ function pageChecker() {
         <input type="hidden" name="status" value="CALLED" />
         <input type="hidden" name="unload_sla" value="ON PROCESS" />
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          ${textInput("vendor_name", "Vendor Name", "Pilih dari list", "", "", "required readonly")}
-          ${textInput("fleet_type", "Fleet Type", "Pilih dari list", "", "", "required readonly")}
-          ${textInput("plat_number", "Plat Number", "Pilih dari list", "", "", 'required readonly onblur="validatePlateInput(this)"')}
+          ${textInput(
+            "vendor_name",
+            "Vendor Name",
+            "Pilih dari list",
+            "",
+            "",
+            "required readonly",
+          )}
+          ${textInput(
+            "fleet_type",
+            "Fleet Type",
+            "Pilih dari list",
+            "",
+            "",
+            "required readonly",
+          )}
+          ${textInput(
+            "plat_number",
+            "Plat Number",
+            "Pilih dari list",
+            "",
+            "",
+            'required readonly onblur="validatePlateInput(this)"',
+          )}
           ${checkerGatePicker()}
           <label class="flex flex-col gap-2 md:col-span-2">
             <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Status Checker</span>
@@ -1903,11 +2095,32 @@ function pageAntrian() {
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
     <div class="lg:col-span-2 glass-card rounded-xl p-6">
       <div class="flex justify-between items-start mb-6"><div><h3 class="font-headline-md text-headline-md">Ringkasan Antrian</h3><p class="font-label-sm text-on-surface-variant">Urutan driver dari QUEUE_TICKET / Security Input</p></div><div class="flex items-center gap-2 px-3 py-1 bg-primary/10 rounded-full border border-primary/20"><div class="w-2 h-2 rounded-full bg-primary status-pulse"></div><span class="text-[10px] uppercase font-bold text-primary">Live</span></div></div>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">${miniMetric("Waiting", state.dashboard?.summary?.ticket?.count_waiting || 0, "text-tertiary")}${miniMetric("Called", state.dashboard?.summary?.ticket?.count_called || 0, "text-primary")}${miniMetric("On Dock", state.dashboard?.summary?.ticket?.count_on_dock || 0, "text-warning")}${miniMetric("Completed", state.dashboard?.summary?.ticket?.count_completed || 0, "text-success")}</div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">${miniMetric(
+        "Waiting",
+        state.dashboard?.summary?.ticket?.count_waiting || 0,
+        "text-tertiary",
+      )}${miniMetric(
+    "Called",
+    state.dashboard?.summary?.ticket?.count_called || 0,
+    "text-primary",
+  )}${miniMetric(
+    "On Dock",
+    state.dashboard?.summary?.ticket?.count_on_dock || 0,
+    "text-warning",
+  )}${miniMetric(
+    "Completed",
+    state.dashboard?.summary?.ticket?.count_completed || 0,
+    "text-success",
+  )}</div>
     </div>
     <div class="glass-card rounded-xl p-6 flex flex-col gap-4">
       <div class="flex justify-between items-center"><h3 class="font-headline-md text-headline-md">Prioritas</h3><span class="material-symbols-outlined text-on-surface-variant">more_vert</span></div>
-      ${(state.dashboard?.priority || []).slice(0, 4).map(priorityItem).join("") || emptyBox("Belum ada prioritas.")}
+      ${
+        (state.dashboard?.priority || [])
+          .slice(0, 4)
+          .map(priorityItem)
+          .join("") || emptyBox("Belum ada prioritas.")
+      }
       <button onclick="switchPage('panggil')" class="w-full py-2 border border-outline-variant rounded text-label-sm hover:bg-surface-container transition-colors uppercase font-bold tracking-widest mt-auto">Buka Panggilan</button>
     </div>
   </div>${queueTable()}`;
@@ -2014,7 +2227,9 @@ function queueWaitingStartValue(row = {}) {
 }
 
 function queueWaitingText(row = {}) {
-  const status = String(row.status || "").trim().toUpperCase();
+  const status = String(row.status || "")
+    .trim()
+    .toUpperCase();
   if (["COMPLETED", "DONE GR"].includes(status)) return "Selesai";
   if (window.InboundTicketContracts?.isDoneGrTerminal(row)) return "Selesai";
   return liveWaitingText(queueWaitingStartValue(row), row.completed_at);
@@ -2025,16 +2240,28 @@ function upcomingQueueCard(x = {}) {
   return `<div class="rounded-xl border border-outline-variant/40 bg-surface-container/55 p-4">
     <div class="flex items-start justify-between gap-3">
       <div>
-        <div class="font-queue-id text-primary text-xl">${esc(x.queue_no || "-")}</div>
+        <div class="font-queue-id text-primary text-xl">${esc(
+          x.queue_no || "-",
+        )}</div>
         <div class="mt-1 inline-flex items-center gap-1 rounded-full bg-tertiary/10 text-tertiary border border-tertiary/20 px-2 py-1 text-[11px] font-extrabold">
-          <span class="material-symbols-outlined text-sm">timer</span>Menunggu ${esc(waiting)}
+          <span class="material-symbols-outlined text-sm">timer</span>Menunggu ${esc(
+            waiting,
+          )}
         </div>
       </div>
-      <div class="text-xs font-bold text-on-surface-variant text-right">${esc(x.status || "WAITING")}</div>
+      <div class="text-xs font-bold text-on-surface-variant text-right">${esc(
+        x.status || "WAITING",
+      )}</div>
     </div>
-    <div class="mt-3 text-sm font-semibold">${esc(x.driver_name || "-")} · ${esc(x.plat_number || "-")}</div>
-    <div class="text-xs text-on-surface-variant mt-1 truncate">${esc(x.vendor_name || "-")}</div>
-    <div class="text-[11px] text-on-surface-variant mt-1 truncate">PO: ${esc(x.po_number || "-")}</div>
+    <div class="mt-3 text-sm font-semibold">${esc(
+      x.driver_name || "-",
+    )} · ${esc(x.plat_number || "-")}</div>
+    <div class="text-xs text-on-surface-variant mt-1 truncate">${esc(
+      x.vendor_name || "-",
+    )}</div>
+    <div class="text-[11px] text-on-surface-variant mt-1 truncate">PO: ${esc(
+      x.po_number || "-",
+    )}</div>
   </div>`;
 }
 
@@ -2114,7 +2341,9 @@ function pronounceQueueNo(queueNo = "") {
     DROP: "drop off",
     "DROP-OFF": "drop off",
   };
-  return `${typeMap[match[1]] || match[1]} slot ${numberToIndoWords(match[2])} nomor ${numberToIndoWords(match[3])}`;
+  return `${typeMap[match[1]] || match[1]} slot ${numberToIndoWords(
+    match[2],
+  )} nomor ${numberToIndoWords(match[3])}`;
 }
 
 function pronounceGate(gate = "") {
@@ -2436,34 +2665,54 @@ function pagePanggil() {
               ${gateSelectOptions("", true)}
             </select>
           </label>
-          ${voiceOn ? `<button onclick="deactivateVoiceMonitor()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">volume_up</span>Suara Aktif</button>` : `<button onclick="activateVoiceMonitor()" class="bg-primary-container text-on-primary-container rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">volume_up</span>Aktifkan Suara TV</button>`}
+          ${
+            voiceOn
+              ? `<button onclick="deactivateVoiceMonitor()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">volume_up</span>Suara Aktif</button>`
+              : `<button onclick="activateVoiceMonitor()" class="bg-primary-container text-on-primary-container rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">volume_up</span>Aktifkan Suara TV</button>`
+          }
           <button onclick="recallVoice()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">replay</span>Panggil Ulang Suara</button>
-          ${tvModeActive ? `<button onclick="exitTvFullScreen()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">fullscreen_exit</span>Exit TV</button>` : `<button onclick="enterTvFullScreen()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">fullscreen</span>Mode TV Full Screen</button>`}
+          ${
+            tvModeActive
+              ? `<button onclick="exitTvFullScreen()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">fullscreen_exit</span>Exit TV</button>`
+              : `<button onclick="enterTvFullScreen()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">fullscreen</span>Mode TV Full Screen</button>`
+          }
         </div>
       </div>
 
       <div class="flex-1 grid grid-cols-1 xl:grid-cols-12 gap-0">
         <div class="xl:col-span-8 flex flex-col items-center justify-center text-center px-6 py-8">
-          <div id="display-status-badge" class="mb-5">${callStatusBadge(last)}</div>
+          <div id="display-status-badge" class="mb-5">${callStatusBadge(
+            last,
+          )}</div>
           <div class="text-[13px] uppercase tracking-[0.75em] text-on-surface-variant font-extrabold mb-4">Nomor Dipanggil</div>
-          <div id="display-queue" class="font-queue-id text-[88px] sm:text-[130px] xl:text-[180px] 2xl:text-[220px] leading-none text-primary font-black tracking-tight calling-effect">${esc(last.queue_no || "-")}</div>
+          <div id="display-queue" class="font-queue-id text-[88px] sm:text-[130px] xl:text-[180px] 2xl:text-[220px] leading-none text-primary font-black tracking-tight calling-effect">${esc(
+            last.queue_no || "-",
+          )}</div>
 
           <div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-5xl">
             <div class="bg-primary-container text-on-primary-container rounded-2xl px-8 py-7 shadow-xl">
               <div class="text-[12px] uppercase tracking-[0.35em] font-extrabold opacity-80">Menuju</div>
-              <div id="display-dock" class="font-extrabold text-5xl md:text-6xl mt-2">${esc(last.gate || "-")}</div>
+              <div id="display-dock" class="font-extrabold text-5xl md:text-6xl mt-2">${esc(
+                last.gate || "-",
+              )}</div>
             </div>
             <div class="bg-surface-container/70 border border-outline-variant rounded-2xl px-8 py-7">
               <div class="text-[12px] uppercase tracking-[0.35em] font-extrabold text-on-surface-variant">Driver</div>
-              <div id="display-driver" class="font-extrabold text-3xl md:text-4xl mt-2 text-on-surface">${esc(last.driver_name || "-")}</div>
+              <div id="display-driver" class="font-extrabold text-3xl md:text-4xl mt-2 text-on-surface">${esc(
+                last.driver_name || "-",
+              )}</div>
             </div>
             <div class="bg-surface-container/70 border border-outline-variant rounded-2xl px-8 py-7">
               <div class="text-[12px] uppercase tracking-[0.35em] font-extrabold text-on-surface-variant">Plat</div>
-              <div id="display-plate" class="font-queue-id text-3xl md:text-4xl mt-2 text-on-surface">${esc(last.plat_number || "-")}</div>
+              <div id="display-plate" class="font-queue-id text-3xl md:text-4xl mt-2 text-on-surface">${esc(
+                last.plat_number || "-",
+              )}</div>
             </div>
           </div>
 
-          <div id="display-vendor" class="mt-8 text-2xl md:text-3xl text-on-surface-variant font-semibold max-w-5xl">${esc(last.vendor_name || "-")}</div>
+          <div id="display-vendor" class="mt-8 text-2xl md:text-3xl text-on-surface-variant font-semibold max-w-5xl">${esc(
+            last.vendor_name || "-",
+          )}</div>
           <div class="mt-4 text-sm text-on-surface-variant">Auto refresh tiap 5 detik dari Output form. Voice otomatis hanya untuk status <b>CALLED / DIPANGGIL</b>.</div>
         </div>
 
@@ -2473,7 +2722,9 @@ function pagePanggil() {
               <h3 class="font-headline-md text-headline-md">Queue Berikutnya</h3>
               <div class="text-xs text-on-surface-variant mt-1">Hanya nomor yang belum dipanggil / status WAITING.</div>
             </div>
-            <span class="rounded-full bg-primary/10 text-primary border border-primary/20 px-3 py-1 text-xs font-extrabold"><span id="display-upcoming-count">${num(upcoming.length)}</span> waiting</span>
+            <span class="rounded-full bg-primary/10 text-primary border border-primary/20 px-3 py-1 text-xs font-extrabold"><span id="display-upcoming-count">${num(
+              upcoming.length,
+            )}</span> waiting</span>
           </div>
           <div id="display-upcoming-list" class="space-y-3 overflow-y-auto pr-1">
             ${renderUpcomingQueueList(upcoming)}
@@ -2488,7 +2739,9 @@ function pageDock() {
   const docks = state.dashboard?.dock || [];
   return `<div class="glass-card rounded-xl p-6">
     <div class="flex justify-between items-center mb-8"><div><h3 class="font-headline-md text-headline-md">Status Dock</h3><p class="text-on-surface-variant">Cek dock kosong, aktif, dan warning.</p></div><button onclick="refreshDashboard()" class="bg-surface-container-high px-4 py-2 rounded-lg font-label-sm flex items-center gap-2"><span class="material-symbols-outlined">refresh</span>Refresh</button></div>
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">${docks.map(dockCard).join("") || emptyBox("Belum ada data dock.")}</div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">${
+      docks.map(dockCard).join("") || emptyBox("Belum ada data dock.")
+    }</div>
   </div>`;
 }
 
@@ -2642,7 +2895,11 @@ function getMonitorSummary(rows = []) {
   ).length;
   const active = rows.filter((r) => {
     const st = String(r.status || "").toUpperCase();
-    return !st.includes("COMPLETED") && !st.includes("EXPIRED") && !st.includes("CANCELLED");
+    return (
+      !st.includes("COMPLETED") &&
+      !st.includes("EXPIRED") &&
+      !st.includes("CANCELLED")
+    );
   }).length;
 
   return {
@@ -2699,15 +2956,15 @@ function updateLiveSlaCells() {
         ? "SLA MISS"
         : "SLA OK"
       : miss
-        ? "SLA MISS"
-        : "ON PROCESS";
+      ? "SLA MISS"
+      : "ON PROCESS";
     el.className =
       "inline-flex items-center px-3 py-1 rounded-full border text-xs font-bold " +
       (miss
         ? "bg-error/10 text-error border-error/30"
         : done
-          ? "bg-success/10 text-success border-success/30"
-          : "bg-warning/10 text-warning border-warning/30");
+        ? "bg-success/10 text-success border-success/30"
+        : "bg-warning/10 text-warning border-warning/30");
   });
 }
 
@@ -2768,16 +3025,32 @@ function gateVisibilityPanel(rows = []) {
               : "bg-surface-container/40 border-outline-variant/40"
           }">
             <div class="flex items-center justify-between gap-2">
-              <div class="font-queue-id text-sm ${busy ? "text-warning" : "text-on-surface-variant"}">${esc(g.gate)}</div>
-              <span class="w-2.5 h-2.5 rounded-full ${busy ? "bg-warning status-pulse" : "bg-outline"}"></span>
+              <div class="font-queue-id text-sm ${
+                busy ? "text-warning" : "text-on-surface-variant"
+              }">${esc(g.gate)}</div>
+              <span class="w-2.5 h-2.5 rounded-full ${
+                busy ? "bg-warning status-pulse" : "bg-outline"
+              }"></span>
             </div>
             ${
               busy
                 ? `<div class="mt-3">
-                    <div class="font-queue-id text-primary text-sm">${esc(first.queue_no || "-")}</div>
-                    <div class="text-[11px] font-bold truncate mt-1">${esc(first.plat_number || "-")}</div>
-                    <div class="text-[10px] text-on-surface-variant truncate">${esc(first.driver_name || "-")}</div>
-                    ${g.rows.length > 1 ? `<div class="text-[10px] text-warning font-bold mt-1">+${g.rows.length - 1} lainnya</div>` : ""}
+                    <div class="font-queue-id text-primary text-sm">${esc(
+                      first.queue_no || "-",
+                    )}</div>
+                    <div class="text-[11px] font-bold truncate mt-1">${esc(
+                      first.plat_number || "-",
+                    )}</div>
+                    <div class="text-[10px] text-on-surface-variant truncate">${esc(
+                      first.driver_name || "-",
+                    )}</div>
+                    ${
+                      g.rows.length > 1
+                        ? `<div class="text-[10px] text-warning font-bold mt-1">+${
+                            g.rows.length - 1
+                          } lainnya</div>`
+                        : ""
+                    }
                   </div>`
                 : `<div class="mt-5 text-[11px] text-on-surface-variant">Kosong</div>`
             }
@@ -2943,10 +3216,22 @@ function monitoringDetailReport(rows = []) {
         ${miniMetric("Called", num(d.called), "text-primary")}
         ${miniMetric("Unloading", num(d.unloading), "text-warning")}
         ${miniMetric("Completed", num(d.completed), "text-success")}
-        ${miniMetric("Expired", num(d.expired), d.expired ? "text-error" : "text-success")}
+        ${miniMetric(
+          "Expired",
+          num(d.expired),
+          d.expired ? "text-error" : "text-success",
+        )}
         ${miniMetric("Total Panggil", num(d.totalCall), "text-primary")}
-        ${miniMetric("Avg Tunggu", formatMinutesCompact(d.avgWaiting), "text-tertiary")}
-        ${miniMetric("Avg Bongkar", formatMinutesCompact(d.avgUnloading), "text-warning")}
+        ${miniMetric(
+          "Avg Tunggu",
+          formatMinutesCompact(d.avgWaiting),
+          "text-tertiary",
+        )}
+        ${miniMetric(
+          "Avg Bongkar",
+          formatMinutesCompact(d.avgUnloading),
+          "text-warning",
+        )}
       </div>
     </div>
 
@@ -2954,11 +3239,23 @@ function monitoringDetailReport(rows = []) {
       <div class="flex items-center gap-2 mb-3"><span class="material-symbols-outlined text-success">analytics</span><h4 class="font-bold text-on-surface">Report SLA & WhatsApp</h4></div>
       <div class="grid grid-cols-2 gap-3">
         ${miniMetric("SLA OK", num(d.slaOk), "text-success")}
-        ${miniMetric("SLA Miss", num(d.slaMiss), d.slaMiss ? "text-error" : "text-success")}
+        ${miniMetric(
+          "SLA Miss",
+          num(d.slaMiss),
+          d.slaMiss ? "text-error" : "text-success",
+        )}
         ${miniMetric("On Process", num(d.slaProcess), "text-warning")}
-        ${miniMetric("Miss Rate", `${num(d.slaMissRate)}%`, d.slaMissRate ? "text-error" : "text-success")}
+        ${miniMetric(
+          "Miss Rate",
+          `${num(d.slaMissRate)}%`,
+          d.slaMissRate ? "text-error" : "text-success",
+        )}
         ${miniMetric("WA Sent", num(d.waSent), "text-success")}
-        ${miniMetric("WA Failed", num(d.waFailed), d.waFailed ? "text-error" : "text-success")}
+        ${miniMetric(
+          "WA Failed",
+          num(d.waFailed),
+          d.waFailed ? "text-error" : "text-success",
+        )}
         ${miniMetric("WA Belum", num(d.waBlank), "text-on-surface-variant")}
         ${miniMetric("No SLA", num(d.slaNo), "text-on-surface-variant")}
       </div>
@@ -3031,8 +3328,8 @@ function getUnloadingEstimateInfo(row = {}) {
     ? directDate
       ? "SLA Finished At"
       : startDate
-        ? "Start Bongkar + SLA Fleet"
-        : ""
+      ? "Start Bongkar + SLA Fleet"
+      : ""
     : "Belum mulai bongkar";
   let estimateDate = null;
   if (hasStartedBongkar) {
@@ -3132,9 +3429,13 @@ function donutChartCard(title, subtitle, items = [], centerText = "") {
       <p class="text-[11px] text-on-surface-variant">${esc(subtitle || "")}</p>
     </div>
     <div class="flex flex-col sm:flex-row items-center gap-4">
-      <div class="relative h-36 w-36 shrink-0 rounded-full border border-outline-variant/40 shadow-inner" style="${donutGradient(items)}">
+      <div class="relative h-36 w-36 shrink-0 rounded-full border border-outline-variant/40 shadow-inner" style="${donutGradient(
+        items,
+      )}">
         <div class="absolute inset-5 rounded-full bg-surface-container/95 border border-outline-variant/40 flex flex-col items-center justify-center text-center">
-          <div class="font-queue-id text-3xl text-primary">${esc(centerText || num(total))}</div>
+          <div class="font-queue-id text-3xl text-primary">${esc(
+            centerText || num(total),
+          )}</div>
           <div class="text-[10px] uppercase tracking-wider text-on-surface-variant">Total</div>
         </div>
       </div>
@@ -3147,10 +3448,16 @@ function donutChartCard(title, subtitle, items = [], centerText = "") {
                 : 0;
               return `<div class="flex items-center justify-between gap-3 text-xs">
             <div class="flex items-center gap-2 min-w-0">
-              <span class="h-3 w-3 rounded-full shrink-0" style="background:${item.color}"></span>
-              <span class="font-bold text-on-surface truncate">${esc(item.label)}</span>
+              <span class="h-3 w-3 rounded-full shrink-0" style="background:${
+                item.color
+              }"></span>
+              <span class="font-bold text-on-surface truncate">${esc(
+                item.label,
+              )}</span>
             </div>
-            <div class="font-queue-id text-primary whitespace-nowrap">${num(item.value)} <span class="text-on-surface-variant">(${num(pct)}%)</span></div>
+            <div class="font-queue-id text-primary whitespace-nowrap">${num(
+              item.value,
+            )} <span class="text-on-surface-variant">(${num(pct)}%)</span></div>
           </div>`;
             })
             .join("") ||
@@ -3163,9 +3470,24 @@ function donutChartCard(title, subtitle, items = [], centerText = "") {
 
 function horizontalBarChart(title, icon, items = [], total = 0) {
   return `<div class="rounded-xl border border-outline-variant/40 bg-surface-container/35 p-4">
-    <div class="flex items-center gap-2 mb-4"><span class="material-symbols-outlined text-primary">${esc(icon || "bar_chart")}</span><h4 class="font-bold text-on-surface">${esc(title)}</h4></div>
+    <div class="flex items-center gap-2 mb-4"><span class="material-symbols-outlined text-primary">${esc(
+      icon || "bar_chart",
+    )}</span><h4 class="font-bold text-on-surface">${esc(title)}</h4></div>
     <div class="space-y-3">
-      ${items.map((item) => chartBar(item.label, item.value, total || 1, item.colorClass || "bg-primary", item.note || "")).join("") || `<div class="text-on-surface-variant text-sm p-4 text-center border border-dashed border-outline-variant rounded-xl">Belum ada data.</div>`}
+      ${
+        items
+          .map((item) =>
+            chartBar(
+              item.label,
+              item.value,
+              total || 1,
+              item.colorClass || "bg-primary",
+              item.note || "",
+            ),
+          )
+          .join("") ||
+        `<div class="text-on-surface-variant text-sm p-4 text-center border border-dashed border-outline-variant rounded-xl">Belum ada data.</div>`
+      }
     </div>
   </div>`;
 }
@@ -3224,9 +3546,24 @@ function monitorChartReport(rows = []) {
 
   return `<div class="space-y-4 mb-6">
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-      ${donutChartCard("Donut Status Checker", "Komposisi status dari Output form", statusItems, num(d.total))}
-      ${donutChartCard("Donut SLA Bongkar", "ON track, belum start, out SLA, dan no estimate", slaItems, num(d.total))}
-      ${donutChartCard("Donut Fleet / Armada", "Top armada berdasarkan jumlah ticket", fleetItems, num(d.total))}
+      ${donutChartCard(
+        "Donut Status Checker",
+        "Komposisi status dari Output form",
+        statusItems,
+        num(d.total),
+      )}
+      ${donutChartCard(
+        "Donut SLA Bongkar",
+        "ON track, belum start, out SLA, dan no estimate",
+        slaItems,
+        num(d.total),
+      )}
+      ${donutChartCard(
+        "Donut Fleet / Armada",
+        "Top armada berdasarkan jumlah ticket",
+        fleetItems,
+        num(d.total),
+      )}
     </div>
 
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -3288,7 +3625,9 @@ function monitorChartReport(rows = []) {
             label: "OUT SLA BONGKAR",
             value: outSlaBongkarRows.length,
             colorClass: "bg-error",
-            note: `${num(outSlaBongkarRows.length)} mobil sedang bongkar lewat target`,
+            note: `${num(
+              outSlaBongkarRows.length,
+            )} mobil sedang bongkar lewat target`,
           },
           {
             label: "OUT SLA TOTAL",
@@ -3331,7 +3670,9 @@ function monitorChartReport(rows = []) {
                   g.items.length,
                   total,
                   miss ? "bg-error" : "bg-primary",
-                  `${num(g.items.length)} ticket · Qty ${num(qty)} · SKU ${num(sku)} · Miss ${num(miss)}`,
+                  `${num(g.items.length)} ticket · Qty ${num(qty)} · SKU ${num(
+                    sku,
+                  )} · Miss ${num(miss)}`,
                 );
               })
               .join("") ||
@@ -3388,17 +3729,43 @@ function unloadingEstimateReport(rows = []) {
           <p class="text-xs text-on-surface-variant">Estimasi selesai bongkar hanya tampil saat mobil sudah <b>UNLOADING</b>. Sumber estimasi: <b>SLA Finished At</b>; kalau kosong dihitung dari <b>Start Bongkar + SLA Fleet</b>. Status WAITING/CALLED belum dibuat estimasi bongkar.</p>
         </div>
         <div class="flex flex-wrap gap-2 text-xs font-bold">
-          <span class="rounded-full bg-error/10 text-error border border-error/30 px-3 py-1">OUT SLA TOTAL: ${num(outSlaCount)}</span>
-          <span class="rounded-full bg-error/10 text-error border border-error/30 px-3 py-1">OUT SLA BONGKAR: ${num(outSlaBongkarCount)}</span>
-          <span class="rounded-full bg-success/10 text-success border border-success/30 px-3 py-1">ON TRACK/OK: ${num(onTrackCount)}</span>
-          <span class="rounded-full bg-warning/10 text-warning border border-warning/30 px-3 py-1">BELUM START: ${num(noStartCount)}</span>
+          <span class="rounded-full bg-error/10 text-error border border-error/30 px-3 py-1">OUT SLA TOTAL: ${num(
+            outSlaCount,
+          )}</span>
+          <span class="rounded-full bg-error/10 text-error border border-error/30 px-3 py-1">OUT SLA BONGKAR: ${num(
+            outSlaBongkarCount,
+          )}</span>
+          <span class="rounded-full bg-success/10 text-success border border-success/30 px-3 py-1">ON TRACK/OK: ${num(
+            onTrackCount,
+          )}</span>
+          <span class="rounded-full bg-warning/10 text-warning border border-warning/30 px-3 py-1">BELUM START: ${num(
+            noStartCount,
+          )}</span>
         </div>
       </div>
     </div>
     <div class="overflow-x-auto">
       <table class="w-full text-left text-sm">
         <thead class="bg-surface-container text-on-surface-variant">
-          <tr>${["Queue", "Jam Berjalan Status Ini", "Plat", "Vendor", "Fleet", "Gate", "Status", "Basis Estimasi Bongkar", "SLA Fleet", "Estimasi Selesai Bongkar", "Sisa/Lewat Target", "Status SLA Bongkar"].map((h) => `<th class="px-4 py-3 font-label-sm uppercase whitespace-nowrap">${h}</th>`).join("")}</tr>
+          <tr>${[
+            "Queue",
+            "Jam Berjalan Status Ini",
+            "Plat",
+            "Vendor",
+            "Fleet",
+            "Gate",
+            "Status",
+            "Basis Estimasi Bongkar",
+            "SLA Fleet",
+            "Estimasi Selesai Bongkar",
+            "Sisa/Lewat Target",
+            "Status SLA Bongkar",
+          ]
+            .map(
+              (h) =>
+                `<th class="px-4 py-3 font-label-sm uppercase whitespace-nowrap">${h}</th>`,
+            )
+            .join("")}</tr>
         </thead>
         <tbody class="divide-y divide-outline-variant/10">
           ${
@@ -3408,14 +3775,16 @@ function unloadingEstimateReport(rows = []) {
                   info.diffMinutes === null
                     ? "-"
                     : info.diffMinutes >= 0
-                      ? `Sisa ${formatMinutesCompact(info.diffMinutes)}`
-                      : `Lewat ${formatMinutesCompact(Math.abs(info.diffMinutes))}`;
+                    ? `Sisa ${formatMinutesCompact(info.diffMinutes)}`
+                    : `Lewat ${formatMinutesCompact(
+                        Math.abs(info.diffMinutes),
+                      )}`;
                 const deltaClass =
                   info.diffMinutes === null
                     ? "text-on-surface-variant"
                     : info.diffMinutes >= 0
-                      ? "text-success"
-                      : "text-error";
+                    ? "text-success"
+                    : "text-error";
                 const status = String(row.status || "").toUpperCase();
                 const runningDone = info.runningEndText || "";
                 const runningText = runningDone
@@ -3423,22 +3792,56 @@ function unloadingEstimateReport(rows = []) {
                   : liveWaitingText(info.runningStartText, "");
                 const basis = info.hasStartedBongkar
                   ? info.estimateSource
-                    ? `${info.estimateSource}${info.baseText ? ` · ${info.baseText}` : ""}`
+                    ? `${info.estimateSource}${
+                        info.baseText ? ` · ${info.baseText}` : ""
+                      }`
                     : "-"
                   : "Belum mulai bongkar";
-                return `<tr class="hover:bg-primary/5 ${info.outSla ? "bg-error/5" : ""}">
-              <td class="px-4 py-3 font-queue-id text-primary whitespace-nowrap">${esc(row.queue_no || "-")}</td>
-              <td class="px-4 py-3 font-queue-id whitespace-nowrap ${info.outSla ? "text-error" : "text-tertiary"} live-waiting-cell" data-live-waiting="1" data-created="${esc(info.runningStartText || "")}" data-completed="${esc(runningDone)}" data-status="${esc(status)}">${esc(runningText)}</td>
-              <td class="px-4 py-3 font-queue-id whitespace-nowrap">${esc(row.plat_number || "-")}</td>
-              <td class="px-4 py-3 min-w-[180px]">${esc(row.vendor_name || "-")}</td>
-              <td class="px-4 py-3 whitespace-nowrap font-bold">${esc(row.fleet_type || "-")}</td>
-              <td class="px-4 py-3 whitespace-nowrap">${esc(row.gate || "-")}</td>
-              <td class="px-4 py-3 whitespace-nowrap">${monitorStatusBadge(row.status || "-")}</td>
-              <td class="px-4 py-3 min-w-[220px] text-xs text-on-surface-variant">${esc(basis)}</td>
-              <td class="px-4 py-3 whitespace-nowrap font-bold">${esc(info.targetLabel || "-")}</td>
-              <td class="px-4 py-3 whitespace-nowrap font-queue-id text-primary">${esc(info.estimateText || "-")}</td>
-              <td class="px-4 py-3 whitespace-nowrap font-queue-id ${deltaClass}" data-live-estimate-delta="1" data-estimate="${esc(info.estimateText || "")}" data-completed="${esc(info.completedText || info.expiredText || "")}">${esc(delta)}</td>
-              <td class="px-4 py-3 whitespace-nowrap"><span class="inline-flex items-center px-3 py-1 rounded-full border text-xs font-bold ${info.badgeClass}">${esc(info.label)}</span></td>
+                return `<tr class="hover:bg-primary/5 ${
+                  info.outSla ? "bg-error/5" : ""
+                }">
+              <td class="px-4 py-3 font-queue-id text-primary whitespace-nowrap">${esc(
+                row.queue_no || "-",
+              )}</td>
+              <td class="px-4 py-3 font-queue-id whitespace-nowrap ${
+                info.outSla ? "text-error" : "text-tertiary"
+              } live-waiting-cell" data-live-waiting="1" data-created="${esc(
+                  info.runningStartText || "",
+                )}" data-completed="${esc(runningDone)}" data-status="${esc(
+                  status,
+                )}">${esc(runningText)}</td>
+              <td class="px-4 py-3 font-queue-id whitespace-nowrap">${esc(
+                row.plat_number || "-",
+              )}</td>
+              <td class="px-4 py-3 min-w-[180px]">${esc(
+                row.vendor_name || "-",
+              )}</td>
+              <td class="px-4 py-3 whitespace-nowrap font-bold">${esc(
+                row.fleet_type || "-",
+              )}</td>
+              <td class="px-4 py-3 whitespace-nowrap">${esc(
+                row.gate || "-",
+              )}</td>
+              <td class="px-4 py-3 whitespace-nowrap">${monitorStatusBadge(
+                row.status || "-",
+              )}</td>
+              <td class="px-4 py-3 min-w-[220px] text-xs text-on-surface-variant">${esc(
+                basis,
+              )}</td>
+              <td class="px-4 py-3 whitespace-nowrap font-bold">${esc(
+                info.targetLabel || "-",
+              )}</td>
+              <td class="px-4 py-3 whitespace-nowrap font-queue-id text-primary">${esc(
+                info.estimateText || "-",
+              )}</td>
+              <td class="px-4 py-3 whitespace-nowrap font-queue-id ${deltaClass}" data-live-estimate-delta="1" data-estimate="${esc(
+                  info.estimateText || "",
+                )}" data-completed="${esc(
+                  info.completedText || info.expiredText || "",
+                )}">${esc(delta)}</td>
+              <td class="px-4 py-3 whitespace-nowrap"><span class="inline-flex items-center px-3 py-1 rounded-full border text-xs font-bold ${
+                info.badgeClass
+              }">${esc(info.label)}</span></td>
             </tr>`;
               })
               .join("") ||
@@ -3455,13 +3858,15 @@ function monitorStatusBadge(status = "") {
   const cls = st.includes("COMPLETED")
     ? "bg-success/10 text-success border-success/30"
     : st.includes("EXPIRED")
-      ? "bg-error/10 text-error border-error/30"
-      : st.includes("UNLOADING")
-        ? "bg-warning/10 text-warning border-warning/30"
-        : st.includes("CALLED")
-          ? "bg-primary/10 text-primary border-primary/30"
-          : "bg-surface-container text-on-surface-variant border-outline-variant";
-  return `<span class="inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold ${cls}">${esc(st)}</span>`;
+    ? "bg-error/10 text-error border-error/30"
+    : st.includes("UNLOADING")
+    ? "bg-warning/10 text-warning border-warning/30"
+    : st.includes("CALLED")
+    ? "bg-primary/10 text-primary border-primary/30"
+    : "bg-surface-container text-on-surface-variant border-outline-variant";
+  return `<span class="inline-flex items-center rounded-full border px-3 py-1 text-xs font-bold ${cls}">${esc(
+    st,
+  )}</span>`;
 }
 
 function getMonitorWaitingStopValue(row = {}) {
@@ -3510,7 +3915,36 @@ function monitorUnifiedDetailTable(rows = []) {
       queueNoOrderValue(a) - queueNoOrderValue(b)
     );
   });
-  return `<div class="rounded-xl border border-outline-variant/30 overflow-hidden mb-6"><div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-surface-container/60 px-4 py-3 border-b border-outline-variant/30"><div><h4 class="font-bold text-on-surface">Detail Waiting, Checker, dan SLA Bongkar</h4><p class="text-xs text-on-surface-variant">Satu table dari Output form. WAITING/CALLED tidak dibuat estimasi bongkar. UNLOADING menampilkan estimasi selesai dan sisa/lewat SLA. EXPIRED tidak dihitung miss SLA dan waktunya berhenti di expired_at.</p></div><input class="form-input max-w-md" placeholder="Filter queue / plat / vendor / status..." oninput="filterTable('monitor-unified-table', this.value)" /></div><div class="overflow-x-auto"><table id="monitor-unified-table" class="w-full text-left text-sm"><thead class="bg-surface-container text-on-surface-variant"><tr>${["Queue", "Status", "Vendor", "Driver", "Plat", "PO", "Fleet", "Gate", "Register", "Called", "Start Bongkar", "Selesai/Expired", "Jam Tunggu", "Jam Bongkar", "SLA Fleet", "Estimasi Selesai Bongkar", "Sisa/Lewat SLA", "Status SLA Bongkar", "Call", "WA"].map((h) => `<th class="px-4 py-3 font-label-sm uppercase whitespace-nowrap">${h}</th>`).join("")}</tr></thead><tbody class="divide-y divide-outline-variant/10">${sorted.map((r) => monitorUnifiedDetailRow(r)).join("") || `<tr><td colspan="20" class="px-6 py-8 text-center text-on-surface-variant">Belum ada data dari Output form.</td></tr>`}</tbody></table></div></div>`;
+  return `<div class="rounded-xl border border-outline-variant/30 overflow-hidden mb-6"><div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 bg-surface-container/60 px-4 py-3 border-b border-outline-variant/30"><div><h4 class="font-bold text-on-surface">Detail Waiting, Checker, dan SLA Bongkar</h4><p class="text-xs text-on-surface-variant">Satu table dari Output form. WAITING/CALLED tidak dibuat estimasi bongkar. UNLOADING menampilkan estimasi selesai dan sisa/lewat SLA. EXPIRED tidak dihitung miss SLA dan waktunya berhenti di expired_at.</p></div><input class="form-input max-w-md" placeholder="Filter queue / plat / vendor / status..." oninput="filterTable('monitor-unified-table', this.value)" /></div><div class="overflow-x-auto"><table id="monitor-unified-table" class="w-full text-left text-sm"><thead class="bg-surface-container text-on-surface-variant"><tr>${[
+    "Queue",
+    "Status",
+    "Vendor",
+    "Driver",
+    "Plat",
+    "PO",
+    "Fleet",
+    "Gate",
+    "Register",
+    "Called",
+    "Start Bongkar",
+    "Selesai/Expired",
+    "Jam Tunggu",
+    "Jam Bongkar",
+    "SLA Fleet",
+    "Estimasi Selesai Bongkar",
+    "Sisa/Lewat SLA",
+    "Status SLA Bongkar",
+    "Call",
+    "WA",
+  ]
+    .map(
+      (h) =>
+        `<th class="px-4 py-3 font-label-sm uppercase whitespace-nowrap">${h}</th>`,
+    )
+    .join("")}</tr></thead><tbody class="divide-y divide-outline-variant/10">${
+    sorted.map((r) => monitorUnifiedDetailRow(r)).join("") ||
+    `<tr><td colspan="20" class="px-6 py-8 text-center text-on-surface-variant">Belum ada data dari Output form.</td></tr>`
+  }</tbody></table></div></div>`;
 }
 function monitorUnifiedDetailRow(r = {}) {
   const st = String(r.status || "").toUpperCase();
@@ -3529,14 +3963,14 @@ function monitorUnifiedDetailRow(r = {}) {
     !showEstimate || info.diffMinutes === null
       ? "-"
       : info.diffMinutes >= 0
-        ? "Sisa " + formatMinutesCompact(info.diffMinutes)
-        : "Lewat " + formatMinutesCompact(Math.abs(info.diffMinutes));
+      ? "Sisa " + formatMinutesCompact(info.diffMinutes)
+      : "Lewat " + formatMinutesCompact(Math.abs(info.diffMinutes));
   const deltaClass =
     !showEstimate || info.diffMinutes === null
       ? "text-on-surface-variant"
       : info.diffMinutes >= 0
-        ? "text-success"
-        : "text-error";
+      ? "text-success"
+      : "text-error";
   const waitingEnd = getMonitorWaitingStopValue(r);
   const waitingText = getMonitorWaitingRuntimeText(r);
   const unloadingText = getMonitorUnloadingRuntimeText(r);
@@ -3546,14 +3980,64 @@ function monitorUnifiedDetailRow(r = {}) {
   const slaLabel = isExpired
     ? "EXPIRED / GAGAL PANGGIL"
     : showEstimate
-      ? info.label
-      : "BELUM START";
+    ? info.label
+    : "BELUM START";
   const slaClass = isExpired
     ? "bg-error/10 text-error border-error/30"
     : showEstimate
-      ? info.badgeClass
-      : "bg-warning/10 text-warning border-warning/30";
-  return `<tr class="hover:bg-primary/5 ${rowClass}"><td class="px-4 py-3 font-queue-id text-primary whitespace-nowrap">${esc(r.queue_no || "-")}</td><td class="px-4 py-3 whitespace-nowrap">${monitorStatusBadge(st || "-")}</td><td class="px-4 py-3 min-w-[180px]">${esc(r.vendor_name || "-")}</td><td class="px-4 py-3 min-w-[120px]">${esc(r.driver_name || "-")}</td><td class="px-4 py-3 font-queue-id whitespace-nowrap">${esc(r.plat_number || "-")}</td><td class="px-4 py-3 min-w-[240px] break-all">${esc(r.po_number || "-")}</td><td class="px-4 py-3 whitespace-nowrap font-bold">${esc(r.fleet_type || "-")}</td><td class="px-4 py-3 whitespace-nowrap">${esc(r.gate || "-")}</td><td class="px-4 py-3 whitespace-nowrap">${esc(reg || "-")}</td><td class="px-4 py-3 whitespace-nowrap">${esc(called || "-")}</td><td class="px-4 py-3 whitespace-nowrap">${esc(start || "-")}</td><td class="px-4 py-3 whitespace-nowrap">${esc(end || "-")}</td><td class="px-4 py-3 font-queue-id whitespace-nowrap ${isExpired ? "text-error" : "text-tertiary"} live-waiting-cell" data-live-waiting="1" data-created="${esc(reg || "")}" data-completed="${esc(waitingEnd || "")}" data-status="${esc(st)}">${esc(isExpired ? formatMinutesCompact(minutesBetweenValues(reg, waitingEnd)) : waitingText)}</td><td class="px-4 py-3 font-queue-id whitespace-nowrap ${info.outSla ? "text-error" : "text-tertiary"} live-waiting-cell" data-live-waiting="1" data-created="${esc(start || "")}" data-completed="${esc(end || "")}" data-status="${esc(st)}">${esc(unloadingText)}</td><td class="px-4 py-3 whitespace-nowrap font-bold">${esc(info.targetLabel || "-")}</td><td class="px-4 py-3 whitespace-nowrap font-queue-id text-primary">${esc(showEstimate ? info.estimateText || "-" : "-")}</td><td class="px-4 py-3 whitespace-nowrap font-queue-id ${deltaClass}" data-live-estimate-delta="1" data-estimate="${esc(showEstimate ? info.estimateText || "" : "")}" data-completed="${esc(end || "")}">${esc(deltaText)}</td><td class="px-4 py-3 whitespace-nowrap"><span class="inline-flex items-center px-3 py-1 rounded-full border text-xs font-bold ${slaClass}">${esc(slaLabel)}</span></td><td class="px-4 py-3 font-bold text-center">${esc(callCount)}</td><td class="px-4 py-3 whitespace-nowrap">${esc(wa)}</td></tr>`;
+    ? info.badgeClass
+    : "bg-warning/10 text-warning border-warning/30";
+  return `<tr class="hover:bg-primary/5 ${rowClass}"><td class="px-4 py-3 font-queue-id text-primary whitespace-nowrap">${esc(
+    r.queue_no || "-",
+  )}</td><td class="px-4 py-3 whitespace-nowrap">${monitorStatusBadge(
+    st || "-",
+  )}</td><td class="px-4 py-3 min-w-[180px]">${esc(
+    r.vendor_name || "-",
+  )}</td><td class="px-4 py-3 min-w-[120px]">${esc(
+    r.driver_name || "-",
+  )}</td><td class="px-4 py-3 font-queue-id whitespace-nowrap">${esc(
+    r.plat_number || "-",
+  )}</td><td class="px-4 py-3 min-w-[240px] break-all">${esc(
+    r.po_number || "-",
+  )}</td><td class="px-4 py-3 whitespace-nowrap font-bold">${esc(
+    r.fleet_type || "-",
+  )}</td><td class="px-4 py-3 whitespace-nowrap">${esc(
+    r.gate || "-",
+  )}</td><td class="px-4 py-3 whitespace-nowrap">${esc(
+    reg || "-",
+  )}</td><td class="px-4 py-3 whitespace-nowrap">${esc(
+    called || "-",
+  )}</td><td class="px-4 py-3 whitespace-nowrap">${esc(
+    start || "-",
+  )}</td><td class="px-4 py-3 whitespace-nowrap">${esc(
+    end || "-",
+  )}</td><td class="px-4 py-3 font-queue-id whitespace-nowrap ${
+    isExpired ? "text-error" : "text-tertiary"
+  } live-waiting-cell" data-live-waiting="1" data-created="${esc(
+    reg || "",
+  )}" data-completed="${esc(waitingEnd || "")}" data-status="${esc(st)}">${esc(
+    isExpired
+      ? formatMinutesCompact(minutesBetweenValues(reg, waitingEnd))
+      : waitingText,
+  )}</td><td class="px-4 py-3 font-queue-id whitespace-nowrap ${
+    info.outSla ? "text-error" : "text-tertiary"
+  } live-waiting-cell" data-live-waiting="1" data-created="${esc(
+    start || "",
+  )}" data-completed="${esc(end || "")}" data-status="${esc(st)}">${esc(
+    unloadingText,
+  )}</td><td class="px-4 py-3 whitespace-nowrap font-bold">${esc(
+    info.targetLabel || "-",
+  )}</td><td class="px-4 py-3 whitespace-nowrap font-queue-id text-primary">${esc(
+    showEstimate ? info.estimateText || "-" : "-",
+  )}</td><td class="px-4 py-3 whitespace-nowrap font-queue-id ${deltaClass}" data-live-estimate-delta="1" data-estimate="${esc(
+    showEstimate ? info.estimateText || "" : "",
+  )}" data-completed="${esc(end || "")}">${esc(
+    deltaText,
+  )}</td><td class="px-4 py-3 whitespace-nowrap"><span class="inline-flex items-center px-3 py-1 rounded-full border text-xs font-bold ${slaClass}">${esc(
+    slaLabel,
+  )}</span></td><td class="px-4 py-3 font-bold text-center">${esc(
+    callCount,
+  )}</td><td class="px-4 py-3 whitespace-nowrap">${esc(wa)}</td></tr>`;
 }
 
 function monitorDetailRow(r = {}) {
@@ -3570,30 +4054,70 @@ function monitorDetailRow(r = {}) {
   );
   const callCount = cleanNumber(r.call_count ?? r.wa_call_count ?? 0);
   const wa = String(r.wa_call_status || "-").toUpperCase();
-  return `<tr class="hover:bg-primary/5 ${st.includes("EXPIRED") ? "bg-error/5" : sla.status === "SLA MISS" ? "bg-error/5" : ""}">
-    <td class="px-4 py-3 font-queue-id text-primary whitespace-nowrap">${esc(r.queue_no || "-")}</td>
+  return `<tr class="hover:bg-primary/5 ${
+    st.includes("EXPIRED")
+      ? "bg-error/5"
+      : sla.status === "SLA MISS"
+      ? "bg-error/5"
+      : ""
+  }">
+    <td class="px-4 py-3 font-queue-id text-primary whitespace-nowrap">${esc(
+      r.queue_no || "-",
+    )}</td>
     <td class="px-4 py-3 whitespace-nowrap">${monitorStatusBadge(st)}</td>
     <td class="px-4 py-3 min-w-[180px]">${esc(r.vendor_name || "-")}</td>
     <td class="px-4 py-3 min-w-[120px]">${esc(r.driver_name || "-")}</td>
-    <td class="px-4 py-3 font-queue-id whitespace-nowrap">${esc(r.plat_number || "-")}</td>
-    <td class="px-4 py-3 min-w-[240px] break-all">${esc(r.po_number || "-")}</td>
+    <td class="px-4 py-3 font-queue-id whitespace-nowrap">${esc(
+      r.plat_number || "-",
+    )}</td>
+    <td class="px-4 py-3 min-w-[240px] break-all">${esc(
+      r.po_number || "-",
+    )}</td>
     <td class="px-4 py-3 whitespace-nowrap">${esc(r.gate || "-")}</td>
     <td class="px-4 py-3 whitespace-nowrap">${esc(reg || "-")}</td>
     <td class="px-4 py-3 whitespace-nowrap">${esc(called || "-")}</td>
     <td class="px-4 py-3 whitespace-nowrap">${esc(start || "-")}</td>
     <td class="px-4 py-3 whitespace-nowrap">${esc(end || "-")}</td>
-    <td class="px-4 py-3 font-queue-id whitespace-nowrap">${esc(formatMinutesCompact(waitingMinutes))}</td>
-    <td class="px-4 py-3 font-queue-id whitespace-nowrap">${esc(formatMinutesCompact(unloadingMinutes))}</td>
+    <td class="px-4 py-3 font-queue-id whitespace-nowrap">${esc(
+      formatMinutesCompact(waitingMinutes),
+    )}</td>
+    <td class="px-4 py-3 font-queue-id whitespace-nowrap">${esc(
+      formatMinutesCompact(unloadingMinutes),
+    )}</td>
     <td class="px-4 py-3 font-bold text-center">${esc(callCount)}</td>
     <td class="px-4 py-3 whitespace-nowrap">${esc(wa)}</td>
-    <td class="px-4 py-3 whitespace-nowrap"><span class="inline-flex items-center px-3 py-1 rounded-full border text-xs font-bold ${sla.badgeClass}">${esc(sla.status)}</span></td>
+    <td class="px-4 py-3 whitespace-nowrap"><span class="inline-flex items-center px-3 py-1 rounded-full border text-xs font-bold ${
+      sla.badgeClass
+    }">${esc(sla.status)}</span></td>
   </tr>`;
 }
 
 function pageMonitor() {
   const allRows = state.dashboard?.queue || [];
   const summary = getMonitorSummary(allRows);
-  return `<div class="grid grid-cols-1 xl:grid-cols-12 gap-gutter"><div class="xl:col-span-12 glass-card rounded-xl p-6"><div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6"><div><h3 class="font-headline-md text-headline-md">Waiting List Monitoring</h3><p class="text-on-surface-variant">Report detail dari hasil input Security dan update Checker. Source utama: <b>Output form</b>.</p></div><button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2 w-fit"><span class="material-symbols-outlined">refresh</span>Refresh Output form</button></div><div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-4 mb-6">${miniMetric("Total Input", summary.total, "text-primary")}${miniMetric("Aktif", summary.active, "text-primary")}${miniMetric("Waiting", summary.waiting, "text-tertiary")}${miniMetric("Called", summary.called, "text-primary")}${miniMetric("Unloading", summary.unloading, "text-warning")}${miniMetric("Completed", summary.completed, "text-success")}${miniMetric("Expired", summary.expired || 0, summary.expired ? "text-error" : "text-success")}${miniMetric("SLA Miss", summary.miss, summary.miss ? "text-error" : "text-success")}</div>${gateVisibilityPanel(allRows)}${monitorUnifiedDetailTable(allRows)}<div class="mb-2">${slaRowsLegend()}</div></div></div>`;
+  return `<div class="grid grid-cols-1 xl:grid-cols-12 gap-gutter"><div class="xl:col-span-12 glass-card rounded-xl p-6"><div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6"><div><h3 class="font-headline-md text-headline-md">Waiting List Monitoring</h3><p class="text-on-surface-variant">Report detail dari hasil input Security dan update Checker. Source utama: <b>Output form</b>.</p></div><button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2 w-fit"><span class="material-symbols-outlined">refresh</span>Refresh Output form</button></div><div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-4 mb-6">${miniMetric(
+    "Total Input",
+    summary.total,
+    "text-primary",
+  )}${miniMetric("Aktif", summary.active, "text-primary")}${miniMetric(
+    "Waiting",
+    summary.waiting,
+    "text-tertiary",
+  )}${miniMetric("Called", summary.called, "text-primary")}${miniMetric(
+    "Unloading",
+    summary.unloading,
+    "text-warning",
+  )}${miniMetric("Completed", summary.completed, "text-success")}${miniMetric(
+    "Expired",
+    summary.expired || 0,
+    summary.expired ? "text-error" : "text-success",
+  )}${miniMetric(
+    "SLA Miss",
+    summary.miss,
+    summary.miss ? "text-error" : "text-success",
+  )}</div>${gateVisibilityPanel(allRows)}${monitorUnifiedDetailTable(
+    allRows,
+  )}<div class="mb-2">${slaRowsLegend()}</div></div></div>`;
 }
 
 function monitorRow(r) {
@@ -3603,7 +4127,9 @@ function monitorRow(r) {
   const danger = sla.status === "SLA MISS";
 
   return `<tr class="hover:bg-primary/5 ${danger ? "bg-error/5" : ""}">
-    <td class="px-4 py-3 font-queue-id text-primary">${esc(r.plat_number || "-")}</td>
+    <td class="px-4 py-3 font-queue-id text-primary">${esc(
+      r.plat_number || "-",
+    )}</td>
     <td class="px-4 py-3 font-queue-id">${esc(r.queue_no || "-")}</td>
     <td class="px-4 py-3 min-w-[190px]">${esc(r.vendor_name || "-")}</td>
     <td class="px-4 py-3 text-sm min-w-[210px]">${esc(r.po_number || "-")}</td>
@@ -3611,10 +4137,24 @@ function monitorRow(r) {
     <td class="px-4 py-3 font-queue-id">${esc(r.count_po_sku || 0)}</td>
     <td class="px-4 py-3">${esc(r.gate || "-")}</td>
     <td class="px-4 py-3">${monitorStatusBadge(st)}</td>
-    <td class="px-4 py-3 font-queue-id ${danger ? "text-error" : "text-tertiary"} live-waiting-cell" data-live-waiting="1" data-created="${esc(r.created_at || "")}" data-completed="${esc(r.completed_at || "")}" data-status="${esc(st)}">${esc(wait)}</td>
+    <td class="px-4 py-3 font-queue-id ${
+      danger ? "text-error" : "text-tertiary"
+    } live-waiting-cell" data-live-waiting="1" data-created="${esc(
+    r.created_at || "",
+  )}" data-completed="${esc(r.completed_at || "")}" data-status="${esc(
+    st,
+  )}">${esc(wait)}</td>
     <td class="px-4 py-3 font-bold">${esc(sla.label)}</td>
     <td class="px-4 py-3">
-      <span data-live-sla-target="${esc(sla.target_minutes || 0)}" data-created="${esc(r.created_at || "")}" data-completed="${esc(r.completed_at || "")}" data-status="${esc(st)}" class="inline-flex items-center px-3 py-1 rounded-full border text-xs font-bold ${sla.badgeClass}">
+      <span data-live-sla-target="${esc(
+        sla.target_minutes || 0,
+      )}" data-created="${esc(r.created_at || "")}" data-completed="${esc(
+    r.completed_at || "",
+  )}" data-status="${esc(
+    st,
+  )}" class="inline-flex items-center px-3 py-1 rounded-full border text-xs font-bold ${
+    sla.badgeClass
+  }">
         ${esc(sla.status)}
       </span>
     </td>
@@ -3642,11 +4182,18 @@ function pageSetting() {
   return `<div class="grid grid-cols-1 lg:grid-cols-2 gap-gutter">
     <div class="glass-card rounded-xl p-6"><h3 class="font-headline-md text-headline-md mb-4">API Setup</h3>
       <p class="text-on-surface-variant mb-4">Edit file HTML, ganti konstanta <b>API_URL_V2</b> dengan URL Web App GAS.</p>
-      <pre class="bg-surface-container-high/60 border border-outline-variant rounded-lg p-4 text-xs overflow-x-auto">const API_URL_V2 = "${esc(typeof API_URL_V2 !== "undefined" ? API_URL_V2 : "")}";</pre>
+      <pre class="bg-surface-container-high/60 border border-outline-variant rounded-lg p-4 text-xs overflow-x-auto">const API_URL_V2 = "${esc(
+        typeof API_URL_V2 !== "undefined" ? API_URL_V2 : "",
+      )}";</pre>
       <button onclick="initApi()" class="mt-4 bg-primary-container text-on-primary-container px-6 py-3 rounded-lg font-bold">Refresh / Test API</button>
     </div>
     <div class="glass-card rounded-xl p-6"><h3 class="font-headline-md text-headline-md mb-4">Endpoint Cepat</h3>
-      ${["raw", "reload", "debug"].map((a) => `<button onclick="openApi('${a}')" class="thin-tab rounded-lg px-4 py-2 mr-2 mb-2">${a}</button>`).join("")}
+      ${["raw", "reload", "debug"]
+        .map(
+          (a) =>
+            `<button onclick="openApi('${a}')" class="thin-tab rounded-lg px-4 py-2 mr-2 mb-2">${a}</button>`,
+        )
+        .join("")}
       <p class="text-on-surface-variant text-sm mt-3">Kalau API URL sudah benar, tombol ini buka endpoint di tab baru.</p>
     </div>
   </div>`;
@@ -3654,60 +4201,95 @@ function pageSetting() {
 
 function pageDebug() {
   const debugUser = typeof getAuthUser === "function" ? getAuthUser() : null;
-  const isDeveloper = String(debugUser?.role || "").toUpperCase() === "DEVELOPER";
-  const operationalDate = typeof getOperationalDateKey === "function"
-    ? getOperationalDateKey(new Date())
-    : new Date().toISOString().slice(0, 10);
+  const isDeveloper =
+    String(debugUser?.role || "").toUpperCase() === "DEVELOPER";
+  const operationalDate =
+    typeof getOperationalDateKey === "function"
+      ? getOperationalDateKey(new Date())
+      : new Date().toISOString().slice(0, 10);
   return `<div class="glass-card rounded-xl p-6">
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4"><div><h3 class="font-headline-md text-headline-md">Debug API</h3><p class="text-on-surface-variant">Cek schema, sample row, dan hasil agregasi.</p></div><button onclick="loadDebug()" class="bg-primary-container text-on-primary-container px-5 py-3 rounded-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined">bug_report</span>Run Debug</button></div>
     <section class="mb-5 rounded-xl border border-primary/25 bg-primary-container/5 p-4">
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3"><div><h4 class="font-bold">Freshness Master Superset</h4><p class="text-sm text-on-surface-variant">Read-only dari database produksi MotherDuck. Khusus SPV/Admin/Developer.</p></div><button onclick="loadSupersetFreshness()" class="thin-tab rounded-lg px-4 py-2 font-bold inline-flex items-center gap-2"><span class="material-symbols-outlined">sync</span>Cek data live</button></div>
       <div id="superset-freshness-output"><p class="text-sm text-on-surface-variant">Klik cek data live untuk melihat received time dan sync terakhir.</p></div>
     </section>
-    <pre id="debug-output" class="bg-surface-container-high/60 border border-outline-variant rounded-lg p-4 text-xs overflow-auto max-h-[650px]">${esc(JSON.stringify(state.debug || { info: "Klik Run Debug" }, null, 2))}</pre>
-    ${isDeveloper ? `<div class="mt-6 border border-error/30 rounded-lg p-4 bg-error-container/10">
+    <pre id="debug-output" class="bg-surface-container-high/60 border border-outline-variant rounded-lg p-4 text-xs overflow-auto max-h-[650px]">${esc(
+      JSON.stringify(state.debug || { info: "Klik Run Debug" }, null, 2),
+    )}</pre>
+    ${
+      isDeveloper
+        ? `<div class="mt-6 border border-error/30 rounded-lg p-4 bg-error-container/10">
       <h4 class="font-bold text-error mb-1">Hapus satu ticket salah input</h4>
       <p class="text-sm text-on-surface-variant mb-3">Khusus Developer. Ticket, detail PO, dan event dihapus permanen hanya bila <b>Queue No + Plat + tanggal operasional</b> cocok persis. Tidak memengaruhi ticket lain.</p>
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:items-end">
         <label class="flex flex-col gap-1"><span class="text-xs font-bold uppercase">Queue No</span><input id="single-ticket-queue-no" class="form-input" placeholder="Contoh: DROP-OFF 1-3" /></label>
         <label class="flex flex-col gap-1"><span class="text-xs font-bold uppercase">Plat Number</span><input id="single-ticket-plate-number" class="form-input uppercase" placeholder="Contoh: D8559YT" /></label>
-        <label class="flex flex-col gap-1"><span class="text-xs font-bold uppercase">Tanggal operasional</span><input id="single-ticket-operational-date" type="date" value="${esc(operationalDate)}" class="form-input" /></label>
+        <label class="flex flex-col gap-1"><span class="text-xs font-bold uppercase">Tanggal operasional</span><input id="single-ticket-operational-date" type="date" value="${esc(
+          operationalDate,
+        )}" class="form-input" /></label>
       </div>
       <button id="single-ticket-delete-button" onclick="deleteSingleTicket()" class="mt-3 bg-error text-on-error px-5 py-3 rounded-lg font-bold">Hapus satu ticket ini</button>
       <p id="single-ticket-delete-result" class="text-sm mt-3"></p>
-    </div>` : ""}
+    </div>`
+        : ""
+    }
     <div class="mt-6 border border-error/30 rounded-lg p-4 bg-error-container/10">
       <h4 class="font-bold text-error mb-1">Hapus data operasional per tanggal</h4>
       <p class="text-sm text-on-surface-variant mb-3">Khusus Developer. Menghapus ticket, detail PO, dan event pada tanggal yang dipilih secara permanen.</p>
       <div class="flex flex-col sm:flex-row gap-3 sm:items-end">
-        <label class="flex flex-col gap-1"><span class="text-xs font-bold uppercase">Tanggal operasional</span><input id="cleanup-operational-date" type="date" value="${esc(operationalDate)}" class="form-input" /></label>
+        <label class="flex flex-col gap-1"><span class="text-xs font-bold uppercase">Tanggal operasional</span><input id="cleanup-operational-date" type="date" value="${esc(
+          operationalDate,
+        )}" class="form-input" /></label>
         <button id="cleanup-operational-button" onclick="deleteTicketsByOperationalDate()" class="bg-error text-on-error px-5 py-3 rounded-lg font-bold">Hapus data tanggal ini</button>
       </div>
       <p id="cleanup-operational-result" class="text-sm mt-3"></p>
     </div>
-    ${isDeveloper ? `<div class="mt-5 border border-warning/40 rounded-lg p-4 bg-warning-container/10">
+    ${
+      isDeveloper
+        ? `<div class="mt-5 border border-warning/40 rounded-lg p-4 bg-warning-container/10">
       <h4 class="font-bold text-warning mb-1">Clear task otomatis</h4>
       <p class="text-sm text-on-surface-variant mb-3">Khusus akun Developer. Semua tiket aktif akan diproses sampai <b>COMPLETED</b>: panggil, bongkar/checking, lalu Done GR. Actual Qty yang masih kosong diisi sesuai Qty PO. Riwayat ticket tetap tersimpan.</p>
       <div class="flex flex-col sm:flex-row gap-3 sm:items-end">
-        <label class="flex flex-col gap-1"><span class="text-xs font-bold uppercase">Tanggal operasional</span><input id="bulk-complete-operational-date" type="date" value="${esc(operationalDate)}" class="form-input" /></label>
+        <label class="flex flex-col gap-1"><span class="text-xs font-bold uppercase">Tanggal operasional</span><input id="bulk-complete-operational-date" type="date" value="${esc(
+          operationalDate,
+        )}" class="form-input" /></label>
         <button id="bulk-complete-operational-button" onclick="bulkCompleteOperationalTasks()" class="bg-warning text-on-warning px-5 py-3 rounded-lg font-bold">Clear semua tiket aktif</button>
       </div>
       <label class="mt-3 inline-flex items-start gap-2 text-sm text-on-surface-variant cursor-pointer"><input id="bulk-complete-all-dates" type="checkbox" checked class="mt-1" /><span><b class="text-on-surface">Clear semua tanggal aktif</b><br/>Centang ini untuk termasuk tiket gantung dari hari operasional sebelumnya. Lepas centang bila hanya ingin tanggal di atas.</span></label>
       <p id="bulk-complete-operational-result" class="text-sm mt-3"></p>
-    </div>` : ""}
+    </div>`
+        : ""
+    }
   </div>`;
 }
 
 function textInput(name, label, placeholder, list, value = "", extra = "") {
-  return `<label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">${label}</span><input name="${name}" ${list ? `list="${list}"` : ""} ${extra || ""} class="form-input" placeholder="${placeholder || ""}" value="${esc(value || "")}" /></label>`;
+  return `<label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">${label}</span><input name="${name}" ${
+    list ? `list="${list}"` : ""
+  } ${extra || ""} class="form-input" placeholder="${
+    placeholder || ""
+  }" value="${esc(value || "")}" /></label>`;
 }
 
 function textareaInput(name, label, placeholder, value = "", extra = "") {
-  return `<label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">${label}</span><textarea name="${name}" ${extra || ""} class="form-input min-h-[92px] resize-y" placeholder="${placeholder || ""}">${esc(value || "")}</textarea></label>`;
+  return `<label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">${label}</span><textarea name="${name}" ${
+    extra || ""
+  } class="form-input min-h-[92px] resize-y" placeholder="${
+    placeholder || ""
+  }">${esc(value || "")}</textarea></label>`;
 }
 
 function selectInput(name, label, options = [], value = "", extra = "") {
-  return `<label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">${label}</span><select name="${name}" class="form-select" ${extra}>${(options || []).map((o) => `<option ${String(o) === String(value) ? "selected" : ""}>${esc(o)}</option>`).join("")}</select></label>`;
+  return `<label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">${label}</span><select name="${name}" class="form-select" ${extra}>${(
+    options || []
+  )
+    .map(
+      (o) =>
+        `<option ${String(o) === String(value) ? "selected" : ""}>${esc(
+          o,
+        )}</option>`,
+    )
+    .join("")}</select></label>`;
 }
 
 function buildSlotOptions(preferred) {
@@ -3835,8 +4417,12 @@ function fleetPreviewCard(type = "") {
       </div>
       <div class="flex-1 text-center md:text-left">
         <div class="text-[11px] uppercase font-bold text-on-surface-variant tracking-wider">Preview Fleet Type</div>
-        <div id="fleet-preview-label" class="text-xl font-extrabold text-primary mt-1">${esc(label)}</div>
-        <div id="fleet-preview-note" class="text-sm text-on-surface-variant mt-2">${esc(getFleetNote(selected))}</div>
+        <div id="fleet-preview-label" class="text-xl font-extrabold text-primary mt-1">${esc(
+          label,
+        )}</div>
+        <div id="fleet-preview-note" class="text-sm text-on-surface-variant mt-2">${esc(
+          getFleetNote(selected),
+        )}</div>
         <div class="text-[11px] text-on-surface-variant mt-2">Asset gambar dari file fleet yang sudah dipisah per tipe kendaraan.</div>
       </div>
     </div>
@@ -3916,7 +4502,9 @@ function renderPoSelectedChips(values) {
             po,
           ) => `<span class="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/25 text-primary px-2 py-1 text-[11px] font-extrabold">
             ${esc(po)}
-            <button type="button" class="w-5 h-5 rounded-full bg-primary/10 hover:bg-primary/20 leading-none" onclick="event.stopPropagation(); removePoChoice('${poEncode(po)}')" title="Hapus PO">×</button>
+            <button type="button" class="w-5 h-5 rounded-full bg-primary/10 hover:bg-primary/20 leading-none" onclick="event.stopPropagation(); removePoChoice('${poEncode(
+              po,
+            )}')" title="Hapus PO">×</button>
           </span>`,
         )
         .join("")
@@ -4063,7 +4651,11 @@ function filterPoDropdown() {
         ? "PO tidak ada untuk vendor/filter tersebut, atau PO sudah pernah daftar."
         : "Belum ada PO available untuk vendor ini. PO yang sudah daftar otomatis disembunyikan."
       : "Pilih / ketik Vendor Name dulu supaya list PO terfilter. PO yang sudah daftar otomatis disembunyikan.";
-    list.innerHTML = `<div class="px-3 py-3 text-[12px] text-on-surface-variant">${msg}${registeredCount ? `<div class="mt-1 text-[11px] text-warning font-bold">${registeredCount} PO sudah terdaftar dan disembunyikan.</div>` : ""}</div>`;
+    list.innerHTML = `<div class="px-3 py-3 text-[12px] text-on-surface-variant">${msg}${
+      registeredCount
+        ? `<div class="mt-1 text-[11px] text-warning font-bold">${registeredCount} PO sudah terdaftar dan disembunyikan.</div>`
+        : ""
+    }</div>`;
     return;
   }
 
@@ -4073,13 +4665,21 @@ function filterPoDropdown() {
       const vendor = meta?.vendor_name || "";
       const sku = meta?.count_po_sku || 0;
       return `<button type="button"
-        onpointerdown="preventDropdownBlurSelect(event); selectPoChoice('${poEncode(po)}')"
+        onpointerdown="preventDropdownBlurSelect(event); selectPoChoice('${poEncode(
+          po,
+        )}')"
         onmousedown="preventDropdownBlurSelect(event)"
         class="w-full px-3 py-3 rounded-lg hover:bg-primary/10 text-left grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-1 sm:gap-3 border-b border-outline-variant/20 last:border-b-0 touch-manipulation">
-        <span class="font-queue-id text-[12px] sm:text-[13px] text-on-surface break-all leading-5">${esc(po)}</span>
+        <span class="font-queue-id text-[12px] sm:text-[13px] text-on-surface break-all leading-5">${esc(
+          po,
+        )}</span>
         <span class="flex flex-col sm:items-end gap-0.5 min-w-0">
-          <span class="text-[10px] sm:text-[11px] text-on-surface-variant font-bold break-words leading-4">${esc(vendor || "-")}</span>
-          <span class="text-[10px] text-primary font-bold">SKU ${esc(sku || 0)}</span>
+          <span class="text-[10px] sm:text-[11px] text-on-surface-variant font-bold break-words leading-4">${esc(
+            vendor || "-",
+          )}</span>
+          <span class="text-[10px] text-primary font-bold">SKU ${esc(
+            sku || 0,
+          )}</span>
         </span>
       </button>`;
     })
@@ -4227,7 +4827,11 @@ function setVendorValue(value = "", trigger = true) {
     label.innerHTML = safeValue
       ? `<span class="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/25 text-primary px-2 py-1 text-[11px] font-extrabold max-w-full">
           <span class="break-words">${esc(safeValue)}</span>
-          ${isManual ? '<span class="rounded bg-warning/15 text-warning px-1.5 py-0.5 text-[9px]">MANUAL</span>' : ""}
+          ${
+            isManual
+              ? '<span class="rounded bg-warning/15 text-warning px-1.5 py-0.5 text-[9px]">MANUAL</span>'
+              : ""
+          }
           <button type="button" class="w-5 h-5 rounded-full bg-primary/10 hover:bg-primary/20 leading-none shrink-0" onclick="event.stopPropagation(); clearVendorChoice()" title="Hapus vendor">×</button>
         </span>`
       : `<span class="text-[12px] text-on-surface-variant px-1">Belum ada vendor dipilih</span>`;
@@ -4294,7 +4898,9 @@ function vendorCustomSelectInput(value = "") {
   const selected = String(value || "").trim();
   return `<label class="flex flex-col gap-2 md:col-span-2">
     <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Vendor Name</span>
-    <input type="hidden" name="vendor_name" id="vendor-name-value" value="${esc(selected)}" required />
+    <input type="hidden" name="vendor_name" id="vendor-name-value" value="${esc(
+      selected,
+    )}" required />
     <div class="relative">
       <div class="form-input min-h-[48px] flex items-center flex-wrap gap-2 py-2 cursor-text"
         onclick="handleCustomSearchContainerClick(event, 'vendor-search-input', 'vendor')">
@@ -4339,7 +4945,9 @@ function filterVendorDropdown() {
     q && !exactMaster
       ? `<button type="button" onclick="commitManualVendor(event)" class="w-full mb-2 px-3 py-3 rounded-lg bg-warning/10 border border-warning/30 hover:bg-warning/20 text-left touch-manipulation">
           <span class="block text-[10px] text-warning font-extrabold uppercase">Vendor tidak ada di master?</span>
-          <span class="block mt-1 font-bold text-[12px] sm:text-[13px] text-on-surface break-words">Gunakan manual: ${esc(q)}</span>
+          <span class="block mt-1 font-bold text-[12px] sm:text-[13px] text-on-surface break-words">Gunakan manual: ${esc(
+            q,
+          )}</span>
         </button>`
       : "";
 
@@ -4350,25 +4958,34 @@ function filterVendorDropdown() {
     return;
   }
 
-  list.innerHTML = manualAction + options
-    .map((vendor) => {
-      const poCount = (state.options.po_number || []).filter((po) =>
-        vendorMatchesFilter(getPoVendor(po), vendor),
-      ).length;
-      return `<button type="button"
+  list.innerHTML =
+    manualAction +
+    options
+      .map((vendor) => {
+        const poCount = (state.options.po_number || []).filter((po) =>
+          vendorMatchesFilter(getPoVendor(po), vendor),
+        ).length;
+        return `<button type="button"
         onclick="handleVendorOptionSafeClick(event, '${poEncode(vendor)}')"
         class="w-full px-3 py-3 rounded-lg hover:bg-primary/10 text-left grid grid-cols-[1fr_auto] gap-3 border-b border-outline-variant/20 last:border-b-0 touch-manipulation">
-        <span class="font-bold text-[12px] sm:text-[13px] text-on-surface break-words leading-5">${esc(vendor)}</span>
-        <span class="text-[10px] text-primary font-bold whitespace-nowrap">${num(poCount)} PO</span>
+        <span class="font-bold text-[12px] sm:text-[13px] text-on-surface break-words leading-5">${esc(
+          vendor,
+        )}</span>
+        <span class="text-[10px] text-primary font-bold whitespace-nowrap">${num(
+          poCount,
+        )} PO</span>
       </button>`;
-    })
-    .join("");
+      })
+      .join("");
 }
 
 function commitManualVendor(event = null) {
   event?.preventDefault?.();
   event?.stopPropagation?.();
-  const vendor = getVendorSearchText().replace(/\s+/g, " ").trim().slice(0, 180);
+  const vendor = getVendorSearchText()
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 180);
   if (!vendor) return showToast("Ketik Vendor Name manual terlebih dahulu.");
   setVendorValue(vendor, true);
   document.getElementById("vendor-dropdown")?.classList.add("hidden");
@@ -4421,7 +5038,9 @@ function poMultiSelectInput(value = "") {
             po,
           ) => `<span class="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/25 text-primary px-2 py-1 text-[11px] font-extrabold max-w-full">
             <span class="break-all">${esc(po)}</span>
-            <button type="button" class="w-5 h-5 rounded-full bg-primary/10 hover:bg-primary/20 leading-none shrink-0" onclick="event.stopPropagation(); removePoChoice('${poEncode(po)}')" title="Hapus PO">×</button>
+            <button type="button" class="w-5 h-5 rounded-full bg-primary/10 hover:bg-primary/20 leading-none shrink-0" onclick="event.stopPropagation(); removePoChoice('${poEncode(
+              po,
+            )}')" title="Hapus PO">×</button>
           </span>`,
         )
         .join("")
@@ -4429,7 +5048,9 @@ function poMultiSelectInput(value = "") {
 
   return `<label class="flex flex-col gap-2 md:col-span-2">
     <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">PO Number</span>
-    <input type="hidden" name="po_number" value="${esc(selected.join(", "))}" required />
+    <input type="hidden" name="po_number" value="${esc(
+      selected.join(", "),
+    )}" required />
     <div class="relative">
       <div class="form-input min-h-[48px] flex items-center flex-wrap gap-2 py-2 cursor-text"
         onclick="handleCustomSearchContainerClick(event, 'po-search-input', 'po')">
@@ -4480,11 +5101,21 @@ function datalists() {
 }
 
 function miniMetric(label, value, color) {
-  return `<div class="p-4 rounded-lg bg-surface-container/50 border border-outline-variant/30"><span class="text-[10px] text-on-surface-variant uppercase font-bold">${esc(label)}</span><div class="text-xl font-bold ${color}">${esc(value)}</div></div>`;
+  return `<div class="p-4 rounded-lg bg-surface-container/50 border border-outline-variant/30"><span class="text-[10px] text-on-surface-variant uppercase font-bold">${esc(
+    label,
+  )}</span><div class="text-xl font-bold ${color}">${esc(value)}</div></div>`;
 }
 
 function priorityItem(r) {
-  return `<div class="p-4 rounded-lg bg-surface-container/30 border border-outline-variant/30 flex justify-between items-center group hover:bg-primary/10 transition-colors cursor-pointer"><div class="flex flex-col"><span class="font-queue-id text-primary">${esc(r.queue_no || "-")}</span><span class="text-[10px] font-bold text-on-surface-variant uppercase">${esc(r.vendor_name || r.note || "-")}</span></div><div class="text-right"><span class="font-label-sm block">${esc(r.gate || "-")}</span><span class="text-[10px] text-on-surface-variant">${esc(r.status || "-")}</span></div></div>`;
+  return `<div class="p-4 rounded-lg bg-surface-container/30 border border-outline-variant/30 flex justify-between items-center group hover:bg-primary/10 transition-colors cursor-pointer"><div class="flex flex-col"><span class="font-queue-id text-primary">${esc(
+    r.queue_no || "-",
+  )}</span><span class="text-[10px] font-bold text-on-surface-variant uppercase">${esc(
+    r.vendor_name || r.note || "-",
+  )}</span></div><div class="text-right"><span class="font-label-sm block">${esc(
+    r.gate || "-",
+  )}</span><span class="text-[10px] text-on-surface-variant">${esc(
+    r.status || "-",
+  )}</span></div></div>`;
 }
 
 function checkerListRow(r, i) {
@@ -4501,21 +5132,27 @@ function checkerListRow(r, i) {
   const actionLabel = isCompleted
     ? "Selesai"
     : isExpired
-      ? "Expired"
-      : st.includes("UNLOADING")
-        ? "Selesai"
-        : st.includes("CALLED")
-          ? "Unloading"
-          : "Panggil";
+    ? "Expired"
+    : st.includes("UNLOADING")
+    ? "Selesai"
+    : st.includes("CALLED")
+    ? "Unloading"
+    : "Panggil";
   const key = checkerRowKey(r);
   const actionButton = terminal
-    ? `<button type="button" disabled class="bg-outline-variant text-on-surface-variant px-3 py-2 rounded-lg font-bold text-xs cursor-not-allowed opacity-70">${esc(actionLabel)}</button>`
-    : `<button type="button" onclick="populateCheckerFromTicketKey('${key}')" class="bg-primary-container text-on-primary-container px-3 py-2 rounded-lg font-bold text-xs whitespace-nowrap">${esc(actionLabel)}</button>`;
+    ? `<button type="button" disabled class="bg-outline-variant text-on-surface-variant px-3 py-2 rounded-lg font-bold text-xs cursor-not-allowed opacity-70">${esc(
+        actionLabel,
+      )}</button>`
+    : `<button type="button" onclick="populateCheckerFromTicketKey('${key}')" class="bg-primary-container text-on-primary-container px-3 py-2 rounded-lg font-bold text-xs whitespace-nowrap">${esc(
+        actionLabel,
+      )}</button>`;
 
   const waButton = terminal
     ? ""
     : `<button type="button" onclick="sendDriverWhatsAppFromKey('${key}', this)" class="bg-success/15 border border-success/30 text-success px-3 py-2 rounded-lg font-bold text-xs flex items-center gap-1 whitespace-nowrap" title="Kirim WhatsApp ke driver">
-        <span class="material-symbols-outlined text-base">chat</span>WA ${callCount ? `(${callCount}x)` : ""}
+        <span class="material-symbols-outlined text-base">chat</span>WA ${
+          callCount ? `(${callCount}x)` : ""
+        }
       </button>`;
 
   const failButton =
@@ -4532,21 +5169,33 @@ function checkerListRow(r, i) {
   return `<tr
     data-status="${esc(st || "-")}"
     data-vendor="${esc(String(r.vendor_name || "").toLowerCase())}"
-    data-queue="${esc(String(r.queue_no || r.original_queue_no || "").toLowerCase())}"
+    data-queue="${esc(
+      String(r.queue_no || r.original_queue_no || "").toLowerCase(),
+    )}"
     data-po="${esc(String(r.po_number || "").toLowerCase())}"
     class="hover:bg-primary/5 transition-colors ${terminal ? "hidden" : ""}">
     <td class="px-4 py-3">
       <div class="flex flex-wrap gap-2">${actionButton}${waButton}${failButton}</div>
     </td>
-    <td class="px-4 py-3 font-queue-id text-primary">${esc(r.queue_no || "-")}</td>
+    <td class="px-4 py-3 font-queue-id text-primary">${esc(
+      r.queue_no || "-",
+    )}</td>
     <td class="px-4 py-3 min-w-[180px]">${esc(r.vendor_name || "-")}</td>
     <td class="px-4 py-3 font-bold text-sm">${esc(r.fleet_type || "-")}</td>
     <td class="px-4 py-3 text-sm min-w-[220px]">${esc(r.po_number || "-")}</td>
-    <td class="px-4 py-3 font-queue-id text-sm">${esc(r.plat_number || "-")}</td>
+    <td class="px-4 py-3 font-queue-id text-sm">${esc(
+      r.plat_number || "-",
+    )}</td>
     <td class="px-4 py-3">${esc(r.driver_name || "-")}</td>
     <td class="px-4 py-3 min-w-[120px]">${esc(r.gate || "-")}</td>
     <td class="px-4 py-3">${esc(st || "-")}</td>
-    <td class="px-4 py-3 font-queue-id ${isCompleted ? "text-success" : isExpired ? "text-error" : "text-tertiary"} live-waiting-cell" data-live-waiting="1" data-created="${esc(r.created_at || "")}" data-completed="${esc(r.completed_at || "")}" data-status="${esc(st)}">${esc(wait)}</td>
+    <td class="px-4 py-3 font-queue-id ${
+      isCompleted ? "text-success" : isExpired ? "text-error" : "text-tertiary"
+    } live-waiting-cell" data-live-waiting="1" data-created="${esc(
+    r.created_at || "",
+  )}" data-completed="${esc(r.completed_at || "")}" data-status="${esc(
+    st,
+  )}">${esc(wait)}</td>
   </tr>`;
 }
 
@@ -4584,21 +5233,21 @@ function updateCheckerStatusPreview(status = "CALLED") {
     box.className = isDone
       ? "bg-success/15 border border-success/30 rounded-lg px-4 py-3 text-success font-bold flex items-center gap-2"
       : isUnloading
-        ? "bg-warning/15 border border-warning/30 rounded-lg px-4 py-3 text-warning font-bold flex items-center gap-2"
-        : "bg-primary/15 border border-primary/30 rounded-lg px-4 py-3 text-primary font-bold flex items-center gap-2";
+      ? "bg-warning/15 border border-warning/30 rounded-lg px-4 py-3 text-warning font-bold flex items-center gap-2"
+      : "bg-primary/15 border border-primary/30 rounded-lg px-4 py-3 text-primary font-bold flex items-center gap-2";
   }
   if (icon)
     icon.textContent = isDone
       ? "check_circle"
       : isUnloading
-        ? "local_shipping"
-        : "campaign";
+      ? "local_shipping"
+      : "campaign";
   if (label)
     label.textContent = isDone
       ? "SELESAI UNLOADING"
       : isUnloading
-        ? "UNLOADING"
-        : "PANGGIL DRIVER";
+      ? "UNLOADING"
+      : "PANGGIL DRIVER";
 
   if (isDone) setCheckerSubmitButtonState("active", "Selesai Unloading");
   else if (isUnloading)
@@ -4653,8 +5302,8 @@ function populateCheckerFormFromRow(row) {
         ? "Wingbox bisa pilih 1 sampai 3 gate lalu panggil ke monitor TV."
         : "Isi Gate lalu panggil ke monitor TV."
       : nextStatus === "UNLOADING"
-        ? "Data siap diubah ke UNLOADING. Gate terkunci."
-        : "Data siap diselesaikan. Gate terkunci.",
+      ? "Data siap diubah ke UNLOADING. Gate terkunci."
+      : "Data siap diselesaikan. Gate terkunci.",
   );
 }
 
@@ -4699,8 +5348,26 @@ function queueTable() {
       <input id="queue-search" oninput="filterTable('queue-table',this.value)" class="form-input md:max-w-xs" placeholder="Cari antrian / plat / vendor..." type="text"/>
     </div>
     <div class="overflow-x-auto"><table id="queue-table" class="w-full text-left">
-      <thead class="bg-surface-container text-on-surface-variant"><tr>${["No. Antrian", "Vendor", "Plat", "PO", "Status", "Gate", "Menunggu", "Qty", "SKU"].map((h) => `<th class="px-6 py-4 font-label-sm uppercase tracking-wider">${h}</th>`).join("")}</tr></thead>
-      <tbody class="divide-y divide-outline-variant/10">${rows.map(queueRow).join("") || `<tr><td colspan="9" class="px-6 py-8 text-center text-on-surface-variant">Belum ada data.</td></tr>`}</tbody>
+      <thead class="bg-surface-container text-on-surface-variant"><tr>${[
+        "No. Antrian",
+        "Vendor",
+        "Plat",
+        "PO",
+        "Status",
+        "Gate",
+        "Menunggu",
+        "Qty",
+        "SKU",
+      ]
+        .map(
+          (h) =>
+            `<th class="px-6 py-4 font-label-sm uppercase tracking-wider">${h}</th>`,
+        )
+        .join("")}</tr></thead>
+      <tbody class="divide-y divide-outline-variant/10">${
+        rows.map(queueRow).join("") ||
+        `<tr><td colspan="9" class="px-6 py-8 text-center text-on-surface-variant">Belum ada data.</td></tr>`
+      }</tbody>
     </table></div>
   </div>`;
 }
@@ -4710,18 +5377,30 @@ function queueRow(q) {
   const color = st.includes("WAIT")
     ? "text-tertiary bg-tertiary/20 border-tertiary/30"
     : st.includes("COMP") || st.includes("DONE")
-      ? "text-success bg-success/10 border-success/30"
-      : st.includes("HOLD") || st.includes("MISS")
-        ? "text-error bg-error/10 border-error/30"
-        : "text-primary bg-primary/20 border-primary/30";
+    ? "text-success bg-success/10 border-success/30"
+    : st.includes("HOLD") || st.includes("MISS")
+    ? "text-error bg-error/10 border-error/30"
+    : "text-primary bg-primary/20 border-primary/30";
   return `<tr class="hover:bg-primary/5 transition-colors">
-    <td class="px-6 py-4 font-queue-id text-primary">${esc(q.queue_no || "-")}</td>
+    <td class="px-6 py-4 font-queue-id text-primary">${esc(
+      q.queue_no || "-",
+    )}</td>
     <td class="px-6 py-4">${esc(q.vendor_name || "-")}</td>
-    <td class="px-6 py-4 font-queue-id text-sm">${esc(q.plat_number || "-")}</td>
+    <td class="px-6 py-4 font-queue-id text-sm">${esc(
+      q.plat_number || "-",
+    )}</td>
     <td class="px-6 py-4 text-sm">${esc(q.po_number || "-")}</td>
-    <td class="px-6 py-4"><span class="px-3 py-1 rounded-full text-[10px] font-bold ${color} border">${esc(st || "-")}</span></td>
+    <td class="px-6 py-4"><span class="px-3 py-1 rounded-full text-[10px] font-bold ${color} border">${esc(
+    st || "-",
+  )}</span></td>
     <td class="px-6 py-4">${esc(q.gate || "-")}</td>
-    <td class="px-6 py-4 font-queue-id text-sm ${st.includes("WAIT") ? "text-tertiary" : "text-on-surface"} live-waiting-cell" data-live-waiting="1" data-created="${esc(q.created_at || "")}" data-completed="${esc(q.completed_at || "")}">${esc(q.waiting_text || liveWaitingText(q.created_at, q.completed_at))}</td>
+    <td class="px-6 py-4 font-queue-id text-sm ${
+      st.includes("WAIT") ? "text-tertiary" : "text-on-surface"
+    } live-waiting-cell" data-live-waiting="1" data-created="${esc(
+    q.created_at || "",
+  )}" data-completed="${esc(q.completed_at || "")}">${esc(
+    q.waiting_text || liveWaitingText(q.created_at, q.completed_at),
+  )}</td>
     <td class="px-6 py-4">${num(q.total_po_qty || 0)}</td>
     <td class="px-6 py-4">${num(q.count_po_sku || 0)}</td>
   </tr>`;
@@ -4732,13 +5411,25 @@ function dockCard(d) {
   const cls = st.includes("KOSONG")
     ? "border-2 border-dashed border-outline-variant text-on-surface-variant"
     : st.includes("WARN") || st.includes("HOLD") || st.includes("MISS")
-      ? "bg-error-container text-on-error-container border-2 border-error status-pulse"
-      : "bg-primary-container text-on-primary-container";
-  return `<div class="rounded-xl p-5 ${cls} min-h-[140px] flex flex-col justify-between hover:-translate-y-1 transition-transform"><div class="font-headline-md text-xl font-bold">${esc(d.gate || "-")}</div><div><div class="font-label-sm text-label-sm uppercase opacity-80">${esc(st)}</div><div class="font-queue-id mt-1">${esc(d.queue_no || d.plat_number || "-")}</div></div></div>`;
+    ? "bg-error-container text-on-error-container border-2 border-error status-pulse"
+    : "bg-primary-container text-on-primary-container";
+  return `<div class="rounded-xl p-5 ${cls} min-h-[140px] flex flex-col justify-between hover:-translate-y-1 transition-transform"><div class="font-headline-md text-xl font-bold">${esc(
+    d.gate || "-",
+  )}</div><div><div class="font-label-sm text-label-sm uppercase opacity-80">${esc(
+    st,
+  )}</div><div class="font-queue-id mt-1">${esc(
+    d.queue_no || d.plat_number || "-",
+  )}</div></div></div>`;
 }
 
 function bottleneck(title, value, note, color) {
-  return `<div class="bg-surface-container-high/50 p-4 rounded-lg border-l-4 border-current ${color} mb-3"><div class="flex justify-between"><span class="font-bold text-on-surface">${esc(title)}</span><span class="font-queue-id ${color}">${esc(value)}</span></div><p class="text-[12px] text-on-surface-variant mt-1">${esc(note)}</p></div>`;
+  return `<div class="bg-surface-container-high/50 p-4 rounded-lg border-l-4 border-current ${color} mb-3"><div class="flex justify-between"><span class="font-bold text-on-surface">${esc(
+    title,
+  )}</span><span class="font-queue-id ${color}">${esc(
+    value,
+  )}</span></div><p class="text-[12px] text-on-surface-variant mt-1">${esc(
+    note,
+  )}</p></div>`;
 }
 
 function printWaitingListTicket(index) {
@@ -4756,7 +5447,25 @@ function printWaitingListTicket(index) {
 function reportTable(rows) {
   return `<div class="overflow-x-auto"><table id="report-table" class="w-full text-left">
     <thead class="bg-surface-container text-on-surface-variant">
-      <tr>${["Print", "WA", "Created", "Queue", "Vendor", "Fleet", "Plat", "PO", "Gate", "Status", "Call", "Menunggu", "Qty", "SKU", "SLA"].map((h) => `<th class="px-4 py-3 font-label-sm uppercase">${h}</th>`).join("")}</tr>
+      <tr>${[
+        "Print",
+        "WA",
+        "Created",
+        "Queue",
+        "Vendor",
+        "Fleet",
+        "Plat",
+        "PO",
+        "Gate",
+        "Status",
+        "Call",
+        "Menunggu",
+        "Qty",
+        "SKU",
+        "SLA",
+      ]
+        .map((h) => `<th class="px-4 py-3 font-label-sm uppercase">${h}</th>`)
+        .join("")}</tr>
     </thead>
     <tbody class="divide-y divide-outline-variant/10">
       ${
@@ -4766,7 +5475,9 @@ function reportTable(rows) {
             const st = String(r.status || "").toUpperCase();
             const terminal = st.includes("COMPLETED") || st.includes("EXPIRED");
             const callCount = Number(r.call_count || r.wa_call_count || 0) || 0;
-            return `<tr class="hover:bg-primary/5 ${st.includes("EXPIRED") ? "bg-error/5" : ""}">
+            return `<tr class="hover:bg-primary/5 ${
+              st.includes("EXPIRED") ? "bg-error/5" : ""
+            }">
                 <td class="px-4 py-3">
                   <button type="button" onclick="printWaitingListTicket(${i})" class="thin-tab rounded-lg px-3 py-2 font-bold text-xs flex items-center gap-1 whitespace-nowrap">
                     <span class="material-symbols-outlined text-sm">print</span>Print
@@ -4781,12 +5492,39 @@ function reportTable(rows) {
                         </button>`
                   }
                 </td>
-                ${["created_at", "queue_no", "vendor_name", "fleet_type", "plat_number", "po_number", "gate", "status"].map((k) => `<td class="px-4 py-3 text-sm">${esc(r[k] ?? "")}</td>`).join("")}
+                ${[
+                  "created_at",
+                  "queue_no",
+                  "vendor_name",
+                  "fleet_type",
+                  "plat_number",
+                  "po_number",
+                  "gate",
+                  "status",
+                ]
+                  .map(
+                    (k) =>
+                      `<td class="px-4 py-3 text-sm">${esc(r[k] ?? "")}</td>`,
+                  )
+                  .join("")}
                 <td class="px-4 py-3 text-sm font-bold">${esc(callCount)}</td>
-                <td class="px-4 py-3 text-sm font-queue-id ${st.includes("EXPIRED") ? "text-error" : "text-tertiary"} live-waiting-cell" data-live-waiting="1" data-created="${esc(r.created_at || "")}" data-completed="${esc(r.completed_at || "")}" data-status="${esc(r.status || "")}">${esc(st.includes("EXPIRED") ? "Expired" : r.waiting_text || liveWaitingText(r.created_at, r.completed_at))}</td>
+                <td class="px-4 py-3 text-sm font-queue-id ${
+                  st.includes("EXPIRED") ? "text-error" : "text-tertiary"
+                } live-waiting-cell" data-live-waiting="1" data-created="${esc(
+              r.created_at || "",
+            )}" data-completed="${esc(
+              r.completed_at || "",
+            )}" data-status="${esc(r.status || "")}">${esc(
+              st.includes("EXPIRED")
+                ? "Expired"
+                : r.waiting_text ||
+                    liveWaitingText(r.created_at, r.completed_at),
+            )}</td>
                 <td class="px-4 py-3 text-sm">${esc(r.total_po_qty ?? "")}</td>
                 <td class="px-4 py-3 text-sm">${esc(r.count_po_sku ?? "")}</td>
-                <td class="px-4 py-3 text-sm">${esc(r.unload_sla ?? r.sla_status ?? "")}</td>
+                <td class="px-4 py-3 text-sm">${esc(
+                  r.unload_sla ?? r.sla_status ?? "",
+                )}</td>
               </tr>`;
           })
           .join("") ||
@@ -4915,7 +5653,8 @@ function getTicketStartUnloadingTimeV7(row = {}) {
 }
 
 function getTicketWaitingEndV7(row = {}) {
-  if (window.InboundTicketContracts?.isCancelled(row)) return row.cancelled_at || row.po_cancelled_at || row.updated_at || "";
+  if (window.InboundTicketContracts?.isCancelled(row))
+    return row.cancelled_at || row.po_cancelled_at || row.updated_at || "";
   const status = String(row.status || "")
     .trim()
     .toUpperCase();
@@ -4965,7 +5704,8 @@ function formatWaitingClockV7(startValue, endValue = "") {
 }
 
 function ticketWaitingMarkupV7(row = {}, extraClass = "") {
-  if (window.InboundTicketContracts?.isCancelled(row)) return `<span class="${extraClass} text-error">Dibatalkan</span>`;
+  if (window.InboundTicketContracts?.isCancelled(row))
+    return `<span class="${extraClass} text-error">Dibatalkan</span>`;
   const start = getTicketRegisterTimeV7(row);
   const end = getTicketWaitingEndV7(row);
   const status = String(row.status || "")
@@ -4989,7 +5729,9 @@ function ticketWaitingMarkupV7(row = {}, extraClass = "") {
 }
 
 function emptyBox(t) {
-  return `<div class="p-6 rounded-lg border border-outline-variant text-on-surface-variant text-center">${esc(t)}</div>`;
+  return `<div class="p-6 rounded-lg border border-outline-variant text-on-surface-variant text-center">${esc(
+    t,
+  )}</div>`;
 }
 
 let liveWaitingTimer = null;
@@ -5023,7 +5765,12 @@ function refreshLiveWaitingCells() {
     const completed = el.dataset.completed || "";
 
     const terminal = ["COMPLETED", "DONE GR"].includes(status);
-    el.textContent = status === "CANCELLED" ? "Dibatalkan" : terminal ? "Selesai" : formatWaitingClockV7(created, completed);
+    el.textContent =
+      status === "CANCELLED"
+        ? "Dibatalkan"
+        : terminal
+        ? "Selesai"
+        : formatWaitingClockV7(created, completed);
 
     el.classList.remove(
       "text-tertiary",
@@ -5309,12 +6056,18 @@ function liveWaitingText(createdAt, completedAt) {
   const h = Math.floor(total / 3600);
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(
+    s,
+  ).padStart(2, "0")}`;
 }
 
 function formatDateTimeLocal(date = new Date()) {
   const pad = (n) => String(n).padStart(2, "0");
-  return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  return `${pad(date.getDate())}/${pad(
+    date.getMonth() + 1,
+  )}/${date.getFullYear()} ${pad(date.getHours())}:${pad(
+    date.getMinutes(),
+  )}:${pad(date.getSeconds())}`;
 }
 
 function normalizePlateValue(value) {
@@ -5482,7 +6235,7 @@ function esc(v) {
         ">": "&gt;",
         '"': "&quot;",
         "'": "&#039;",
-      })[m],
+      }[m]),
   );
 }
 
@@ -5598,7 +6351,9 @@ function getEstimatedFinishedAt(row = {}) {
 function getQueueRunningSummaryText() {
   const running = getCurrentRunningTicket();
   if (!running) return "Sedang berjalan: - · estimasi selesai -";
-  return `Sedang berjalan: ${running.queue_no || "-"} (${running.gate || "-"}) · estimasi selesai ${getEstimatedFinishedAt(running) || "-"}`;
+  return `Sedang berjalan: ${running.queue_no || "-"} (${
+    running.gate || "-"
+  }) · estimasi selesai ${getEstimatedFinishedAt(running) || "-"}`;
 }
 
 function demoDashboard() {
@@ -5740,7 +6495,9 @@ function gateSelectOptions(selected = "", allowBlank = false) {
         const isSelected =
           selectedSet.has(gateText) || String(gate) === String(selected);
         const isActive = activeSet.has(gateText) && !isSelected;
-        return `<option value="${esc(gate)}" ${isSelected ? "selected" : ""}>${esc(gate)}${isActive ? " — aktif (bisa dipilih)" : ""}</option>`;
+        return `<option value="${esc(gate)}" ${
+          isSelected ? "selected" : ""
+        }>${esc(gate)}${isActive ? " — aktif (bisa dipilih)" : ""}</option>`;
       })
       .join("")
   );
@@ -5833,10 +6590,16 @@ function checkerSectionTabs() {
       ${tabs
         .map(([key, label, count, icon]) => {
           const on = active === key;
-          return `<button type="button" onclick="setCheckerSection('${key}')" class="${on ? "bg-secondary-container text-on-secondary-container border-secondary-container" : "bg-surface-container/60 text-on-surface-variant border-outline-variant"} border rounded-xl px-2 py-3 font-bold text-[11px] sm:text-xs flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2">
+          return `<button type="button" onclick="setCheckerSection('${key}')" class="${
+            on
+              ? "bg-secondary-container text-on-secondary-container border-secondary-container"
+              : "bg-surface-container/60 text-on-surface-variant border-outline-variant"
+          } border rounded-xl px-2 py-3 font-bold text-[11px] sm:text-xs flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2">
             <span class="material-symbols-outlined text-base">${icon}</span>
             <span>${label}</span>
-            <span class="rounded-full px-2 py-0.5 text-[10px] ${on ? "bg-on-secondary-container/20" : "bg-surface-container-high"}">${count}</span>
+            <span class="rounded-full px-2 py-0.5 text-[10px] ${
+              on ? "bg-on-secondary-container/20" : "bg-surface-container-high"
+            }">${count}</span>
           </button>`;
         })
         .join("")}
@@ -5849,13 +6612,15 @@ function checkerStatusPill(status = "") {
   const cls = st.includes("EXPIRED")
     ? "bg-error/10 text-error border-error/30"
     : st.includes("COMPLETED")
-      ? "bg-success/10 text-success border-success/30"
-      : st.includes("UNLOADING")
-        ? "bg-warning/10 text-warning border-warning/30"
-        : st.includes("CALLED")
-          ? "bg-primary/10 text-primary border-primary/30"
-          : "bg-tertiary/10 text-tertiary border-tertiary/30";
-  return `<span class="inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-extrabold ${cls}">${esc(st || "-")}</span>`;
+    ? "bg-success/10 text-success border-success/30"
+    : st.includes("UNLOADING")
+    ? "bg-warning/10 text-warning border-warning/30"
+    : st.includes("CALLED")
+    ? "bg-primary/10 text-primary border-primary/30"
+    : "bg-tertiary/10 text-tertiary border-tertiary/30";
+  return `<span class="inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-extrabold ${cls}">${esc(
+    st || "-",
+  )}</span>`;
 }
 
 function checkerTicketCard(row = {}, i = 0) {
@@ -5874,18 +6639,18 @@ function checkerTicketCard(row = {}, i = 0) {
   const primaryLabel = terminal
     ? "Read Only"
     : isUnloading
-      ? "Selesai Unloading"
-      : isCalled
-        ? "Mulai Unloading"
-        : "Panggil Gate";
+    ? "Selesai Unloading"
+    : isCalled
+    ? "Mulai Unloading"
+    : "Panggil Gate";
 
   const primaryIcon = terminal
     ? "visibility"
     : isUnloading
-      ? "task_alt"
-      : isCalled
-        ? "warehouse"
-        : "campaign";
+    ? "task_alt"
+    : isCalled
+    ? "warehouse"
+    : "campaign";
 
   const primaryButton = terminal
     ? ""
@@ -5896,7 +6661,9 @@ function checkerTicketCard(row = {}, i = 0) {
   const waButton = terminal
     ? ""
     : `<button type="button" onclick="sendDriverWhatsAppFromKey('${key}', this)" class="bg-success/15 border border-success/30 text-success px-3 py-2 rounded-lg font-bold text-xs inline-flex items-center justify-center gap-1">
-        <span class="material-symbols-outlined text-base">chat</span>WA${callCount ? ` ${callCount}x` : ""}
+        <span class="material-symbols-outlined text-base">chat</span>WA${
+          callCount ? ` ${callCount}x` : ""
+        }
       </button>`;
 
   const failButton =
@@ -5912,13 +6679,19 @@ function checkerTicketCard(row = {}, i = 0) {
     class="checker-card rounded-2xl border border-outline-variant/40 bg-surface-container/45 p-4 shadow-sm"
     data-status="${esc(st)}"
     data-vendor="${esc(String(row.vendor_name || "").toLowerCase())}"
-    data-queue="${esc(String(row.queue_no || row.original_queue_no || "").toLowerCase())}"
+    data-queue="${esc(
+      String(row.queue_no || row.original_queue_no || "").toLowerCase(),
+    )}"
     data-po="${esc(String(row.po_number || "").toLowerCase())}"
     data-plate="${esc(String(row.plat_number || "").toLowerCase())}">
     <div class="flex items-start justify-between gap-3">
       <div class="min-w-0">
-        <div class="font-queue-id text-primary text-2xl">${esc(row.queue_no || "-")}</div>
-        <div class="text-[11px] uppercase text-on-surface-variant font-bold mt-1 truncate">${esc(row.vendor_name || "-")}</div>
+        <div class="font-queue-id text-primary text-2xl">${esc(
+          row.queue_no || "-",
+        )}</div>
+        <div class="text-[11px] uppercase text-on-surface-variant font-bold mt-1 truncate">${esc(
+          row.vendor_name || "-",
+        )}</div>
       </div>
       ${checkerStatusPill(st)}
     </div>
@@ -5926,7 +6699,9 @@ function checkerTicketCard(row = {}, i = 0) {
     <div class="grid grid-cols-2 gap-2 mt-4 text-xs">
       <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3">
         <div class="text-[10px] uppercase text-on-surface-variant font-bold">Plat</div>
-        <div class="font-queue-id text-sm mt-1">${esc(row.plat_number || "-")}</div>
+        <div class="font-queue-id text-sm mt-1">${esc(
+          row.plat_number || "-",
+        )}</div>
       </div>
       <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3">
         <div class="text-[10px] uppercase text-on-surface-variant font-bold">Gate</div>
@@ -5934,19 +6709,37 @@ function checkerTicketCard(row = {}, i = 0) {
       </div>
       <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3">
         <div class="text-[10px] uppercase text-on-surface-variant font-bold">Driver</div>
-        <div class="font-bold truncate mt-1">${esc(row.driver_name || "-")}</div>
+        <div class="font-bold truncate mt-1">${esc(
+          row.driver_name || "-",
+        )}</div>
       </div>
       <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3">
         <div class="text-[10px] uppercase text-on-surface-variant font-bold">Menunggu</div>
-        <div class="font-queue-id text-tertiary mt-1 live-waiting-cell" data-live-waiting="1" data-created="${esc(row.created_at || "")}" data-completed="${esc(row.completed_at || "")}" data-status="${esc(st)}">${esc(waitText)}</div>
+        <div class="font-queue-id text-tertiary mt-1 live-waiting-cell" data-live-waiting="1" data-created="${esc(
+          row.created_at || "",
+        )}" data-completed="${esc(row.completed_at || "")}" data-status="${esc(
+    st,
+  )}">${esc(waitText)}</div>
       </div>
     </div>
 
     <div class="mt-3 text-xs text-on-surface-variant">
       <div><b>Fleet:</b> ${esc(row.fleet_type || "-")}</div>
       <div class="truncate"><b>PO:</b> ${esc(row.po_number || "-")}</div>
-      ${isUnloading ? `<div><b>Estimasi selesai:</b> ${esc(getEstimatedFinishedAt(row) || row.sla_finished_at || "-")}</div>` : ""}
-      ${st.includes("EXPIRED") ? `<div class="text-error font-bold"><b>Reason:</b> ${esc(row.expired_reason || "Driver tidak hadir")}</div>` : ""}
+      ${
+        isUnloading
+          ? `<div><b>Estimasi selesai:</b> ${esc(
+              getEstimatedFinishedAt(row) || row.sla_finished_at || "-",
+            )}</div>`
+          : ""
+      }
+      ${
+        st.includes("EXPIRED")
+          ? `<div class="text-error font-bold"><b>Reason:</b> ${esc(
+              row.expired_reason || "Driver tidak hadir",
+            )}</div>`
+          : ""
+      }
     </div>
 
     <div class="mt-4 flex flex-wrap gap-2">
@@ -5986,8 +6779,8 @@ function pageChecker() {
     section === "unloading"
       ? "Unloading"
       : section === "selesai"
-        ? "Selesai Unloading"
-        : "Memanggil";
+      ? "Selesai Unloading"
+      : "Memanggil";
 
   return `<div class="grid grid-cols-1 xl:grid-cols-12 gap-gutter">
     <div class="xl:col-span-8 glass-card rounded-xl p-4 sm:p-6">
@@ -6013,11 +6806,18 @@ function pageChecker() {
 
       <div class="flex items-center justify-between mb-3">
         <div class="font-bold text-on-surface">${esc(sectionTitle)}</div>
-        <div class="text-xs text-on-surface-variant">${num(rows.length)} ticket</div>
+        <div class="text-xs text-on-surface-variant">${num(
+          rows.length,
+        )} ticket</div>
       </div>
 
       <div id="checker-card-list" class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[68vh] overflow-y-auto pr-1">
-        ${rows.map((row, i) => checkerTicketCard(row, i)).join("") || `<div class="md:col-span-2 rounded-xl border border-dashed border-outline-variant p-8 text-center text-on-surface-variant">Belum ada data di section ${esc(sectionTitle)}.</div>`}
+        ${
+          rows.map((row, i) => checkerTicketCard(row, i)).join("") ||
+          `<div class="md:col-span-2 rounded-xl border border-dashed border-outline-variant p-8 text-center text-on-surface-variant">Belum ada data di section ${esc(
+            sectionTitle,
+          )}.</div>`
+        }
       </div>
     </div>
 
@@ -6031,9 +6831,30 @@ function pageChecker() {
         <input type="hidden" name="status" value="CALLED" />
         <input type="hidden" name="unload_sla" value="ON PROCESS" />
         <div class="grid grid-cols-1 gap-4">
-          ${textInput("vendor_name", "Vendor Name", "Pilih dari card", "", "", "required readonly")}
-          ${textInput("fleet_type", "Fleet Type", "Pilih dari card", "", "", "required readonly")}
-          ${textInput("plat_number", "Plat Number", "Pilih dari card", "", "", 'required readonly onblur="validatePlateInput(this)"')}
+          ${textInput(
+            "vendor_name",
+            "Vendor Name",
+            "Pilih dari card",
+            "",
+            "",
+            "required readonly",
+          )}
+          ${textInput(
+            "fleet_type",
+            "Fleet Type",
+            "Pilih dari card",
+            "",
+            "",
+            "required readonly",
+          )}
+          ${textInput(
+            "plat_number",
+            "Plat Number",
+            "Pilih dari card",
+            "",
+            "",
+            'required readonly onblur="validatePlateInput(this)"',
+          )}
           ${checkerGatePicker()}
           <label class="flex flex-col gap-2">
             <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Status Berikutnya</span>
@@ -6084,8 +6905,8 @@ function callLimitBadge(row = {}) {
     count >= 3
       ? "bg-error/10 text-error border-error/30"
       : count > 0
-        ? "bg-warning/10 text-warning border-warning/30"
-        : "bg-surface-container-high text-on-surface-variant border-outline-variant";
+      ? "bg-warning/10 text-warning border-warning/30"
+      : "bg-surface-container-high text-on-surface-variant border-outline-variant";
   return `<span class="inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-extrabold ${cls}">${count}/3 CALL</span>`;
 }
 
@@ -6100,7 +6921,9 @@ function showDriverNoShowSuggestionFromKey(encodedKey = "", btn = null) {
   }
   const callCount = getDriverCallCount(row);
   const message = [
-    `Driver ${row.driver_name || "-"} / ${row.plat_number || "-"} sudah dipanggil ${callCount}x.`,
+    `Driver ${row.driver_name || "-"} / ${
+      row.plat_number || "-"
+    } sudah dipanggil ${callCount}x.`,
     "",
     "Saran operasional:",
     "Jika driver tidak datang setelah 3x panggilan, antrian ini dibuat EXPIRED.",
@@ -6131,18 +6954,18 @@ function checkerTicketCard(row = {}, i = 0) {
   const primaryLabel = terminal
     ? "Read Only"
     : isUnloading
-      ? "Selesai Unloading"
-      : isCalled
-        ? "Mulai Unloading"
-        : "Panggil Gate";
+    ? "Selesai Unloading"
+    : isCalled
+    ? "Mulai Unloading"
+    : "Panggil Gate";
 
   const primaryIcon = terminal
     ? "visibility"
     : isUnloading
-      ? "task_alt"
-      : isCalled
-        ? "warehouse"
-        : "campaign";
+    ? "task_alt"
+    : isCalled
+    ? "warehouse"
+    : "campaign";
 
   const primaryButton = terminal
     ? ""
@@ -6154,24 +6977,26 @@ function checkerTicketCard(row = {}, i = 0) {
     terminal || isUnloading
       ? ""
       : isCalled
-        ? callCount >= 3
-          ? `<button type="button" onclick="showDriverNoShowSuggestionFromKey('${key}', this)" class="bg-error/15 border border-error/30 text-error px-3 py-2 rounded-lg font-bold text-xs inline-flex items-center justify-center gap-1" title="Sudah 3x dipanggil">
+      ? callCount >= 3
+        ? `<button type="button" onclick="showDriverNoShowSuggestionFromKey('${key}', this)" class="bg-error/15 border border-error/30 text-error px-3 py-2 rounded-lg font-bold text-xs inline-flex items-center justify-center gap-1" title="Sudah 3x dipanggil">
             <span class="material-symbols-outlined text-base">warning</span>3/3
           </button>`
-          : `<button type="button" onclick="recallDriverFromKey('${key}', this)" class="bg-warning/15 border border-warning/30 text-warning px-3 py-2 rounded-lg font-bold text-xs inline-flex items-center justify-center gap-1" title="Panggil ulang maksimal 3x">
+        : `<button type="button" onclick="recallDriverFromKey('${key}', this)" class="bg-warning/15 border border-warning/30 text-warning px-3 py-2 rounded-lg font-bold text-xs inline-flex items-center justify-center gap-1" title="Panggil ulang maksimal 3x">
             <span class="material-symbols-outlined text-base">campaign</span>Panggil Ulang ${callCount}/3
           </button>`
-        : "";
+      : "";
 
   const waButton =
     terminal || isUnloading
       ? ""
       : callCount >= 3
-        ? `<button type="button" onclick="showDriverNoShowSuggestionFromKey('${key}', this)" class="bg-outline-variant text-on-surface-variant px-3 py-2 rounded-lg font-bold text-xs inline-flex items-center justify-center gap-1 opacity-70" title="Limit 3x tercapai">
+      ? `<button type="button" onclick="showDriverNoShowSuggestionFromKey('${key}', this)" class="bg-outline-variant text-on-surface-variant px-3 py-2 rounded-lg font-bold text-xs inline-flex items-center justify-center gap-1 opacity-70" title="Limit 3x tercapai">
           <span class="material-symbols-outlined text-base">chat</span>WA Limit
         </button>`
-        : `<button type="button" onclick="sendDriverWhatsAppFromKey('${key}', this)" class="bg-success/15 border border-success/30 text-success px-3 py-2 rounded-lg font-bold text-xs inline-flex items-center justify-center gap-1">
-          <span class="material-symbols-outlined text-base">chat</span>WA${callCount ? ` ${callCount}x` : ""}
+      : `<button type="button" onclick="sendDriverWhatsAppFromKey('${key}', this)" class="bg-success/15 border border-success/30 text-success px-3 py-2 rounded-lg font-bold text-xs inline-flex items-center justify-center gap-1">
+          <span class="material-symbols-outlined text-base">chat</span>WA${
+            callCount ? ` ${callCount}x` : ""
+          }
         </button>`;
 
   const failButton =
@@ -6187,13 +7012,19 @@ function checkerTicketCard(row = {}, i = 0) {
     class="checker-card rounded-2xl border border-outline-variant/40 bg-surface-container/45 p-4 shadow-sm"
     data-status="${esc(st)}"
     data-vendor="${esc(String(row.vendor_name || "").toLowerCase())}"
-    data-queue="${esc(String(row.queue_no || row.original_queue_no || "").toLowerCase())}"
+    data-queue="${esc(
+      String(row.queue_no || row.original_queue_no || "").toLowerCase(),
+    )}"
     data-po="${esc(String(row.po_number || "").toLowerCase())}"
     data-plate="${esc(String(row.plat_number || "").toLowerCase())}">
     <div class="flex items-start justify-between gap-3">
       <div class="min-w-0">
-        <div class="font-queue-id text-primary text-2xl">${esc(row.queue_no || "-")}</div>
-        <div class="text-[11px] uppercase text-on-surface-variant font-bold mt-1 truncate">${esc(row.vendor_name || "-")}</div>
+        <div class="font-queue-id text-primary text-2xl">${esc(
+          row.queue_no || "-",
+        )}</div>
+        <div class="text-[11px] uppercase text-on-surface-variant font-bold mt-1 truncate">${esc(
+          row.vendor_name || "-",
+        )}</div>
       </div>
       <div class="flex flex-col items-end gap-1">
         ${checkerStatusPill(st)}
@@ -6204,7 +7035,9 @@ function checkerTicketCard(row = {}, i = 0) {
     <div class="grid grid-cols-2 gap-2 mt-4 text-xs">
       <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3">
         <div class="text-[10px] uppercase text-on-surface-variant font-bold">Plat</div>
-        <div class="font-queue-id text-sm mt-1">${esc(row.plat_number || "-")}</div>
+        <div class="font-queue-id text-sm mt-1">${esc(
+          row.plat_number || "-",
+        )}</div>
       </div>
       <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3">
         <div class="text-[10px] uppercase text-on-surface-variant font-bold">Gate</div>
@@ -6212,20 +7045,42 @@ function checkerTicketCard(row = {}, i = 0) {
       </div>
       <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3">
         <div class="text-[10px] uppercase text-on-surface-variant font-bold">Driver</div>
-        <div class="font-bold truncate mt-1">${esc(row.driver_name || "-")}</div>
+        <div class="font-bold truncate mt-1">${esc(
+          row.driver_name || "-",
+        )}</div>
       </div>
       <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3">
         <div class="text-[10px] uppercase text-on-surface-variant font-bold">Menunggu</div>
-        <div class="font-queue-id text-tertiary mt-1 live-waiting-cell" data-live-waiting="1" data-created="${esc(row.created_at || "")}" data-completed="${esc(row.completed_at || "")}" data-status="${esc(st)}">${esc(waitText)}</div>
+        <div class="font-queue-id text-tertiary mt-1 live-waiting-cell" data-live-waiting="1" data-created="${esc(
+          row.created_at || "",
+        )}" data-completed="${esc(row.completed_at || "")}" data-status="${esc(
+    st,
+  )}">${esc(waitText)}</div>
       </div>
     </div>
 
     <div class="mt-3 text-xs text-on-surface-variant">
       <div><b>Fleet:</b> ${esc(row.fleet_type || "-")}</div>
       <div class="truncate"><b>PO:</b> ${esc(row.po_number || "-")}</div>
-      ${isUnloading ? `<div><b>Estimasi selesai:</b> ${esc(getEstimatedFinishedAt(row) || row.sla_finished_at || "-")}</div>` : ""}
-      ${callCount >= 3 && isCalled ? `<div class="mt-2 rounded-lg border border-error/30 bg-error/10 p-2 text-error font-bold">Sudah 3x dipanggil. Jika driver tidak datang, arahkan buat nomor antrian baru.</div>` : ""}
-      ${st.includes("EXPIRED") ? `<div class="text-error font-bold"><b>Reason:</b> ${esc(row.expired_reason || "Driver tidak hadir")}</div>` : ""}
+      ${
+        isUnloading
+          ? `<div><b>Estimasi selesai:</b> ${esc(
+              getEstimatedFinishedAt(row) || row.sla_finished_at || "-",
+            )}</div>`
+          : ""
+      }
+      ${
+        callCount >= 3 && isCalled
+          ? `<div class="mt-2 rounded-lg border border-error/30 bg-error/10 p-2 text-error font-bold">Sudah 3x dipanggil. Jika driver tidak datang, arahkan buat nomor antrian baru.</div>`
+          : ""
+      }
+      ${
+        st.includes("EXPIRED")
+          ? `<div class="text-error font-bold"><b>Reason:</b> ${esc(
+              row.expired_reason || "Driver tidak hadir",
+            )}</div>`
+          : ""
+      }
     </div>
 
     <div class="mt-4 flex flex-wrap gap-2">
@@ -6245,7 +7100,9 @@ function vehicleFleetOptionsHtml(selected = "") {
   return getFleetTypeOptions()
     .map((type) => {
       const value = normalizeFleetType(type);
-      return `<option value="${esc(value)}" ${value === safeSelected ? "selected" : ""}>${esc(getFleetDisplayLabel(value))}</option>`;
+      return `<option value="${esc(value)}" ${
+        value === safeSelected ? "selected" : ""
+      }>${esc(getFleetDisplayLabel(value))}</option>`;
     })
     .join("");
 }
@@ -6268,8 +7125,12 @@ function vehicleRowInput(vehicle = {}, index = 0) {
 
     <div class="grid grid-cols-1 xl:grid-cols-[180px_1fr] gap-4 items-start">
       <div class="rounded-xl border border-outline-variant bg-surface-container-high/60 p-3 flex flex-col items-center justify-center min-h-[150px]">
-        <img data-vehicle-fleet-img="1" src="${esc(img)}" alt="${esc(label)}" class="w-full h-[92px] object-contain" onerror="this.onerror=null;this.src=FLEET_IMAGE_DATA.default;" />
-        <div data-vehicle-fleet-label="1" class="mt-2 text-primary font-extrabold text-center">${esc(label)}</div>
+        <img data-vehicle-fleet-img="1" src="${esc(img)}" alt="${esc(
+    label,
+  )}" class="w-full h-[92px] object-contain" onerror="this.onerror=null;this.src=FLEET_IMAGE_DATA.default;" />
+        <div data-vehicle-fleet-label="1" class="mt-2 text-primary font-extrabold text-center">${esc(
+          label,
+        )}</div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -6283,29 +7144,65 @@ function vehicleRowInput(vehicle = {}, index = 0) {
         <div class="md:col-span-2 flex flex-col gap-2">
           <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Plat Number Mobil Ini</span>
           <div class="grid grid-cols-[72px_120px_92px] gap-2 items-center max-w-[330px]">
-            <input data-vehicle-plate-part="prefix" class="form-input text-center uppercase" maxlength="2" placeholder="B" value="${esc(plate.prefix)}" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'').slice(0,2); syncVehicleMultiInput();" />
-            <input data-vehicle-plate-part="number" class="form-input text-center" maxlength="4" inputmode="numeric" placeholder="1234" value="${esc(plate.number)}" oninput="this.value=this.value.replace(/\\D/g,'').slice(0,4); syncVehicleMultiInput();" />
-            <input data-vehicle-plate-part="suffix" class="form-input text-center uppercase" maxlength="3" placeholder="XYZ" value="${esc(plate.suffix)}" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'').slice(0,3); syncVehicleMultiInput();" />
+            <input data-vehicle-plate-part="prefix" class="form-input text-center uppercase" maxlength="2" placeholder="B" value="${esc(
+              plate.prefix,
+            )}" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'').slice(0,2); syncVehicleMultiInput();" />
+            <input data-vehicle-plate-part="number" class="form-input text-center" maxlength="4" inputmode="numeric" placeholder="1234" value="${esc(
+              plate.number,
+            )}" oninput="this.value=this.value.replace(/\\D/g,'').slice(0,4); syncVehicleMultiInput();" />
+            <input data-vehicle-plate-part="suffix" class="form-input text-center uppercase" maxlength="3" placeholder="XYZ" value="${esc(
+              plate.suffix,
+            )}" oninput="this.value=this.value.toUpperCase().replace(/[^A-Z]/g,'').slice(0,3); syncVehicleMultiInput();" />
           </div>
           <div class="text-[11px] text-on-surface-variant">Contoh: <b>B</b> | <b>1234</b> | <b>XYZ</b>. Fleet Type di atas hanya berlaku untuk plat ini.</div>
         </div>
 
         <label class="flex flex-col gap-2">
           <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Driver Mobil Ini</span>
-          <input data-vehicle-field="driver_name" class="form-input" placeholder="Nama driver" value="${esc(vehicle.driver_name || "")}" required oninput="syncVehicleMultiInput()" />
+          <input data-vehicle-field="driver_name" class="form-input" placeholder="Nama driver" value="${esc(
+            vehicle.driver_name || "",
+          )}" required oninput="syncVehicleMultiInput()" />
         </label>
         <label class="flex flex-col gap-2">
           <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">WhatsApp Mobil Ini</span>
-          <input data-vehicle-field="phone_number" class="form-input" placeholder="0812xxxx" inputmode="tel" value="${esc(vehicle.phone_number || "")}" required onblur="normalizeVehiclePhoneInput(this)" oninput="syncVehicleMultiInput()" />
+          <input data-vehicle-field="phone_number" class="form-input" placeholder="0812xxxx" inputmode="tel" value="${esc(
+            vehicle.phone_number || "",
+          )}" required onblur="normalizeVehiclePhoneInput(this)" oninput="syncVehicleMultiInput()" />
         </label>
         <label class="flex flex-col gap-2 md:col-span-2">
           <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">6 Digit No KTP Driver</span>
-          <input data-vehicle-field="ktp_6_digit" class="form-input" placeholder="Optional. Contoh: 123456" maxlength="6" inputmode="numeric" value="${esc(vehicle.ktp_6_digit || "")}" oninput="this.value=this.value.replace(/\\D/g,'').slice(0,6); syncVehicleMultiInput();" />
+          <input data-vehicle-field="ktp_6_digit" class="form-input" placeholder="Optional. Contoh: 123456" maxlength="6" inputmode="numeric" value="${esc(
+            vehicle.ktp_6_digit || "",
+          )}" oninput="this.value=this.value.replace(/\\D/g,'').slice(0,6); syncVehicleMultiInput();" />
         </label>
         <label class="flex flex-col gap-2">
-          <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Jumlah TKBM</span>
-          <input data-vehicle-field="tkbm_count" type="number" min="0" max="2147483647" step="1" inputmode="numeric" class="form-input" value="${esc(vehicle.tkbm_count ?? 0)}" placeholder="Contoh: 3" required oninput="syncVehicleMultiInput();" />
-          <span class="text-[11px] text-on-surface-variant">Jumlah orang yang dibawa driver untuk mobil ini. Isi 0 jika tidak membawa TKBM.</span>
+          <span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Apakah Memakai TKBM?</span>
+          <select
+            data-vehicle-field="tkbm_count"
+            class="form-input"
+            required
+            onchange="syncVehicleMultiInput();"
+          >
+            <option value="NO" ${
+              !["YES", "1"].includes(
+                String(vehicle.tkbm_count ?? "NO")
+                  .trim()
+                  .toUpperCase(),
+              )
+                ? "selected"
+                : ""
+            }>NO</option>
+            <option value="YES" ${
+              ["YES", "1"].includes(
+                String(vehicle.tkbm_count ?? "NO")
+                  .trim()
+                  .toUpperCase(),
+              )
+                ? "selected"
+                : ""
+            }>YES</option>
+          </select>
+          <span class="text-[11px] text-on-surface-variant">Pilih YES jika kendaraan menggunakan TKBM, atau NO jika tidak.</span>
         </label>
       </div>
     </div>
@@ -6323,7 +7220,9 @@ function vehicleMultiInput() {
         <span class="material-symbols-outlined text-sm">add</span>Tambah Kendaraan
       </button>
     </div>
-    <input type="hidden" id="fleet-type-hidden" name="fleet_type" value="${esc(getFleetDefaultType())}" />
+    <input type="hidden" id="fleet-type-hidden" name="fleet_type" value="${esc(
+      getFleetDefaultType(),
+    )}" />
     <input type="hidden" id="plat-number-hidden" name="plat_number" value="" />
     <input type="hidden" id="driver-name-hidden" name="driver_name" value="" />
     <input type="hidden" id="phone-number-hidden" name="phone_number" value="" />
@@ -6413,9 +7312,15 @@ function collectVehicleRows() {
         row.querySelector('[data-vehicle-plate-part="suffix"]')?.value || "";
       const rawPhone =
         row.querySelector('[data-vehicle-field="phone_number"]')?.value || "";
-      const tkbmResult = window.InboundTicketContracts?.normalizeTkbm(
-        row.querySelector('[data-vehicle-field="tkbm_count"]')?.value || "",
-      ) || { valid: false, count: 0 };
+      const tkbmChoice = String(
+        row.querySelector('[data-vehicle-field="tkbm_count"]')?.value || "NO",
+      )
+        .trim()
+        .toUpperCase();
+      const tkbmResult = {
+        valid: ["YES", "NO"].includes(tkbmChoice),
+        count: tkbmChoice === "YES" ? 1 : 0,
+      };
       const normalizedPhones =
         typeof parseAndNormalizePhones === "function"
           ? parseAndNormalizePhones(rawPhone)
@@ -6519,9 +7424,13 @@ function validateVehicleRows() {
     const driverOk = !!String(driverEl?.value || "").trim();
     const phoneOk = !!phone;
     const ktpOk = !ktp || /^\d{6}$/.test(ktp);
-    const tkbmResult = window.InboundTicketContracts?.normalizeTkbm(
-      tkbmEl?.value || "",
-    ) || { valid: false };
+    const tkbmChoice = String(tkbmEl?.value || "NO")
+      .trim()
+      .toUpperCase();
+    const tkbmResult = {
+      valid: ["YES", "NO"].includes(tkbmChoice),
+      count: tkbmChoice === "YES" ? 1 : 0,
+    };
 
     if (plate) plateSet.add(plate);
     if (fleetEl) fleetEl.classList.toggle("invalid", !fleetOk);
@@ -6533,7 +7442,15 @@ function validateVehicleRows() {
     if (ktpEl) ktpEl.classList.toggle("invalid", !ktpOk);
     if (tkbmEl) tkbmEl.classList.toggle("invalid", !tkbmResult.valid);
 
-    if (!fleetOk || !plateOk || !driverOk || !phoneOk || !ktpOk || !tkbmResult.valid) ok = false;
+    if (
+      !fleetOk ||
+      !plateOk ||
+      !driverOk ||
+      !phoneOk ||
+      !ktpOk ||
+      !tkbmResult.valid
+    )
+      ok = false;
   });
 
   if (!vehicles.length) ok = false;
@@ -6565,14 +7482,32 @@ function pageDaftar() {
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           ${vendorCustomSelectInput(lookup?.summary?.vendor_name || "")}
           ${poMultiSelectInput(lookup?.summary?.po_number || "")}
-          ${selectInput("ticket_type", "Tipe Tiket", ["REG", "VIP", "DROP-OFF"], "REG", 'required onchange="handleTicketTypeChange()"')}
-          ${selectInput("slot", "Slot", buildSlotOptions(lookup?.summary?.slot), lookup?.summary?.slot || "3", "required")}
+          ${selectInput(
+            "ticket_type",
+            "Tipe Tiket",
+            ["REG", "VIP", "DROP-OFF"],
+            "REG",
+            'required onchange="handleTicketTypeChange()"',
+          )}
+          ${selectInput(
+            "slot",
+            "Slot",
+            buildSlotOptions(lookup?.summary?.slot),
+            lookup?.summary?.slot || "3",
+            "required",
+          )}
           ${vehicleMultiInput()}
-          <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Register Time</span><input name="register_time" class="form-input opacity-80" value="${esc(nowText)}" readonly /></label>
+          <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Register Time</span><input name="register_time" class="form-input opacity-80" value="${esc(
+            nowText,
+          )}" readonly /></label>
           <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Status Security</span><input type="hidden" name="status" value="WAITING" /><div class="bg-tertiary/15 border border-tertiary/30 rounded-lg px-4 py-3 text-tertiary font-bold">WAITING</div></label>
           <label class="flex flex-col gap-2 md:col-span-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Auto Summary</span><div class="grid grid-cols-2 gap-2">
-            <div class="bg-surface-container/60 border border-outline-variant rounded-lg p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Total PO Qty</div><div id="security-total-qty" class="font-queue-id text-primary">${num(lookup?.summary?.total_po_qty || 0)}</div></div>
-            <div class="bg-surface-container/60 border border-outline-variant rounded-lg p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Count SKU</div><div id="security-count-sku" class="font-queue-id text-primary">${num(lookup?.summary?.count_po_sku || 0)}</div></div>
+            <div class="bg-surface-container/60 border border-outline-variant rounded-lg p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Total PO Qty</div><div id="security-total-qty" class="font-queue-id text-primary">${num(
+              lookup?.summary?.total_po_qty || 0,
+            )}</div></div>
+            <div class="bg-surface-container/60 border border-outline-variant rounded-lg p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Count SKU</div><div id="security-count-sku" class="font-queue-id text-primary">${num(
+              lookup?.summary?.count_po_sku || 0,
+            )}</div></div>
           </div></label>
         </div>
         ${renderPoLookupSummary(lookup)}
@@ -6586,7 +7521,9 @@ function pageDaftar() {
     </div>
     <div class="glass-card rounded-xl p-6 flex flex-col justify-center items-center text-center">
       <span class="text-on-surface-variant uppercase font-label-sm">Nomor Terakhir</span>
-      <div id="new-queue-number" class="font-queue-id text-[64px] md:text-[78px] leading-none text-primary my-6">${esc(state.lastCalled.queue_no || "REG 3-0")}</div>
+      <div id="new-queue-number" class="font-queue-id text-[64px] md:text-[78px] leading-none text-primary my-6">${esc(
+        state.lastCalled.queue_no || "REG 3-0",
+      )}</div>
       <p class="text-on-surface-variant">Format: REG 3-12 = reguler, VIP 3-12 = prioritas, dan DROP-OFF untuk kendaraan tanpa PO.</p>
     </div>
   </div>`;
@@ -6933,7 +7870,9 @@ function securityFormMatchesRowsForPrint(rows = []) {
   function kpiHtml(label, value, note, icon, cls = "text-primary") {
     return `<div class="spv-card spv-kpi">
       <div class="flex items-center justify-between gap-3">
-        <span class="text-[11px] uppercase tracking-wider font-bold text-on-surface-variant">${esc(label)}</span>
+        <span class="text-[11px] uppercase tracking-wider font-bold text-on-surface-variant">${esc(
+          label,
+        )}</span>
         <span class="material-symbols-outlined ${cls}">${icon}</span>
       </div>
       <div class="spv-kpi-value ${cls}">${esc(value)}</div>
@@ -7071,21 +8010,68 @@ function securityFormMatchesRowsForPrint(rows = []) {
           ]
             .map(
               ([v, t]) =>
-                `<button onclick="setSpvRange('${v}')" class="thin-tab rounded-full px-4 py-2 text-xs ${String(range) === v ? "active" : ""}">${t}</button>`,
+                `<button onclick="setSpvRange('${v}')" class="thin-tab rounded-full px-4 py-2 text-xs ${
+                  String(range) === v ? "active" : ""
+                }">${t}</button>`,
             )
             .join("")}
         </div>
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8 gap-3">
-        ${kpiHtml("Total Input", num(s.total), "Jumlah ticket", "confirmation_number")}
-        ${kpiHtml("Waiting", num(s.waiting), "Masih menunggu", "schedule", "text-warning")}
-        ${kpiHtml("Called", num(s.called), "Sudah dipanggil", "campaign", "text-primary")}
-        ${kpiHtml("Unloading", num(s.unloading), "Sedang bongkar", "local_shipping", "text-tertiary")}
-        ${kpiHtml("Completed", num(s.completed), "Selesai bongkar", "check_circle", "text-success")}
-        ${kpiHtml("Expired", num(s.expired), "Tidak hadir", "timer_off", "text-error")}
-        ${kpiHtml("Gate Aktif", `${num(s.activeGates)} / 10`, "Gate terpakai", "door_open")}
-        ${kpiHtml("Avg Waiting", formatMinutesCompact(Math.round(s.avgWaiting)), "Rata-rata waktu tunggu", "hourglass_top")}
+        ${kpiHtml(
+          "Total Input",
+          num(s.total),
+          "Jumlah ticket",
+          "confirmation_number",
+        )}
+        ${kpiHtml(
+          "Waiting",
+          num(s.waiting),
+          "Masih menunggu",
+          "schedule",
+          "text-warning",
+        )}
+        ${kpiHtml(
+          "Called",
+          num(s.called),
+          "Sudah dipanggil",
+          "campaign",
+          "text-primary",
+        )}
+        ${kpiHtml(
+          "Unloading",
+          num(s.unloading),
+          "Sedang bongkar",
+          "local_shipping",
+          "text-tertiary",
+        )}
+        ${kpiHtml(
+          "Completed",
+          num(s.completed),
+          "Selesai bongkar",
+          "check_circle",
+          "text-success",
+        )}
+        ${kpiHtml(
+          "Expired",
+          num(s.expired),
+          "Tidak hadir",
+          "timer_off",
+          "text-error",
+        )}
+        ${kpiHtml(
+          "Gate Aktif",
+          `${num(s.activeGates)} / 10`,
+          "Gate terpakai",
+          "door_open",
+        )}
+        ${kpiHtml(
+          "Avg Waiting",
+          formatMinutesCompact(Math.round(s.avgWaiting)),
+          "Rata-rata waktu tunggu",
+          "hourglass_top",
+        )}
       </div>
 
       <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -7098,8 +8084,15 @@ function securityFormMatchesRowsForPrint(rows = []) {
               .map(
                 (g) => `<div class="spv-bar-row">
                   <div class="font-bold text-sm">${esc(g.gate)}</div>
-                  <div class="spv-bar-track"><div class="spv-bar-fill" style="width:${Math.max(2, (g.unloadMinutes / maxGate) * 100)}%"></div></div>
-                  <div class="text-right text-xs font-queue-id">${formatMinutesCompact(Math.round(g.unloadMinutes))}<br><span class="text-on-surface-variant">${num(g.tickets)} ticket</span></div>
+                  <div class="spv-bar-track"><div class="spv-bar-fill" style="width:${Math.max(
+                    2,
+                    (g.unloadMinutes / maxGate) * 100,
+                  )}%"></div></div>
+                  <div class="text-right text-xs font-queue-id">${formatMinutesCompact(
+                    Math.round(g.unloadMinutes),
+                  )}<br><span class="text-on-surface-variant">${num(
+                  g.tickets,
+                )} ticket</span></div>
                 </div>`,
               )
               .join("")}
@@ -7141,8 +8134,14 @@ function securityFormMatchesRowsForPrint(rows = []) {
                         <td>${num(v.tickets)}</td>
                         <td>${num(v.completed)}</td>
                         <td>${formatMinutesCompact(Math.round(v.avgWait))}</td>
-                        <td>${formatMinutesCompact(Math.round(v.avgUnload))}</td>
-                        <td class="${v.slaMissPct > 0 ? "text-error font-bold" : "text-success"}">${v.slaMissPct.toFixed(1)}%</td>
+                        <td>${formatMinutesCompact(
+                          Math.round(v.avgUnload),
+                        )}</td>
+                        <td class="${
+                          v.slaMissPct > 0
+                            ? "text-error font-bold"
+                            : "text-success"
+                        }">${v.slaMissPct.toFixed(1)}%</td>
                       </tr>`,
                       )
                       .join("")
@@ -7160,11 +8159,21 @@ function securityFormMatchesRowsForPrint(rows = []) {
             acts.length
               ? acts
                   .map(
-                    (
-                      a,
-                    ) => `<button onclick="openTicketDetailByIdentity('${esc(a.ticket_id || "")}','${esc(a.queue_no || "")}','${esc(a.plate || "")}')" class="text-left rounded-xl border border-outline-variant/50 bg-surface-container/35 p-3 hover:bg-surface-container-high">
-                    <div class="flex flex-wrap items-center justify-between gap-2"><b>${esc(a.type)} · ${esc(a.queue_no || "-")}</b><span class="text-xs text-on-surface-variant">${esc(a.time)}</span></div>
-                    <div class="text-xs text-on-surface-variant mt-1">${esc(a.plate || "-")} · ${esc(a.vendor || "-")}</div>
+                    (a) => `<button onclick="openTicketDetailByIdentity('${esc(
+                      a.ticket_id || "",
+                    )}','${esc(a.queue_no || "")}','${esc(
+                      a.plate || "",
+                    )}')" class="text-left rounded-xl border border-outline-variant/50 bg-surface-container/35 p-3 hover:bg-surface-container-high">
+                    <div class="flex flex-wrap items-center justify-between gap-2"><b>${esc(
+                      a.type,
+                    )} · ${esc(
+                      a.queue_no || "-",
+                    )}</b><span class="text-xs text-on-surface-variant">${esc(
+                      a.time,
+                    )}</span></div>
+                    <div class="text-xs text-on-surface-variant mt-1">${esc(
+                      a.plate || "-",
+                    )} · ${esc(a.vendor || "-")}</div>
                   </button>`,
                   )
                   .join("")
@@ -7234,10 +8243,24 @@ function securityFormMatchesRowsForPrint(rows = []) {
           .map(
             (
               r,
-            ) => `<button class="global-search-item" onclick="openTicketDetailByIdentity('${esc(r.ticket_id || "")}','${esc(r.queue_no || "")}','${esc(r.plat_number || "")}');document.getElementById('global-ticket-search-results')?.classList.add('hidden')">
-              <div class="flex items-center justify-between gap-3"><b>${esc(r.queue_no || "-")}</b><span class="text-xs font-bold text-primary">${esc(statusOf(r))}</span></div>
-              <div class="text-xs text-on-surface-variant mt-1">${esc(r.plat_number || "-")} · ${esc(r.vendor_name || "-")} · ${esc(r.driver_name || "-")}</div>
-              <div class="text-[11px] text-on-surface-variant break-all">${esc(r.po_number || "-")}</div>
+            ) => `<button class="global-search-item" onclick="openTicketDetailByIdentity('${esc(
+              r.ticket_id || "",
+            )}','${esc(r.queue_no || "")}','${esc(
+              r.plat_number || "",
+            )}');document.getElementById('global-ticket-search-results')?.classList.add('hidden')">
+              <div class="flex items-center justify-between gap-3"><b>${esc(
+                r.queue_no || "-",
+              )}</b><span class="text-xs font-bold text-primary">${esc(
+              statusOf(r),
+            )}</span></div>
+              <div class="text-xs text-on-surface-variant mt-1">${esc(
+                r.plat_number || "-",
+              )} · ${esc(r.vendor_name || "-")} · ${esc(
+              r.driver_name || "-",
+            )}</div>
+              <div class="text-[11px] text-on-surface-variant break-all">${esc(
+                r.po_number || "-",
+              )}</div>
             </button>`,
           )
           .join("")
@@ -7310,7 +8333,9 @@ function securityFormMatchesRowsForPrint(rows = []) {
     };
     modal.innerHTML = `<div class="ticket-modal">
       <div class="sticky top-0 z-10 flex items-center justify-between gap-3 p-5 border-b border-outline-variant bg-surface-container-lowest">
-        <div><div class="text-xs uppercase tracking-wider text-on-surface-variant">Detail Ticket</div><h2 class="font-queue-id text-3xl text-primary">${esc(r.queue_no || "-")}</h2></div>
+        <div><div class="text-xs uppercase tracking-wider text-on-surface-variant">Detail Ticket</div><h2 class="font-queue-id text-3xl text-primary">${esc(
+          r.queue_no || "-",
+        )}</h2></div>
         <button onclick="document.getElementById('ticket-detail-modal')?.remove()" class="thin-tab h-10 w-10 rounded-full flex items-center justify-center"><span class="material-symbols-outlined">close</span></button>
       </div>
       <div class="p-5 space-y-5">
@@ -7327,7 +8352,11 @@ function securityFormMatchesRowsForPrint(rows = []) {
           ]
             .map(
               ([a, b]) =>
-                `<div class="rounded-xl border border-outline-variant/50 bg-surface-container/40 p-3"><div class="text-[10px] uppercase font-bold text-on-surface-variant">${esc(a)}</div><div class="font-bold mt-1 break-words">${esc(b)}</div></div>`,
+                `<div class="rounded-xl border border-outline-variant/50 bg-surface-container/40 p-3"><div class="text-[10px] uppercase font-bold text-on-surface-variant">${esc(
+                  a,
+                )}</div><div class="font-bold mt-1 break-words">${esc(
+                  b,
+                )}</div></div>`,
             )
             .join("")}
         </div>
@@ -7335,21 +8364,42 @@ function securityFormMatchesRowsForPrint(rows = []) {
           <div class="text-xs uppercase font-bold text-on-surface-variant mb-2">PO</div>
           <div class="font-bold break-all">${esc(r.po_number || "-")}</div>
           <div class="grid grid-cols-2 gap-3 mt-3">
-            <div><span class="text-xs text-on-surface-variant">Total Qty</span><div class="font-queue-id text-xl">${num(r.total_po_qty || 0)}</div></div>
-            <div><span class="text-xs text-on-surface-variant">Count SKU</span><div class="font-queue-id text-xl">${num(r.count_po_sku || 0)}</div></div>
+            <div><span class="text-xs text-on-surface-variant">Total Qty</span><div class="font-queue-id text-xl">${num(
+              r.total_po_qty || 0,
+            )}</div></div>
+            <div><span class="text-xs text-on-surface-variant">Count SKU</span><div class="font-queue-id text-xl">${num(
+              r.count_po_sku || 0,
+            )}</div></div>
           </div>
         </div>
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div class="spv-card p-4"><h3 class="font-bold text-lg mb-4">Activity Log</h3><div class="ticket-timeline">${timelineForRow(r)}</div></div>
+          <div class="spv-card p-4"><h3 class="font-bold text-lg mb-4">Activity Log</h3><div class="ticket-timeline">${timelineForRow(
+            r,
+          )}</div></div>
           <div class="spv-card p-4"><h3 class="font-bold text-lg mb-4">WA & SLA</h3>
             <div class="grid gap-3 text-sm">
-              <div><span class="text-on-surface-variant">WA Status</span><div class="font-bold">${esc(r.wa_call_status || "-")}</div></div>
-              <div><span class="text-on-surface-variant">WA Sent</span><div class="font-bold">${esc(r.wa_call_sent_at || "-")}</div></div>
-              <div><span class="text-on-surface-variant">WA Error</span><div class="font-bold text-error break-words">${esc(r.wa_call_error || "-")}</div></div>
-              <div><span class="text-on-surface-variant">Call Count</span><div class="font-bold">${num(r.call_count || 0)} / 3</div></div>
-              <div><span class="text-on-surface-variant">Waiting</span><div class="font-bold">${esc(r.driver_waiting_duration || liveWaitingText(r.register_time || r.created_at, r.called_at))}</div></div>
-              <div><span class="text-on-surface-variant">Unloading</span><div class="font-bold">${esc(r.unloading_duration || "-")}</div></div>
-              <div><span class="text-on-surface-variant">SLA</span><div class="font-bold">${esc(r.sla_status || r.unload_sla || "-")}</div></div>
+              <div><span class="text-on-surface-variant">WA Status</span><div class="font-bold">${esc(
+                r.wa_call_status || "-",
+              )}</div></div>
+              <div><span class="text-on-surface-variant">WA Sent</span><div class="font-bold">${esc(
+                r.wa_call_sent_at || "-",
+              )}</div></div>
+              <div><span class="text-on-surface-variant">WA Error</span><div class="font-bold text-error break-words">${esc(
+                r.wa_call_error || "-",
+              )}</div></div>
+              <div><span class="text-on-surface-variant">Call Count</span><div class="font-bold">${num(
+                r.call_count || 0,
+              )} / 3</div></div>
+              <div><span class="text-on-surface-variant">Waiting</span><div class="font-bold">${esc(
+                r.driver_waiting_duration ||
+                  liveWaitingText(r.register_time || r.created_at, r.called_at),
+              )}</div></div>
+              <div><span class="text-on-surface-variant">Unloading</span><div class="font-bold">${esc(
+                r.unloading_duration || "-",
+              )}</div></div>
+              <div><span class="text-on-surface-variant">SLA</span><div class="font-bold">${esc(
+                r.sla_status || r.unload_sla || "-",
+              )}</div></div>
             </div>
           </div>
         </div>
@@ -7379,7 +8429,9 @@ function securityFormMatchesRowsForPrint(rows = []) {
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Vendor Manual</span><input id="manual-vendor-name" class="form-input" placeholder="Contoh: PT MAJU JAYA" /></label>
         <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">PO Manual</span><input id="manual-po-number" class="form-input" placeholder="Contoh: PO123456" /></label>
-        <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Slot</span><select id="manual-slot" class="form-select">${buildSlotOptions("3")}</select></label>
+        <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Slot</span><select id="manual-slot" class="form-select">${buildSlotOptions(
+          "3",
+        )}</select></label>
         <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Total Qty</span><input id="manual-total-qty" type="number" min="0" step="1" class="form-input" placeholder="0" /></label>
         <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Count SKU</span><input id="manual-count-sku" type="number" min="0" step="1" class="form-input" placeholder="0" /></label>
       </div>
@@ -7556,9 +8608,10 @@ function securityFormMatchesRowsForPrint(rows = []) {
   if (window.__commercialTrackerV23Installed) return;
   window.__commercialTrackerV23Installed = true;
 
-  const todayWib = () => new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Jakarta",
-  }).format(new Date());
+  const todayWib = () =>
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Jakarta",
+    }).format(new Date());
 
   const view = {
     query: "",
@@ -7579,10 +8632,17 @@ function securityFormMatchesRowsForPrint(rows = []) {
   const isTerminal = (row) =>
     ["COMPLETED", "EXPIRED", "CANCELLED", "DONE GR"].includes(statusOf(row)) ||
     Boolean(window.InboundTicketContracts?.isDoneGrTerminal(row));
-  const keyOf = (row) => cleanText(row?.ticket_id || `${row?.queue_no || ""}|${row?.plat_number || ""}`);
-  const poRowsOf = (row) => Array.isArray(row?.po_rows) ? row.po_rows : [];
-  const poTextOf = (row) => [row?.po_number, ...poRowsOf(row).map((po) => po?.po_number)].filter(Boolean).join(" ");
-  const trackerRows = () => Array.isArray(state.dashboard?.queue) ? state.dashboard.queue : [];
+  const keyOf = (row) =>
+    cleanText(
+      row?.ticket_id || `${row?.queue_no || ""}|${row?.plat_number || ""}`,
+    );
+  const poRowsOf = (row) => (Array.isArray(row?.po_rows) ? row.po_rows : []);
+  const poTextOf = (row) =>
+    [row?.po_number, ...poRowsOf(row).map((po) => po?.po_number)]
+      .filter(Boolean)
+      .join(" ");
+  const trackerRows = () =>
+    Array.isArray(state.dashboard?.queue) ? state.dashboard.queue : [];
 
   function operationalDateOf(row) {
     const direct = cleanText(row?.operational_date);
@@ -7591,7 +8651,9 @@ function securityFormMatchesRowsForPrint(rows = []) {
     if (!raw) return "";
     const date = new Date(raw);
     if (Number.isNaN(date.getTime())) return cleanText(raw).slice(0, 10);
-    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(date);
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Jakarta",
+    }).format(date);
   }
 
   function slaOf(row) {
@@ -7608,31 +8670,42 @@ function securityFormMatchesRowsForPrint(rows = []) {
     const sla = slaOf(row);
     const status = cleanText(sla.status).toUpperCase();
     const delta = Number(sla.delta_minutes);
-    if (["SLA MISS", "LATE"].includes(status) || (Number.isFinite(delta) && delta < 0)) return "danger";
-    if (!isTerminal(row) && Number.isFinite(delta) && delta <= 60) return "warning";
+    if (
+      ["SLA MISS", "LATE"].includes(status) ||
+      (Number.isFinite(delta) && delta < 0)
+    )
+      return "danger";
+    if (!isTerminal(row) && Number.isFinite(delta) && delta <= 60)
+      return "warning";
     return "good";
   }
 
   function slaLabel(row) {
     const sla = slaOf(row);
-    return cleanText(sla.label || sla.status || (isTerminal(row) ? "Selesai" : "On track"));
+    return cleanText(
+      sla.label || sla.status || (isTerminal(row) ? "Selesai" : "On track"),
+    );
   }
 
   function statusLabel(status) {
-    return {
-      WAITING: "WAITING",
-      CALLED: "DIPANGGIL",
-      UNLOADING: "BONGKAR",
-      "WAITING GR": "WAITING GR",
-      "DONE GR": "DONE GR",
-      COMPLETED: "SELESAI",
-      EXPIRED: "EXPIRED",
-    }[status] || status;
+    return (
+      {
+        WAITING: "WAITING",
+        CALLED: "DIPANGGIL",
+        UNLOADING: "BONGKAR",
+        "WAITING GR": "WAITING GR",
+        "DONE GR": "DONE GR",
+        COMPLETED: "SELESAI",
+        EXPIRED: "EXPIRED",
+      }[status] || status
+    );
   }
 
   function waitingLabel(row) {
     try {
-      return typeof driverWaitingLabel === "function" ? driverWaitingLabel(row) : "-";
+      return typeof driverWaitingLabel === "function"
+        ? driverWaitingLabel(row)
+        : "-";
     } catch (error) {
       return "-";
     }
@@ -7641,15 +8714,25 @@ function securityFormMatchesRowsForPrint(rows = []) {
   function progressPercent(value) {
     const match = cleanText(value).match(/^(\d+)\s*\/\s*(\d+)$/);
     if (!match || Number(match[2]) <= 0) return 0;
-    return Math.max(0, Math.min(100, Math.round((Number(match[1]) / Number(match[2])) * 100)));
+    return Math.max(
+      0,
+      Math.min(100, Math.round((Number(match[1]) / Number(match[2])) * 100)),
+    );
   }
 
   function targetSlaLabel(row) {
     try {
-      const estimate = typeof getUnloadingEstimateInfo === "function"
-        ? getUnloadingEstimateInfo(row) || {}
-        : {};
-      return estimate.target_at || estimate.estimateText || row.sla_finished_at || row.sla_target_at || "-";
+      const estimate =
+        typeof getUnloadingEstimateInfo === "function"
+          ? getUnloadingEstimateInfo(row) || {}
+          : {};
+      return (
+        estimate.target_at ||
+        estimate.estimateText ||
+        row.sla_finished_at ||
+        row.sla_target_at ||
+        "-"
+      );
     } catch (error) {
       return cleanText(row.sla_finished_at || row.sla_target_at || "-");
     }
@@ -7657,7 +8740,10 @@ function securityFormMatchesRowsForPrint(rows = []) {
 
   function dateTimeLabel(value) {
     if (!value) return "-";
-    return window.InboundTicketContracts?.formatWibDateTime(value) || cleanText(value);
+    return (
+      window.InboundTicketContracts?.formatWibDateTime(value) ||
+      cleanText(value)
+    );
   }
 
   function filteredRows() {
@@ -7670,8 +8756,13 @@ function securityFormMatchesRowsForPrint(rows = []) {
         if (view.date && operationalDateOf(row) !== view.date) return false;
         const status = statusOf(row);
         if (view.status === "ACTIVE" && isTerminal(row)) return false;
-        if (view.status === "GR" && !["WAITING GR", "DONE GR"].includes(status)) return false;
-        if (!["ALL", "ACTIVE", "GR"].includes(view.status) && status !== view.status) return false;
+        if (view.status === "GR" && !["WAITING GR", "DONE GR"].includes(status))
+          return false;
+        if (
+          !["ALL", "ACTIVE", "GR"].includes(view.status) &&
+          status !== view.status
+        )
+          return false;
         if (!query) return true;
         return [
           row.ticket_id,
@@ -7687,7 +8778,10 @@ function securityFormMatchesRowsForPrint(rows = []) {
         const tone = toneRank[slaTone(a)] - toneRank[slaTone(b)];
         if (tone) return tone;
         if (isTerminal(a) !== isTerminal(b)) return isTerminal(a) ? 1 : -1;
-        return new Date(a.created_at || a.register_time || 0) - new Date(b.created_at || b.register_time || 0);
+        return (
+          new Date(a.created_at || a.register_time || 0) -
+          new Date(b.created_at || b.register_time || 0)
+        );
       });
   }
 
@@ -7699,75 +8793,228 @@ function securityFormMatchesRowsForPrint(rows = []) {
   }
 
   function metricCard(label, value, note, tone, icon) {
-    return `<article class="commercial-metric ${tone}"><span class="material-symbols-outlined">${icon}</span><div><small>${esc(label)}</small><b>${Number(value || 0).toLocaleString("id-ID")}</b><em>${esc(note)}</em></div></article>`;
+    return `<article class="commercial-metric ${tone}"><span class="material-symbols-outlined">${icon}</span><div><small>${esc(
+      label,
+    )}</small><b>${Number(value || 0).toLocaleString("id-ID")}</b><em>${esc(
+      note,
+    )}</em></div></article>`;
   }
 
   function metricsHtml() {
     const rows = trackerRows().filter((row) => typeOf(row) !== "DROP-OFF");
     const active = rows.filter((row) => !isTerminal(row));
-    const completedToday = rows.filter((row) => statusOf(row) === "COMPLETED").length;
+    const completedToday = rows.filter(
+      (row) => statusOf(row) === "COMPLETED",
+    ).length;
     return [
       metricCard("Aktif", active.length, "REG dan VIP", "blue", "schedule"),
-      metricCard("Waiting", active.filter((row) => statusOf(row) === "WAITING").length, "Menunggu panggil", "amber", "hourglass_top"),
-      metricCard("Bongkar", active.filter((row) => statusOf(row) === "UNLOADING").length, "Gate berjalan", "purple", "local_shipping"),
-      metricCard("Proses GR", active.filter((row) => ["WAITING GR", "DONE GR"].includes(statusOf(row))).length, "Checker selesai", "cyan", "inventory_2"),
-      metricCard("SLA Berisiko", active.filter((row) => ["danger", "warning"].includes(slaTone(row))).length, "Perlu perhatian", "red", "warning"),
-      metricCard("Selesai", completedToday, "Data tersedia", "green", "check_circle"),
+      metricCard(
+        "Waiting",
+        active.filter((row) => statusOf(row) === "WAITING").length,
+        "Menunggu panggil",
+        "amber",
+        "hourglass_top",
+      ),
+      metricCard(
+        "Bongkar",
+        active.filter((row) => statusOf(row) === "UNLOADING").length,
+        "Gate berjalan",
+        "purple",
+        "local_shipping",
+      ),
+      metricCard(
+        "Proses GR",
+        active.filter((row) =>
+          ["WAITING GR", "DONE GR"].includes(statusOf(row)),
+        ).length,
+        "Checker selesai",
+        "cyan",
+        "inventory_2",
+      ),
+      metricCard(
+        "SLA Berisiko",
+        active.filter((row) => ["danger", "warning"].includes(slaTone(row)))
+          .length,
+        "Perlu perhatian",
+        "red",
+        "warning",
+      ),
+      metricCard(
+        "Selesai",
+        completedToday,
+        "Data tersedia",
+        "green",
+        "check_circle",
+      ),
     ].join("");
   }
 
   function listHtml(rows) {
     const visible = rows.slice(0, 100);
     const selected = selectedRow(rows);
-    return `<div class="commercial-list-head"><div><b>Hasil Pencarian</b><small>${rows.length.toLocaleString("id-ID")} tiket ditemukan</small></div><span>${visible.length}${rows.length > visible.length ? "+" : ""} tampil</span></div>
+    return `<div class="commercial-list-head"><div><b>Hasil Pencarian</b><small>${rows.length.toLocaleString(
+      "id-ID",
+    )} tiket ditemukan</small></div><span>${visible.length}${
+      rows.length > visible.length ? "+" : ""
+    } tampil</span></div>
       <div class="commercial-ticket-list" role="list" aria-label="Daftar tiket inbound">
-        ${visible.map((row) => {
-          const key = keyOf(row);
-          const poCount = Number(row.ticket_po_count || poRowsOf(row).length || (row.po_number ? 1 : 0));
-          return `<button type="button" role="listitem" class="commercial-ticket ${selected && keyOf(selected) === key ? "selected" : ""}" data-commercial-key="${esc(key)}" onclick="selectCommercialTicket(this.dataset.commercialKey)">
-            <div class="commercial-ticket-top"><span class="commercial-queue">${esc(row.queue_no || "-")}</span><span class="commercial-status status-${statusOf(row).replace(/\s+/g, "-").toLowerCase()}">${esc(statusLabel(statusOf(row)))}</span></div>
+        ${
+          visible
+            .map((row) => {
+              const key = keyOf(row);
+              const poCount = Number(
+                row.ticket_po_count ||
+                  poRowsOf(row).length ||
+                  (row.po_number ? 1 : 0),
+              );
+              return `<button type="button" role="listitem" class="commercial-ticket ${
+                selected && keyOf(selected) === key ? "selected" : ""
+              }" data-commercial-key="${esc(
+                key,
+              )}" onclick="selectCommercialTicket(this.dataset.commercialKey)">
+            <div class="commercial-ticket-top"><span class="commercial-queue">${esc(
+              row.queue_no || "-",
+            )}</span><span class="commercial-status status-${statusOf(row)
+                .replace(/\s+/g, "-")
+                .toLowerCase()}">${esc(statusLabel(statusOf(row)))}</span></div>
             <strong>${esc(row.vendor_name || "-")}</strong>
-            <div class="commercial-ticket-meta"><span>${esc(row.plat_number || "-")}</span><span>${poCount} PO</span><span>Gate ${esc(row.gate || "-")}</span></div>
-            <div class="commercial-ticket-foot"><span>Checker ${esc(row.checker_progress || "0/0")} · GR ${esc(row.gr_progress || "0/0")}</span><b class="sla-${slaTone(row)}">${esc(slaLabel(row))}</b></div>
+            <div class="commercial-ticket-meta"><span>${esc(
+              row.plat_number || "-",
+            )}</span><span>${poCount} PO</span><span>Gate ${esc(
+                row.gate || "-",
+              )}</span></div>
+            <div class="commercial-ticket-foot"><span>Checker ${esc(
+              row.checker_progress || "0/0",
+            )} · GR ${esc(
+                row.gr_progress || "0/0",
+              )}</span><b class="sla-${slaTone(row)}">${esc(
+                slaLabel(row),
+              )}</b></div>
           </button>`;
-        }).join("") || `<div class="commercial-empty">Tiket tidak ditemukan. Ubah kata pencarian atau filter.</div>`}
+            })
+            .join("") ||
+          `<div class="commercial-empty">Tiket tidak ditemukan. Ubah kata pencarian atau filter.</div>`
+        }
       </div>`;
   }
 
   function timelineHtml(row) {
     const status = statusOf(row);
-    const rank = { WAITING: 0, CALLED: 1, UNLOADING: 2, "WAITING GR": 3, "DONE GR": 4, COMPLETED: 4 }[status] ?? 0;
+    const rank =
+      {
+        WAITING: 0,
+        CALLED: 1,
+        UNLOADING: 2,
+        "WAITING GR": 3,
+        "DONE GR": 4,
+        COMPLETED: 4,
+      }[status] ?? 0;
     const steps = [
       ["REGISTER", row.register_time || row.created_at],
       ["CALLED", row.called_at],
       ["BONGKAR", row.start_unloading_at],
       ["DONE GR", row.done_gr_at || row.ticket_done_gr_at || row.po_updated_at],
     ];
-    return `<div class="commercial-timeline" aria-label="Timeline proses tiket">${steps.map(([label, time], index) => `<div class="commercial-step ${index < rank || time ? "done" : index === rank ? "current" : ""}"><i><span class="material-symbols-outlined">${index < rank || time ? "check" : index === rank ? "radio_button_checked" : "circle"}</span></i><b>${label}</b><small>${dateTimeLabel(time)}</small></div>`).join("")}</div>`;
+    return `<div class="commercial-timeline" aria-label="Timeline proses tiket">${steps
+      .map(
+        ([label, time], index) =>
+          `<div class="commercial-step ${
+            index < rank || time ? "done" : index === rank ? "current" : ""
+          }"><i><span class="material-symbols-outlined">${
+            index < rank || time
+              ? "check"
+              : index === rank
+              ? "radio_button_checked"
+              : "circle"
+          }</span></i><b>${label}</b><small>${dateTimeLabel(
+            time,
+          )}</small></div>`,
+      )
+      .join("")}</div>`;
   }
 
   function poTableHtml(row) {
     const poRows = poRowsOf(row);
     const rows = poRows.length ? poRows : row.po_number ? [row] : [];
-    return `<details class="commercial-po" open><summary><span><span class="material-symbols-outlined">receipt_long</span>Daftar PO</span><b>${rows.length}</b></summary><div class="commercial-po-scroll"><table><thead><tr><th>PO Number</th><th>Qty</th><th>SKU</th><th>Checker</th><th>GR</th></tr></thead><tbody>${rows.map((po) => `<tr><td>${esc(po.po_number || "-")}</td><td>${esc(po.total_po_qty ?? po.po_qty ?? "-")}</td><td>${esc(po.count_po_sku ?? po.ticket_total_sku ?? "-")}</td><td>${esc(po.checker_status || "-")}</td><td>${esc(po.gr_status || "-")}</td></tr>`).join("") || `<tr><td colspan="5">Tidak ada detail PO.</td></tr>`}</tbody></table></div></details>`;
+    return `<details class="commercial-po" open><summary><span><span class="material-symbols-outlined">receipt_long</span>Daftar PO</span><b>${
+      rows.length
+    }</b></summary><div class="commercial-po-scroll"><table><thead><tr><th>PO Number</th><th>Qty</th><th>SKU</th><th>Checker</th><th>GR</th></tr></thead><tbody>${
+      rows
+        .map(
+          (po) =>
+            `<tr><td>${esc(po.po_number || "-")}</td><td>${esc(
+              po.total_po_qty ?? po.po_qty ?? "-",
+            )}</td><td>${esc(
+              po.count_po_sku ?? po.ticket_total_sku ?? "-",
+            )}</td><td>${esc(po.checker_status || "-")}</td><td>${esc(
+              po.gr_status || "-",
+            )}</td></tr>`,
+        )
+        .join("") || `<tr><td colspan="5">Tidak ada detail PO.</td></tr>`
+    }</tbody></table></div></details>`;
   }
 
   function detailHtml(row) {
-    if (!row) return `<div class="commercial-detail commercial-empty">Pilih tiket untuk melihat detail tracking.</div>`;
+    if (!row)
+      return `<div class="commercial-detail commercial-empty">Pilih tiket untuk melihat detail tracking.</div>`;
     const sla = slaOf(row);
     let trackUrl = "";
-    try { trackUrl = makeDriverTrackUrl(row); } catch (error) {}
+    try {
+      trackUrl = makeDriverTrackUrl(row);
+    } catch (error) {}
     const target = targetSlaLabel(row);
     const checkerProgress = cleanText(row.checker_progress || "0/0");
     const grProgress = cleanText(row.gr_progress || "0/0");
     return `<article class="commercial-detail" data-commercial-detail>
-      <header class="commercial-detail-head"><div><div class="commercial-detail-title"><span>${esc(row.queue_no || "-")}</span><span class="commercial-status status-${statusOf(row).replace(/\s+/g, "-").toLowerCase()}">${esc(statusLabel(statusOf(row)))}</span></div><p>${esc(row.vendor_name || "-")} · ${esc(row.plat_number || "-")} · Gate ${esc(row.gate || "-")}</p></div><span class="commercial-live"><i></i>LIVE DATA</span></header>
-      <section class="commercial-detail-kpis"><div><small>Target SLA</small><b>${esc(dateTimeLabel(target))}</b></div><div><small>Kondisi SLA</small><b class="sla-${slaTone(row)}">${esc(slaLabel(row))}</b></div><div><small>Jam Menunggu</small><b>${esc(waitingLabel(row))}</b></div></section>
-      <section class="commercial-progress"><div><span><b>Checker</b><em>${esc(checkerProgress)}</em></span><progress max="100" value="${progressPercent(checkerProgress)}"></progress></div><div><span><b>GR</b><em>${esc(grProgress)}</em></span><progress max="100" value="${progressPercent(grProgress)}"></progress></div></section>
-      <section class="commercial-section"><h3>Timeline Proses</h3>${timelineHtml(row)}</section>
-      <section class="commercial-section"><h3>Detail Tiket</h3><div class="commercial-info-grid"><div><small>Driver</small><b>${esc(row.driver_name || "-")}</b></div><div><small>Vendor</small><b>${esc(row.vendor_name || "-")}</b></div><div><small>Plat</small><b>${esc(row.plat_number || "-")}</b></div><div><small>Fleet</small><b>${esc(row.fleet_type || "-")}</b></div><div><small>Jumlah TKBM</small><b>${esc(Number(row.tkbm_count || 0))}</b></div><div><small>Jenis Tiket</small><b>${esc(typeOf(row))}</b></div><div><small>Last Update</small><b>${esc(dateTimeLabel(row.updated_at || row.row_updated_at))}</b></div></div></section>
+      <header class="commercial-detail-head"><div><div class="commercial-detail-title"><span>${esc(
+        row.queue_no || "-",
+      )}</span><span class="commercial-status status-${statusOf(row)
+      .replace(/\s+/g, "-")
+      .toLowerCase()}">${esc(statusLabel(statusOf(row)))}</span></div><p>${esc(
+      row.vendor_name || "-",
+    )} · ${esc(row.plat_number || "-")} · Gate ${esc(
+      row.gate || "-",
+    )}</p></div><span class="commercial-live"><i></i>LIVE DATA</span></header>
+      <section class="commercial-detail-kpis"><div><small>Target SLA</small><b>${esc(
+        dateTimeLabel(target),
+      )}</b></div><div><small>Kondisi SLA</small><b class="sla-${slaTone(
+      row,
+    )}">${esc(slaLabel(row))}</b></div><div><small>Jam Menunggu</small><b>${esc(
+      waitingLabel(row),
+    )}</b></div></section>
+      <section class="commercial-progress"><div><span><b>Checker</b><em>${esc(
+        checkerProgress,
+      )}</em></span><progress max="100" value="${progressPercent(
+      checkerProgress,
+    )}"></progress></div><div><span><b>GR</b><em>${esc(
+      grProgress,
+    )}</em></span><progress max="100" value="${progressPercent(
+      grProgress,
+    )}"></progress></div></section>
+      <section class="commercial-section"><h3>Timeline Proses</h3>${timelineHtml(
+        row,
+      )}</section>
+      <section class="commercial-section"><h3>Detail Tiket</h3><div class="commercial-info-grid"><div><small>Driver</small><b>${esc(
+        row.driver_name || "-",
+      )}</b></div><div><small>Vendor</small><b>${esc(
+      row.vendor_name || "-",
+    )}</b></div><div><small>Plat</small><b>${esc(
+      row.plat_number || "-",
+    )}</b></div><div><small>Fleet</small><b>${esc(
+      row.fleet_type || "-",
+    )}</b></div><div><small>Memakai TKBM?</small><b>${esc(
+      Number(row.tkbm_count || 0) > 0 ? "YES" : "NO",
+    )}</b></div><div><small>Jenis Tiket</small><b>${esc(
+      typeOf(row),
+    )}</b></div><div><small>Last Update</small><b>${esc(
+      dateTimeLabel(row.updated_at || row.row_updated_at),
+    )}</b></div></div></section>
       ${poTableHtml(row)}
-      <div class="commercial-actions"><button type="button" onclick="copyCommercialTrackingLink('${esc(trackUrl)}')"><span class="material-symbols-outlined">content_copy</span>Salin Link Tracking</button><button type="button" onclick="openCommercialDriverView('${esc(trackUrl)}')"><span class="material-symbols-outlined">open_in_new</span>Buka Tampilan Driver</button></div>
+      <div class="commercial-actions"><button type="button" onclick="copyCommercialTrackingLink('${esc(
+        trackUrl,
+      )}')"><span class="material-symbols-outlined">content_copy</span>Salin Link Tracking</button><button type="button" onclick="openCommercialDriverView('${esc(
+      trackUrl,
+    )}')"><span class="material-symbols-outlined">open_in_new</span>Buka Tampilan Driver</button></div>
     </article>`;
   }
 
@@ -7783,9 +9030,15 @@ function securityFormMatchesRowsForPrint(rows = []) {
 
   window.applyCommercialFilters = function applyCommercialFiltersV23() {
     view.query = cleanText(document.getElementById("commercial-search")?.value);
-    view.status = cleanText(document.getElementById("commercial-status-filter")?.value || "ACTIVE").toUpperCase();
-    view.type = cleanText(document.getElementById("commercial-type-filter")?.value || "ALL").toUpperCase();
-    view.date = cleanText(document.getElementById("commercial-date-filter")?.value);
+    view.status = cleanText(
+      document.getElementById("commercial-status-filter")?.value || "ACTIVE",
+    ).toUpperCase();
+    view.type = cleanText(
+      document.getElementById("commercial-type-filter")?.value || "ALL",
+    ).toUpperCase();
+    view.date = cleanText(
+      document.getElementById("commercial-date-filter")?.value,
+    );
     view.selectedKey = "";
     refreshView();
   };
@@ -7802,19 +9055,22 @@ function securityFormMatchesRowsForPrint(rows = []) {
     view.selectedKey = cleanText(key);
     refreshView();
     if (window.matchMedia("(max-width: 900px)").matches) {
-      document.querySelector("[data-commercial-detail]")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      document
+        .querySelector("[data-commercial-detail]")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   };
 
-  window.copyCommercialTrackingLink = async function copyCommercialTrackingLinkV23(url) {
-    if (!url) return showToast("Link tracking belum tersedia.");
-    try {
-      await navigator.clipboard.writeText(url);
-      showToast("Link tracking driver disalin.");
-    } catch (error) {
-      showToast("Browser tidak mengizinkan copy otomatis.");
-    }
-  };
+  window.copyCommercialTrackingLink =
+    async function copyCommercialTrackingLinkV23(url) {
+      if (!url) return showToast("Link tracking belum tersedia.");
+      try {
+        await navigator.clipboard.writeText(url);
+        showToast("Link tracking driver disalin.");
+      } catch (error) {
+        showToast("Browser tidak mengizinkan copy otomatis.");
+      }
+    };
 
   window.openCommercialDriverView = function openCommercialDriverViewV23(url) {
     if (!url) return showToast("Link tracking belum tersedia.");
@@ -7826,8 +9082,38 @@ function securityFormMatchesRowsForPrint(rows = []) {
     return `<div class="commercial-tracker">
       <section class="commercial-hero"><div><div class="commercial-eyebrow">INBOUND CBT / READ ONLY</div><h2>COMERCIAL Ticket Tracker</h2><p>Cari vendor atau PO dan pantau status yang sama dengan hasil scan QR driver.</p></div><button type="button" onclick="refreshDashboard()"><span class="material-symbols-outlined">refresh</span>Refresh Data</button></section>
       <section id="commercial-metrics" class="commercial-metrics">${metricsHtml()}</section>
-      <section class="commercial-toolbar"><label class="commercial-search"><span class="material-symbols-outlined">search</span><input id="commercial-search" value="${esc(view.query)}" oninput="applyCommercialFilters()" placeholder="Cari PO, vendor, queue, plat, atau Ticket ID" autocomplete="off" /></label><label><span>Tanggal Tiket</span><div class="commercial-date-control"><input id="commercial-date-filter" type="date" value="${esc(view.date)}" onchange="applyCommercialFilters()" /><button type="button" onclick="clearCommercialDateFilter()" title="Tampilkan semua tanggal">Semua</button></div></label><label><span>Status</span><select id="commercial-status-filter" onchange="applyCommercialFilters()"><option value="ACTIVE" ${view.status === "ACTIVE" ? "selected" : ""}>Tiket Aktif</option><option value="ALL" ${view.status === "ALL" ? "selected" : ""}>Semua Status</option><option value="WAITING" ${view.status === "WAITING" ? "selected" : ""}>Waiting</option><option value="CALLED" ${view.status === "CALLED" ? "selected" : ""}>Dipanggil</option><option value="UNLOADING" ${view.status === "UNLOADING" ? "selected" : ""}>Bongkar</option><option value="GR" ${view.status === "GR" ? "selected" : ""}>Proses GR</option><option value="COMPLETED" ${view.status === "COMPLETED" ? "selected" : ""}>Selesai</option></select></label><label><span>Jenis Tiket</span><select id="commercial-type-filter" onchange="applyCommercialFilters()"><option value="ALL" ${view.type === "ALL" ? "selected" : ""}>REG + VIP</option><option value="REG" ${view.type === "REG" ? "selected" : ""}>REG</option><option value="VIP" ${view.type === "VIP" ? "selected" : ""}>VIP</option><option value="DROP-OFF" ${view.type === "DROP-OFF" ? "selected" : ""}>Drop-Off</option></select></label></section>
-      <section class="commercial-workspace"><div id="commercial-list-panel" class="commercial-list-panel">${listHtml(rows)}</div><div id="commercial-detail-panel">${detailHtml(selectedRow(rows))}</div></section>
+      <section class="commercial-toolbar"><label class="commercial-search"><span class="material-symbols-outlined">search</span><input id="commercial-search" value="${esc(
+        view.query,
+      )}" oninput="applyCommercialFilters()" placeholder="Cari PO, vendor, queue, plat, atau Ticket ID" autocomplete="off" /></label><label><span>Tanggal Tiket</span><div class="commercial-date-control"><input id="commercial-date-filter" type="date" value="${esc(
+      view.date,
+    )}" onchange="applyCommercialFilters()" /><button type="button" onclick="clearCommercialDateFilter()" title="Tampilkan semua tanggal">Semua</button></div></label><label><span>Status</span><select id="commercial-status-filter" onchange="applyCommercialFilters()"><option value="ACTIVE" ${
+      view.status === "ACTIVE" ? "selected" : ""
+    }>Tiket Aktif</option><option value="ALL" ${
+      view.status === "ALL" ? "selected" : ""
+    }>Semua Status</option><option value="WAITING" ${
+      view.status === "WAITING" ? "selected" : ""
+    }>Waiting</option><option value="CALLED" ${
+      view.status === "CALLED" ? "selected" : ""
+    }>Dipanggil</option><option value="UNLOADING" ${
+      view.status === "UNLOADING" ? "selected" : ""
+    }>Bongkar</option><option value="GR" ${
+      view.status === "GR" ? "selected" : ""
+    }>Proses GR</option><option value="COMPLETED" ${
+      view.status === "COMPLETED" ? "selected" : ""
+    }>Selesai</option></select></label><label><span>Jenis Tiket</span><select id="commercial-type-filter" onchange="applyCommercialFilters()"><option value="ALL" ${
+      view.type === "ALL" ? "selected" : ""
+    }>REG + VIP</option><option value="REG" ${
+      view.type === "REG" ? "selected" : ""
+    }>REG</option><option value="VIP" ${
+      view.type === "VIP" ? "selected" : ""
+    }>VIP</option><option value="DROP-OFF" ${
+      view.type === "DROP-OFF" ? "selected" : ""
+    }>Drop-Off</option></select></label></section>
+      <section class="commercial-workspace"><div id="commercial-list-panel" class="commercial-list-panel">${listHtml(
+        rows,
+      )}</div><div id="commercial-detail-panel">${detailHtml(
+      selectedRow(rows),
+    )}</div></section>
     </div>`;
   };
 
@@ -7838,8 +9124,11 @@ function securityFormMatchesRowsForPrint(rows = []) {
   ROLE_ACCESS.COMERCIAL = ["commercial"];
   ROLE_DEFAULT_PAGE.COMERCIAL = "commercial";
   ["SPV", "ADMIN", "DEVELOPER"].forEach((role) => {
-    ROLE_ACCESS[role] = Array.isArray(ROLE_ACCESS[role]) ? ROLE_ACCESS[role] : [];
-    if (!ROLE_ACCESS[role].includes("commercial")) ROLE_ACCESS[role].push("commercial");
+    ROLE_ACCESS[role] = Array.isArray(ROLE_ACCESS[role])
+      ? ROLE_ACCESS[role]
+      : [];
+    if (!ROLE_ACCESS[role].includes("commercial"))
+      ROLE_ACCESS[role].push("commercial");
   });
   applyRoleAccessUI?.();
 })();
@@ -7850,7 +9139,9 @@ function securityFormMatchesRowsForPrint(rows = []) {
   window.__waitingListV19Installed = true;
 
   window.doneGrBatchV19 = async function doneGrBatchV19() {
-    const inputs = [...document.querySelectorAll("[data-actual-qty-input-v18]")];
+    const inputs = [
+      ...document.querySelectorAll("[data-actual-qty-input-v18]"),
+    ];
     const byTicket = new Map();
     for (const input of inputs) {
       const quantity = Number(input.value || 0);
@@ -7860,13 +9151,21 @@ function securityFormMatchesRowsForPrint(rows = []) {
         (row.po_rows || []).some((po) => String(po.ticket_po_id) === poId),
       );
       if (!ticket || !poId) continue;
-      if (!byTicket.has(ticket.ticket_id)) byTicket.set(ticket.ticket_id, { ticket, items: [] });
-      byTicket.get(ticket.ticket_id).items.push({ ticket_po_id: poId, actual_quantity: quantity });
+      if (!byTicket.has(ticket.ticket_id))
+        byTicket.set(ticket.ticket_id, { ticket, items: [] });
+      byTicket
+        .get(ticket.ticket_id)
+        .items.push({ ticket_po_id: poId, actual_quantity: quantity });
     }
     if (!byTicket.size) {
-      return showToast("Isi Actual Qty lebih dari 0 pada PO yang ingin di-Done GR.");
+      return showToast(
+        "Isi Actual Qty lebih dari 0 pada PO yang ingin di-Done GR.",
+      );
     }
-    const total = [...byTicket.values()].reduce((sum, item) => sum + item.items.length, 0);
+    const total = [...byTicket.values()].reduce(
+      (sum, item) => sum + item.items.length,
+      0,
+    );
     if (!confirm(`Simpan Actual Qty dan Done GR untuk ${total} PO?`)) return;
     try {
       for (const { ticket, items } of byTicket.values()) {
@@ -7887,8 +9186,89 @@ function securityFormMatchesRowsForPrint(rows = []) {
   };
 
   const LEGACY_OUTPUT_HEADERS_V20 = [
-    "cancelled_at", "cancelled_reason", "cancelled_by", "po_cancelled_at", "po_cancelled_reason", "po_cancelled_by",
-    "Timestamp", "ticket_id", "queue_no", "ticket_type", "slot", "fleet_type", "plat_number", "driver_name", "phone_number", "ktp_6_digit", "tkbm_count", "vendor_name", "po_number", "total_po_qty", "actual_quantity", "count_po_sku", "status", "gate", "unload_sla", "source", "created_at", "register_time", "called_at", "updated_at", "completed_at", "start_unloading_at", "driver_waiting_duration", "driver_waiting_minutes", "unloading_duration", "unloading_duration_minutes", "sla_target_hours", "sla_status", "wa_call_status", "wa_call_sent_at", "wa_call_error", "wa_call_provider", "wa_call_target", "call_count", "last_call_attempt_at", "expired_at", "expired_reason", "sla_finished_at", "operational_date", "data_source", "last_call_at", "waiting_gr_at", "done_gr_at", "handover_grn_at", "wa_handover_status", "wa_handover_sent_at", "wa_handover_error", "wa_handover_target", "ticket_po_id", "po_sequence", "ticket_po_count", "ticket_total_qty", "ticket_total_sku", "finish_unloading_at", "checker_id", "checker_name", "checker_status", "checker_started_at", "checker_done_at", "checker_started_by", "checker_done_by", "checker_duration", "checker_duration_minutes", "gr_status", "done_gr_by", "gr_wait_duration", "gr_wait_minutes", "inbound_sla_duration", "inbound_sla_minutes", "wa_ticket_status", "wa_ticket_sent_at", "wa_ticket_error", "wa_ticket_target",
+    "cancelled_at",
+    "cancelled_reason",
+    "cancelled_by",
+    "po_cancelled_at",
+    "po_cancelled_reason",
+    "po_cancelled_by",
+    "Timestamp",
+    "ticket_id",
+    "queue_no",
+    "ticket_type",
+    "slot",
+    "fleet_type",
+    "plat_number",
+    "driver_name",
+    "phone_number",
+    "ktp_6_digit",
+    "tkbm_count",
+    "vendor_name",
+    "po_number",
+    "total_po_qty",
+    "actual_quantity",
+    "count_po_sku",
+    "status",
+    "gate",
+    "unload_sla",
+    "source",
+    "created_at",
+    "register_time",
+    "called_at",
+    "updated_at",
+    "completed_at",
+    "start_unloading_at",
+    "driver_waiting_duration",
+    "driver_waiting_minutes",
+    "unloading_duration",
+    "unloading_duration_minutes",
+    "sla_target_hours",
+    "sla_status",
+    "wa_call_status",
+    "wa_call_sent_at",
+    "wa_call_error",
+    "wa_call_provider",
+    "wa_call_target",
+    "call_count",
+    "last_call_attempt_at",
+    "expired_at",
+    "expired_reason",
+    "sla_finished_at",
+    "operational_date",
+    "data_source",
+    "last_call_at",
+    "waiting_gr_at",
+    "done_gr_at",
+    "handover_grn_at",
+    "wa_handover_status",
+    "wa_handover_sent_at",
+    "wa_handover_error",
+    "wa_handover_target",
+    "ticket_po_id",
+    "po_sequence",
+    "ticket_po_count",
+    "ticket_total_qty",
+    "ticket_total_sku",
+    "finish_unloading_at",
+    "checker_id",
+    "checker_name",
+    "checker_status",
+    "checker_started_at",
+    "checker_done_at",
+    "checker_started_by",
+    "checker_done_by",
+    "checker_duration",
+    "checker_duration_minutes",
+    "gr_status",
+    "done_gr_by",
+    "gr_wait_duration",
+    "gr_wait_minutes",
+    "inbound_sla_duration",
+    "inbound_sla_minutes",
+    "wa_ticket_status",
+    "wa_ticket_sent_at",
+    "wa_ticket_error",
+    "wa_ticket_target",
   ];
 
   function durationExportV20(from, to) {
@@ -7897,7 +9277,10 @@ function securityFormMatchesRowsForPrint(rows = []) {
     if (!start || !end || end < start) return { text: "", minutes: "" };
     const minutes = Math.round((end - start) / 60000);
     const hours = String(Math.floor(minutes / 60)).padStart(2, "0");
-    return { text: `${hours}:${String(minutes % 60).padStart(2, "0")}:00`, minutes };
+    return {
+      text: `${hours}:${String(minutes % 60).padStart(2, "0")}:00`,
+      minutes,
+    };
   }
 
   function legacyOutputRowsV20(rows) {
@@ -7909,20 +9292,126 @@ function securityFormMatchesRowsForPrint(rows = []) {
     });
     return rows.map((row) => {
       const pos = byTicket.get(String(row.ticket_id || "")) || [row];
-      const poSequence = Math.max(1, pos.findIndex((item) => item.ticket_po_id === row.ticket_po_id) + 1);
-      const activePos = pos.filter((item) => !window.InboundTicketContracts.isCancelled(item));
-      const ticketQty = activePos.reduce((sum, item) => sum + Number(item.total_po_qty || 0), 0);
-      const ticketSku = activePos.reduce((sum, item) => sum + Number(item.count_po_sku || 0), 0);
-      const finish = row.cancelled_at || row.po_cancelled_at || row.finish_unloading_at || "";
-      const driverWaiting = durationExportV20(row.created_at || row.register_time, row.start_unloading_at || finish);
+      const poSequence = Math.max(
+        1,
+        pos.findIndex((item) => item.ticket_po_id === row.ticket_po_id) + 1,
+      );
+      const activePos = pos.filter(
+        (item) => !window.InboundTicketContracts.isCancelled(item),
+      );
+      const ticketQty = activePos.reduce(
+        (sum, item) => sum + Number(item.total_po_qty || 0),
+        0,
+      );
+      const ticketSku = activePos.reduce(
+        (sum, item) => sum + Number(item.count_po_sku || 0),
+        0,
+      );
+      const finish =
+        row.cancelled_at ||
+        row.po_cancelled_at ||
+        row.finish_unloading_at ||
+        "";
+      const driverWaiting = durationExportV20(
+        row.created_at || row.register_time,
+        row.start_unloading_at || finish,
+      );
       const unloading = durationExportV20(row.start_unloading_at, finish);
-      const checker = durationExportV20(row.checker_started_at, row.checker_done_at);
+      const checker = durationExportV20(
+        row.checker_started_at,
+        row.checker_done_at,
+      );
       const grWait = durationExportV20(row.checker_done_at, row.done_gr_at);
-      const inboundSla = durationExportV20(row.start_unloading_at, finish || row.done_gr_at);
+      const inboundSla = durationExportV20(
+        row.start_unloading_at,
+        finish || row.done_gr_at,
+      );
       return {
-        cancelled_at: row.cancelled_at || "", cancelled_reason: row.cancelled_reason || "", cancelled_by: row.cancelled_by || "",
-        po_cancelled_at: row.po_cancelled_at || "", po_cancelled_reason: row.po_cancelled_reason || "", po_cancelled_by: row.po_cancelled_by || "",
-        Timestamp: row.created_at || row.register_time || "", ticket_id: row.ticket_id || "", queue_no: row.queue_no || "", ticket_type: row.ticket_type || "", slot: row.slot || "", fleet_type: row.fleet_type || "", plat_number: row.plat_number || "", driver_name: row.driver_name || "", phone_number: row.phone_number || "", ktp_6_digit: row.ktp_6_digit || "", tkbm_count: Number(row.tkbm_count || 0), vendor_name: row.po_vendor_name || row.vendor_name || "", po_number: row.po_number || "", total_po_qty: row.total_po_qty || 0, actual_quantity: row.actual_quantity || 0, count_po_sku: row.count_po_sku || 0, status: row.status || "", gate: row.gate || "", unload_sla: row.unload_sla || "", source: row.source || "Supabase", created_at: row.created_at || "", register_time: row.register_time || row.created_at || "", called_at: row.called_at || "", updated_at: row.updated_at || row.po_updated_at || "", completed_at: String(row.status || "").toUpperCase() === "COMPLETED" ? finish : "", start_unloading_at: row.start_unloading_at || "", driver_waiting_duration: driverWaiting.text, driver_waiting_minutes: driverWaiting.minutes, unloading_duration: unloading.text, unloading_duration_minutes: unloading.minutes, sla_target_hours: window.InboundTicketContracts.getInboundSlaInfo(row).target_hours, sla_status: window.InboundTicketContracts.getInboundSlaInfo(row).status, wa_call_status: "", wa_call_sent_at: "", wa_call_error: "", wa_call_provider: "", wa_call_target: "", call_count: row.call_count || 0, last_call_attempt_at: row.last_call_at || "", expired_at: row.expired_at || "", expired_reason: row.expired_reason || "", sla_finished_at: finish, operational_date: row.operational_date || "", data_source: "Supabase", last_call_at: row.last_call_at || "", waiting_gr_at: row.checker_done_at || "", done_gr_at: row.done_gr_at || "", handover_grn_at: row.handover_grn_at || "", wa_handover_status: "", wa_handover_sent_at: "", wa_handover_error: "", wa_handover_target: "", ticket_po_id: row.ticket_po_id || "", po_sequence: poSequence, ticket_po_count: pos.length, ticket_total_qty: ticketQty, ticket_total_sku: ticketSku, finish_unloading_at: finish, checker_id: row.checker_id || "", checker_name: row.checker_name || "", checker_status: row.checker_status || "", checker_started_at: row.checker_started_at || "", checker_done_at: row.checker_done_at || "", checker_started_by: "", checker_done_by: "", checker_duration: checker.text, checker_duration_minutes: checker.minutes, gr_status: row.gr_status || "", done_gr_by: "", gr_wait_duration: grWait.text, gr_wait_minutes: grWait.minutes, inbound_sla_duration: inboundSla.text, inbound_sla_minutes: inboundSla.minutes, wa_ticket_status: "", wa_ticket_sent_at: "", wa_ticket_error: "", wa_ticket_target: "",
+        cancelled_at: row.cancelled_at || "",
+        cancelled_reason: row.cancelled_reason || "",
+        cancelled_by: row.cancelled_by || "",
+        po_cancelled_at: row.po_cancelled_at || "",
+        po_cancelled_reason: row.po_cancelled_reason || "",
+        po_cancelled_by: row.po_cancelled_by || "",
+        Timestamp: row.created_at || row.register_time || "",
+        ticket_id: row.ticket_id || "",
+        queue_no: row.queue_no || "",
+        ticket_type: row.ticket_type || "",
+        slot: row.slot || "",
+        fleet_type: row.fleet_type || "",
+        plat_number: row.plat_number || "",
+        driver_name: row.driver_name || "",
+        phone_number: row.phone_number || "",
+        ktp_6_digit: row.ktp_6_digit || "",
+        tkbm_count: Number(row.tkbm_count || 0),
+        vendor_name: row.po_vendor_name || row.vendor_name || "",
+        po_number: row.po_number || "",
+        total_po_qty: row.total_po_qty || 0,
+        actual_quantity: row.actual_quantity || 0,
+        count_po_sku: row.count_po_sku || 0,
+        status: row.status || "",
+        gate: row.gate || "",
+        unload_sla: row.unload_sla || "",
+        source: row.source || "Supabase",
+        created_at: row.created_at || "",
+        register_time: row.register_time || row.created_at || "",
+        called_at: row.called_at || "",
+        updated_at: row.updated_at || row.po_updated_at || "",
+        completed_at:
+          String(row.status || "").toUpperCase() === "COMPLETED" ? finish : "",
+        start_unloading_at: row.start_unloading_at || "",
+        driver_waiting_duration: driverWaiting.text,
+        driver_waiting_minutes: driverWaiting.minutes,
+        unloading_duration: unloading.text,
+        unloading_duration_minutes: unloading.minutes,
+        sla_target_hours:
+          window.InboundTicketContracts.getInboundSlaInfo(row).target_hours,
+        sla_status: window.InboundTicketContracts.getInboundSlaInfo(row).status,
+        wa_call_status: "",
+        wa_call_sent_at: "",
+        wa_call_error: "",
+        wa_call_provider: "",
+        wa_call_target: "",
+        call_count: row.call_count || 0,
+        last_call_attempt_at: row.last_call_at || "",
+        expired_at: row.expired_at || "",
+        expired_reason: row.expired_reason || "",
+        sla_finished_at: finish,
+        operational_date: row.operational_date || "",
+        data_source: "Supabase",
+        last_call_at: row.last_call_at || "",
+        waiting_gr_at: row.checker_done_at || "",
+        done_gr_at: row.done_gr_at || "",
+        handover_grn_at: row.handover_grn_at || "",
+        wa_handover_status: "",
+        wa_handover_sent_at: "",
+        wa_handover_error: "",
+        wa_handover_target: "",
+        ticket_po_id: row.ticket_po_id || "",
+        po_sequence: poSequence,
+        ticket_po_count: pos.length,
+        ticket_total_qty: ticketQty,
+        ticket_total_sku: ticketSku,
+        finish_unloading_at: finish,
+        checker_id: row.checker_id || "",
+        checker_name: row.checker_name || "",
+        checker_status: row.checker_status || "",
+        checker_started_at: row.checker_started_at || "",
+        checker_done_at: row.checker_done_at || "",
+        checker_started_by: "",
+        checker_done_by: "",
+        checker_duration: checker.text,
+        checker_duration_minutes: checker.minutes,
+        gr_status: row.gr_status || "",
+        done_gr_by: "",
+        gr_wait_duration: grWait.text,
+        gr_wait_minutes: grWait.minutes,
+        inbound_sla_duration: inboundSla.text,
+        inbound_sla_minutes: inboundSla.minutes,
+        wa_ticket_status: "",
+        wa_ticket_sent_at: "",
+        wa_ticket_error: "",
+        wa_ticket_target: "",
       };
     });
   }
@@ -7931,33 +9420,52 @@ function securityFormMatchesRowsForPrint(rows = []) {
     try {
       showToast("Menyiapkan CSV detail dari MotherDuck...");
       const allRows = await motherDuckApiGet("export_rows");
-      const visibleTickets = window.__waitingListFilteredRowsV181 || state.dashboard?.report_preview || [];
-      const ticketIds = new Set(visibleTickets.map((ticket) => String(ticket.ticket_id || "")).filter(Boolean));
+      const visibleTickets =
+        window.__waitingListFilteredRowsV181 ||
+        state.dashboard?.report_preview ||
+        [];
+      const ticketIds = new Set(
+        visibleTickets
+          .map((ticket) => String(ticket.ticket_id || ""))
+          .filter(Boolean),
+      );
       const selectedRows = ticketIds.size
         ? allRows.filter((row) => ticketIds.has(String(row.ticket_id || "")))
         : allRows;
-      if (!selectedRows.length) return showToast("Tidak ada data sesuai filter.");
+      if (!selectedRows.length)
+        return showToast("Tidak ada data sesuai filter.");
       const rows = legacyOutputRowsV20(selectedRows);
 
-      const escapeCsv = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`;
+      const escapeCsv = (value) =>
+        `"${String(value ?? "").replaceAll('"', '""')}"`;
       const csv = [
         LEGACY_OUTPUT_HEADERS_V20.map(escapeCsv).join(","),
-        ...rows.map((row) => LEGACY_OUTPUT_HEADERS_V20.map((key) => escapeCsv(row[key])).join(",")),
+        ...rows.map((row) =>
+          LEGACY_OUTPUT_HEADERS_V20.map((key) => escapeCsv(row[key])).join(","),
+        ),
       ].join("\r\n");
-      const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
+      const url = URL.createObjectURL(
+        new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }),
+      );
       const link = document.createElement("a");
       link.href = url;
-      link.download = `waiting-list-detail-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.download = `waiting-list-detail-${new Date()
+        .toISOString()
+        .slice(0, 10)}.csv`;
       link.click();
       URL.revokeObjectURL(url);
-      showToast(`${rows.length} baris PO dengan header detail berhasil diexport.`);
+      showToast(
+        `${rows.length} baris PO dengan header detail berhasil diexport.`,
+      );
     } catch (error) {
       console.error(error);
       showToast(`Export CSV gagal: ${error.message}`);
     }
   };
   window.__exportCsvV19 = window.exportCsv;
-  try { exportCsv = window.exportCsv; } catch (error) {}
+  try {
+    exportCsv = window.exportCsv;
+  } catch (error) {}
 })();
 
 /* ==========================================================================
@@ -8252,7 +9760,11 @@ function securityFormMatchesRowsForPrint(rows = []) {
           ? "PO tidak ada untuk vendor/filter tersebut, atau PO sudah pernah daftar."
           : "Belum ada PO available untuk vendor ini."
         : "Pilih Vendor Name dulu supaya list PO terfilter.";
-      list.innerHTML = `<div class="px-3 py-3 text-[12px] text-on-surface-variant">${msg}${registeredCount ? `<div class="mt-1 text-warning font-bold">${registeredCount} PO sudah terdaftar dan disembunyikan.</div>` : ""}</div>`;
+      list.innerHTML = `<div class="px-3 py-3 text-[12px] text-on-surface-variant">${msg}${
+        registeredCount
+          ? `<div class="mt-1 text-warning font-bold">${registeredCount} PO sudah terdaftar dan disembunyikan.</div>`
+          : ""
+      }</div>`;
       return;
     }
 
@@ -8263,15 +9775,27 @@ function securityFormMatchesRowsForPrint(rows = []) {
           const meta = getPoMeta(po);
           const checked = selectedBatch.has(po);
           return `<label onpointerdown="window.__poDropdownInteracting=true; event.stopPropagation(); setTimeout(()=>window.__poDropdownInteracting=false,500)" onclick="event.stopPropagation()" class="w-full px-3 py-3 rounded-lg hover:bg-primary/10 grid grid-cols-[auto_1fr_auto] gap-3 items-center border-b border-outline-variant/20 cursor-pointer touch-manipulation">
-            <input type="checkbox" class="h-5 w-5 accent-primary" ${checked ? "checked" : ""} onchange="togglePoBatchChoice('${poEncode(po)}', this.checked)" />
-            <span class="min-w-0"><span class="font-queue-id text-[12px] sm:text-[13px] break-all block">${esc(po)}</span><span class="text-[10px] text-on-surface-variant font-bold block">${esc(meta?.vendor_name || "-")}</span></span>
-            <span class="text-[10px] text-primary font-bold">SKU ${esc(meta?.count_po_sku || 0)}</span>
+            <input type="checkbox" class="h-5 w-5 accent-primary" ${
+              checked ? "checked" : ""
+            } onchange="togglePoBatchChoice('${poEncode(po)}', this.checked)" />
+            <span class="min-w-0"><span class="font-queue-id text-[12px] sm:text-[13px] break-all block">${esc(
+              po,
+            )}</span><span class="text-[10px] text-on-surface-variant font-bold block">${esc(
+            meta?.vendor_name || "-",
+          )}</span></span>
+            <span class="text-[10px] text-primary font-bold">SKU ${esc(
+              meta?.count_po_sku || 0,
+            )}</span>
           </label>`;
         })
         .join("")}
       </div>
       <div class="sticky bottom-0 bg-surface-container-lowest border-t border-outline-variant p-2">
-        <button id="po-batch-add-btn" type="button" ${selectedBatch.size ? "" : "disabled"} onclick="applyPoBatchSelection(event)" class="w-full bg-primary-container text-on-primary-container rounded-lg px-4 py-3 font-bold disabled:opacity-50 disabled:cursor-not-allowed">${selectedBatch.size ? `Tambah ${selectedBatch.size} PO` : "Pilih PO"}</button>
+        <button id="po-batch-add-btn" type="button" ${
+          selectedBatch.size ? "" : "disabled"
+        } onclick="applyPoBatchSelection(event)" class="w-full bg-primary-container text-on-primary-container rounded-lg px-4 py-3 font-bold disabled:opacity-50 disabled:cursor-not-allowed">${
+      selectedBatch.size ? `Tambah ${selectedBatch.size} PO` : "Pilih PO"
+    }</button>
       </div>`;
   };
 
@@ -8322,17 +9846,19 @@ function securityFormMatchesRowsForPrint(rows = []) {
       st === "EXPIRED"
         ? "bg-error/10 text-error border-error/30"
         : st === "COMPLETED"
-          ? "bg-success/10 text-success border-success/30"
-          : st === "DONE GR"
-            ? "bg-secondary/10 text-secondary border-secondary/30"
-            : st === "WAITING GR"
-              ? "bg-tertiary/10 text-tertiary border-tertiary/30"
-              : st === "UNLOADING"
-                ? "bg-warning/10 text-warning border-warning/30"
-                : st === "CALLED"
-                  ? "bg-primary/10 text-primary border-primary/30"
-                  : "bg-surface-container-high text-on-surface-variant border-outline-variant";
-    return `<span class="inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-extrabold ${cls}">${esc(st || "-")}</span>`;
+        ? "bg-success/10 text-success border-success/30"
+        : st === "DONE GR"
+        ? "bg-secondary/10 text-secondary border-secondary/30"
+        : st === "WAITING GR"
+        ? "bg-tertiary/10 text-tertiary border-tertiary/30"
+        : st === "UNLOADING"
+        ? "bg-warning/10 text-warning border-warning/30"
+        : st === "CALLED"
+        ? "bg-primary/10 text-primary border-primary/30"
+        : "bg-surface-container-high text-on-surface-variant border-outline-variant";
+    return `<span class="inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-extrabold ${cls}">${esc(
+      st || "-",
+    )}</span>`;
   };
 
   window.populateCheckerFormFromRow = function populateCheckerFormFromRowV3(
@@ -8379,21 +9905,21 @@ function securityFormMatchesRowsForPrint(rows = []) {
       box.className = isWaitingGr
         ? "bg-success/15 border border-success/30 rounded-lg px-4 py-3 text-success font-bold flex items-center gap-2"
         : isUnloading
-          ? "bg-warning/15 border border-warning/30 rounded-lg px-4 py-3 text-warning font-bold flex items-center gap-2"
-          : "bg-primary/15 border border-primary/30 rounded-lg px-4 py-3 text-primary font-bold flex items-center gap-2";
+        ? "bg-warning/15 border border-warning/30 rounded-lg px-4 py-3 text-warning font-bold flex items-center gap-2"
+        : "bg-primary/15 border border-primary/30 rounded-lg px-4 py-3 text-primary font-bold flex items-center gap-2";
     }
     if (icon)
       icon.textContent = isWaitingGr
         ? "task_alt"
         : isUnloading
-          ? "local_shipping"
-          : "campaign";
+        ? "local_shipping"
+        : "campaign";
     if (label)
       label.textContent = isWaitingGr
         ? "SELESAI BONGKAR → MENUNGGU GR"
         : isUnloading
-          ? "MULAI BONGKAR"
-          : "PANGGIL DRIVER KE GATE";
+        ? "MULAI BONGKAR"
+        : "PANGGIL DRIVER KE GATE";
     if (isWaitingGr) setCheckerSubmitButtonState("active", "Selesai Bongkar");
     else if (isUnloading)
       setCheckerSubmitButtonState("active", "Mulai Bongkar");
@@ -8406,8 +9932,8 @@ function securityFormMatchesRowsForPrint(rows = []) {
       count >= 4
         ? "bg-error/10 text-error border-error/30"
         : count >= 3
-          ? "bg-warning/10 text-warning border-warning/30"
-          : "bg-surface-container-high text-on-surface-variant border-outline-variant";
+        ? "bg-warning/10 text-warning border-warning/30"
+        : "bg-surface-container-high text-on-surface-variant border-outline-variant";
     return `<span class="inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-extrabold ${cls}">${count}/4 STEP</span>`;
   };
 
@@ -8427,18 +9953,18 @@ function securityFormMatchesRowsForPrint(rows = []) {
       st === "WAITING"
         ? "Panggil ke Gate"
         : isCalled
-          ? "Mulai Bongkar"
-          : isUnloading
-            ? "Selesai Bongkar"
-            : "Hanya Lihat";
+        ? "Mulai Bongkar"
+        : isUnloading
+        ? "Selesai Bongkar"
+        : "Hanya Lihat";
     const primaryIcon =
       st === "WAITING"
         ? "campaign"
         : isCalled
-          ? "warehouse"
-          : isUnloading
-            ? "task_alt"
-            : "visibility";
+        ? "warehouse"
+        : isUnloading
+        ? "task_alt"
+        : "visibility";
     const primaryButton = checkerActive
       ? `<button type="button" onclick="openCheckerActionFromKey('${key}')" class="bg-primary-container text-on-primary-container px-3 py-2 rounded-lg font-bold text-xs flex-1 inline-flex items-center justify-center gap-1"><span class="material-symbols-outlined text-base">${primaryIcon}</span>${primaryLabel}</button>`
       : "";
@@ -8448,13 +9974,21 @@ function securityFormMatchesRowsForPrint(rows = []) {
       if (callCount >= 3) {
         callAction =
           cooldown > 0
-            ? `<button disabled data-call-cooldown-until="${Date.now() + cooldown * 1000}" class="bg-outline-variant text-on-surface-variant px-3 py-2 rounded-lg font-bold text-xs opacity-60">Expired 4/4 · ${cooldown}s</button>`
+            ? `<button disabled data-call-cooldown-until="${
+                Date.now() + cooldown * 1000
+              }" class="bg-outline-variant text-on-surface-variant px-3 py-2 rounded-lg font-bold text-xs opacity-60">Expired 4/4 · ${cooldown}s</button>`
             : `<button type="button" onclick="markDriverCallFailedFromKey('${key}', this)" class="bg-error/15 border border-error/30 text-error px-3 py-2 rounded-lg font-bold text-xs inline-flex items-center gap-1"><span class="material-symbols-outlined text-base">person_cancel</span>Expired 4/4</button>`;
       } else {
         callAction =
           cooldown > 0
-            ? `<button disabled data-call-cooldown-until="${Date.now() + cooldown * 1000}" class="bg-outline-variant text-on-surface-variant px-3 py-2 rounded-lg font-bold text-xs opacity-60">Panggil ${callCount + 1}/3 · ${cooldown}s</button>`
-            : `<button type="button" onclick="recallDriverFromKey('${key}', this)" class="bg-warning/15 border border-warning/30 text-warning px-3 py-2 rounded-lg font-bold text-xs inline-flex items-center gap-1"><span class="material-symbols-outlined text-base">campaign</span>Panggil ${callCount + 1}/3</button>`;
+            ? `<button disabled data-call-cooldown-until="${
+                Date.now() + cooldown * 1000
+              }" class="bg-outline-variant text-on-surface-variant px-3 py-2 rounded-lg font-bold text-xs opacity-60">Panggil ${
+                callCount + 1
+              }/3 · ${cooldown}s</button>`
+            : `<button type="button" onclick="recallDriverFromKey('${key}', this)" class="bg-warning/15 border border-warning/30 text-warning px-3 py-2 rounded-lg font-bold text-xs inline-flex items-center gap-1"><span class="material-symbols-outlined text-base">campaign</span>Panggil ${
+                callCount + 1
+              }/3</button>`;
       }
     }
 
@@ -8466,17 +10000,68 @@ function securityFormMatchesRowsForPrint(rows = []) {
       "font-queue-id text-tertiary mt-1",
     );
 
-    return `<article class="checker-card rounded-2xl border border-outline-variant/40 bg-surface-container/45 p-4 shadow-sm" data-status="${esc(st)}" data-vendor="${esc(String(row.vendor_name || "").toLowerCase())}" data-queue="${esc(String(row.queue_no || "").toLowerCase())}" data-po="${esc(String(row.po_number || "").toLowerCase())}" data-plate="${esc(String(row.plat_number || "").toLowerCase())}">
-      <div class="flex items-start justify-between gap-3"><div><div class="font-queue-id text-primary text-2xl">${esc(row.queue_no || "-")}</div><div class="text-[11px] uppercase text-on-surface-variant font-bold mt-1">${esc(row.vendor_name || "-")}</div></div><div class="flex flex-col items-end gap-1">${checkerStatusPill(st)}${isCalled ? callLimitBadge(row) : ""}</div></div>
-      <div class="grid grid-cols-2 gap-2 mt-4 text-xs"><div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Plat</div><div class="font-queue-id text-sm mt-1">${esc(row.plat_number || "-")}</div></div><div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Gate</div><div class="font-bold text-sm mt-1">${esc(row.gate || "-")}</div></div><div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Driver</div><div class="font-bold truncate mt-1">${esc(row.driver_name || "-")}</div></div><div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Menunggu</div><div>${waitMarkup}</div></div></div>
-      <div class="mt-3 text-xs text-on-surface-variant"><div><b>Fleet:</b> ${esc(row.fleet_type || "-")}</div><div class="truncate"><b>PO:</b> ${esc(row.po_number || "-")}</div>${isUnloading ? `<div><b>Estimasi selesai:</b> ${esc(getEstimatedFinishedAt(row) || row.sla_finished_at || "-")}</div>` : ""}</div>
+    return `<article class="checker-card rounded-2xl border border-outline-variant/40 bg-surface-container/45 p-4 shadow-sm" data-status="${esc(
+      st,
+    )}" data-vendor="${esc(
+      String(row.vendor_name || "").toLowerCase(),
+    )}" data-queue="${esc(
+      String(row.queue_no || "").toLowerCase(),
+    )}" data-po="${esc(
+      String(row.po_number || "").toLowerCase(),
+    )}" data-plate="${esc(String(row.plat_number || "").toLowerCase())}">
+      <div class="flex items-start justify-between gap-3"><div><div class="font-queue-id text-primary text-2xl">${esc(
+        row.queue_no || "-",
+      )}</div><div class="text-[11px] uppercase text-on-surface-variant font-bold mt-1">${esc(
+      row.vendor_name || "-",
+    )}</div></div><div class="flex flex-col items-end gap-1">${checkerStatusPill(
+      st,
+    )}${isCalled ? callLimitBadge(row) : ""}</div></div>
+      <div class="grid grid-cols-2 gap-2 mt-4 text-xs"><div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Plat</div><div class="font-queue-id text-sm mt-1">${esc(
+        row.plat_number || "-",
+      )}</div></div><div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Gate</div><div class="font-bold text-sm mt-1">${esc(
+      row.gate || "-",
+    )}</div></div><div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Driver</div><div class="font-bold truncate mt-1">${esc(
+      row.driver_name || "-",
+    )}</div></div><div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Menunggu</div><div>${waitMarkup}</div></div></div>
+      <div class="mt-3 text-xs text-on-surface-variant"><div><b>Fleet:</b> ${esc(
+        row.fleet_type || "-",
+      )}</div><div class="truncate"><b>PO:</b> ${esc(
+      row.po_number || "-",
+    )}</div>${
+      isUnloading
+        ? `<div><b>Estimasi selesai:</b> ${esc(
+            getEstimatedFinishedAt(row) || row.sla_finished_at || "-",
+          )}</div>`
+        : ""
+    }</div>
       <div class="mt-4 flex flex-wrap gap-2">${primaryButton}${callAction}${waButton}</div>
     </article>`;
   };
 
   window.reportTable = function reportTableV3(rows) {
     const role = String(getAuthUser?.()?.role || "").toUpperCase();
-    return `<div class="overflow-x-auto"><table id="report-table" class="w-full text-left"><thead class="bg-surface-container text-on-surface-variant"><tr>${["Action", "Print", "WA", "Created", "Queue", "Vendor", "Fleet", "Plat", "PO", "Gate", "Status", "Call", "Menunggu", "Qty", "SKU", "SLA"].map((h) => `<th class="px-4 py-3 font-label-sm uppercase">${h}</th>`).join("")}</tr></thead><tbody class="divide-y divide-outline-variant/10">${
+    return `<div class="overflow-x-auto"><table id="report-table" class="w-full text-left"><thead class="bg-surface-container text-on-surface-variant"><tr>${[
+      "Action",
+      "Print",
+      "WA",
+      "Created",
+      "Queue",
+      "Vendor",
+      "Fleet",
+      "Plat",
+      "PO",
+      "Gate",
+      "Status",
+      "Call",
+      "Menunggu",
+      "Qty",
+      "SKU",
+      "SLA",
+    ]
+      .map((h) => `<th class="px-4 py-3 font-label-sm uppercase">${h}</th>`)
+      .join(
+        "",
+      )}</tr></thead><tbody class="divide-y divide-outline-variant/10">${
       rows
         .map((r, i) => {
           const key = checkerRowKey(r);
@@ -8492,13 +10077,36 @@ function securityFormMatchesRowsForPrint(rows = []) {
             st === "EXPIRED"
               ? "Expired"
               : ["WAITING GR", "DONE GR", "COMPLETED"].includes(st)
-                ? "Bongkar selesai"
-                : r.waiting_text ||
-                  liveWaitingText(
-                    r.created_at,
-                    r.waiting_gr_at || r.completed_at,
-                  );
-          return `<tr class="hover:bg-primary/5 ${st === "EXPIRED" ? "bg-error/5" : ""}"><td class="px-4 py-3">${action}</td><td class="px-4 py-3"><button onclick="printWaitingListTicket(${i})" class="thin-tab rounded-lg px-3 py-2 font-bold text-xs">Print</button></td><td class="px-4 py-3">-</td>${["created_at", "queue_no", "vendor_name", "fleet_type", "plat_number", "po_number", "gate", "status"].map((k) => `<td class="px-4 py-3 text-sm">${esc(r[k] ?? "")}</td>`).join("")}<td class="px-4 py-3 font-bold">${esc(r.call_count || 0)}</td><td class="px-4 py-3 font-queue-id">${esc(wait)}</td><td class="px-4 py-3">${esc(r.total_po_qty ?? "")}</td><td class="px-4 py-3">${esc(r.count_po_sku ?? "")}</td><td class="px-4 py-3">${esc(r.unload_sla ?? r.sla_status ?? "")}</td></tr>`;
+              ? "Bongkar selesai"
+              : r.waiting_text ||
+                liveWaitingText(
+                  r.created_at,
+                  r.waiting_gr_at || r.completed_at,
+                );
+          return `<tr class="hover:bg-primary/5 ${
+            st === "EXPIRED" ? "bg-error/5" : ""
+          }"><td class="px-4 py-3">${action}</td><td class="px-4 py-3"><button onclick="printWaitingListTicket(${i})" class="thin-tab rounded-lg px-3 py-2 font-bold text-xs">Print</button></td><td class="px-4 py-3">-</td>${[
+            "created_at",
+            "queue_no",
+            "vendor_name",
+            "fleet_type",
+            "plat_number",
+            "po_number",
+            "gate",
+            "status",
+          ]
+            .map((k) => `<td class="px-4 py-3 text-sm">${esc(r[k] ?? "")}</td>`)
+            .join("")}<td class="px-4 py-3 font-bold">${esc(
+            r.call_count || 0,
+          )}</td><td class="px-4 py-3 font-queue-id">${esc(
+            wait,
+          )}</td><td class="px-4 py-3">${esc(
+            r.total_po_qty ?? "",
+          )}</td><td class="px-4 py-3">${esc(
+            r.count_po_sku ?? "",
+          )}</td><td class="px-4 py-3">${esc(
+            r.unload_sla ?? r.sla_status ?? "",
+          )}</td></tr>`;
         })
         .join("") ||
       `<tr><td colspan="16" class="px-6 py-8 text-center text-on-surface-variant">Belum ada waiting list.</td></tr>`
@@ -8531,7 +10139,33 @@ function securityFormMatchesRowsForPrint(rows = []) {
   window.pageMonitor = function pageMonitorV3() {
     const rows = state.dashboard?.queue || [];
     const s = getMonitorSummary(rows);
-    return `<div class="grid grid-cols-1 xl:grid-cols-12 gap-gutter"><div class="xl:col-span-12 glass-card rounded-xl p-6"><div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6"><div><h3 class="font-headline-md text-headline-md">Waiting List Monitoring</h3><p class="text-on-surface-variant">Flow: WAITING → CALLED → UNLOADING → WAITING GR → DONE GR → COMPLETED.</p></div><button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">refresh</span>Refresh</button></div><div class="grid grid-cols-2 md:grid-cols-5 xl:grid-cols-10 gap-3 mb-6">${miniMetric("Total", s.total, "text-primary")}${miniMetric("Waiting", s.waiting, "text-tertiary")}${miniMetric("Called", s.called, "text-primary")}${miniMetric("Unloading", s.unloading, "text-warning")}${miniMetric("Waiting GR", s.waitingGr, "text-tertiary")}${miniMetric("Done GR", s.doneGr, "text-secondary")}${miniMetric("Completed", s.completed, "text-success")}${miniMetric("Expired", s.expired, "text-error")}${miniMetric("Gate Aktif", getActiveGateSet().size, "text-primary")}${miniMetric("SLA Miss", s.miss, s.miss ? "text-error" : "text-success")}</div>${gateVisibilityPanel(rows)}${monitorUnifiedDetailTable(rows)}<div class="mb-2">${slaRowsLegend()}</div></div></div>`;
+    return `<div class="grid grid-cols-1 xl:grid-cols-12 gap-gutter"><div class="xl:col-span-12 glass-card rounded-xl p-6"><div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6"><div><h3 class="font-headline-md text-headline-md">Waiting List Monitoring</h3><p class="text-on-surface-variant">Flow: WAITING → CALLED → UNLOADING → WAITING GR → DONE GR → COMPLETED.</p></div><button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">refresh</span>Refresh</button></div><div class="grid grid-cols-2 md:grid-cols-5 xl:grid-cols-10 gap-3 mb-6">${miniMetric(
+      "Total",
+      s.total,
+      "text-primary",
+    )}${miniMetric("Waiting", s.waiting, "text-tertiary")}${miniMetric(
+      "Called",
+      s.called,
+      "text-primary",
+    )}${miniMetric("Unloading", s.unloading, "text-warning")}${miniMetric(
+      "Waiting GR",
+      s.waitingGr,
+      "text-tertiary",
+    )}${miniMetric("Done GR", s.doneGr, "text-secondary")}${miniMetric(
+      "Completed",
+      s.completed,
+      "text-success",
+    )}${miniMetric("Expired", s.expired, "text-error")}${miniMetric(
+      "Gate Aktif",
+      getActiveGateSet().size,
+      "text-primary",
+    )}${miniMetric(
+      "SLA Miss",
+      s.miss,
+      s.miss ? "text-error" : "text-success",
+    )}</div>${gateVisibilityPanel(rows)}${monitorUnifiedDetailTable(
+      rows,
+    )}<div class="mb-2">${slaRowsLegend()}</div></div></div>`;
   };
 
   setInterval(() => {
@@ -8694,8 +10328,8 @@ function securityFormMatchesRowsForPrint(rows = []) {
       estimateSource: directDate
         ? "SLA Finished At"
         : startDate
-          ? "Start Bongkar + SLA Fleet"
-          : "Belum mulai bongkar",
+        ? "Start Bongkar + SLA Fleet"
+        : "Belum mulai bongkar",
       estimateText,
       outSla,
       diffMinutes,
@@ -9205,10 +10839,10 @@ window.initShader = function initShaderDisabled() {
       status === "WAITING"
         ? "Panggil Driver ke Gate"
         : status === "CALLED"
-          ? "Mulai Bongkar"
-          : status === "UNLOADING"
-            ? "Selesai Bongkar"
-            : "Proses Tiket";
+        ? "Mulai Bongkar"
+        : status === "UNLOADING"
+        ? "Selesai Bongkar"
+        : "Proses Tiket";
 
     const title = document.getElementById("mobile-checker-sheet-title");
     const summary = document.getElementById("mobile-checker-sheet-summary");
@@ -9379,7 +11013,11 @@ window.initShader = function initShaderDisabled() {
         const previous = points[index - 1];
         const current = points[index];
         const middleX = (previous.x + current.x) / 2;
-        path += ` C ${middleX.toFixed(2)} ${previous.y.toFixed(2)}, ${middleX.toFixed(2)} ${current.y.toFixed(2)}, ${current.x.toFixed(2)} ${current.y.toFixed(2)}`;
+        path += ` C ${middleX.toFixed(2)} ${previous.y.toFixed(
+          2,
+        )}, ${middleX.toFixed(2)} ${current.y.toFixed(2)}, ${current.x.toFixed(
+          2,
+        )} ${current.y.toFixed(2)}`;
       }
     }
 
@@ -9398,16 +11036,38 @@ window.initShader = function initShaderDisabled() {
 
       <div class="wm-line-chart">
         <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="Tren kendaraan masuk 8 jam terakhir">
-          <line x1="${left}" y1="${top + plotHeight * 0.25}" x2="${width - right}" y2="${top + plotHeight * 0.25}" class="wm-chart-grid-line"></line>
-          <line x1="${left}" y1="${top + plotHeight * 0.5}" x2="${width - right}" y2="${top + plotHeight * 0.5}" class="wm-chart-grid-line"></line>
-          <line x1="${left}" y1="${top + plotHeight * 0.75}" x2="${width - right}" y2="${top + plotHeight * 0.75}" class="wm-chart-grid-line"></line>
+          <line x1="${left}" y1="${top + plotHeight * 0.25}" x2="${
+      width - right
+    }" y2="${top + plotHeight * 0.25}" class="wm-chart-grid-line"></line>
+          <line x1="${left}" y1="${top + plotHeight * 0.5}" x2="${
+      width - right
+    }" y2="${top + plotHeight * 0.5}" class="wm-chart-grid-line"></line>
+          <line x1="${left}" y1="${top + plotHeight * 0.75}" x2="${
+      width - right
+    }" y2="${top + plotHeight * 0.75}" class="wm-chart-grid-line"></line>
           <path d="${path}" class="wm-chart-path"></path>
-          ${points.map((point) => `<circle cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="4" class="wm-chart-dot"><title>${point.value} kendaraan</title></circle>`).join("")}
+          ${points
+            .map(
+              (point) =>
+                `<circle cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(
+                  2,
+                )}" r="4" class="wm-chart-dot"><title>${
+                  point.value
+                } kendaraan</title></circle>`,
+            )
+            .join("")}
         </svg>
       </div>
 
       <div class="wm-chart-labels">
-        ${labels.map((label, index) => `<span class="${index % 2 ? "wm-label-secondary" : ""}">${esc(label)}</span>`).join("")}
+        ${labels
+          .map(
+            (label, index) =>
+              `<span class="${index % 2 ? "wm-label-secondary" : ""}">${esc(
+                label,
+              )}</span>`,
+          )
+          .join("")}
       </div>
     </section>`;
   }
@@ -9469,7 +11129,9 @@ window.initShader = function initShaderDisabled() {
           class="wm-donut"
           style="background: ${donutBackground};"
           role="img"
-          aria-label="Completed SLA ${num(completedSla)}, Miss SLA ${num(missSla)}, Expired ${num(expired)}"
+          aria-label="Completed SLA ${num(completedSla)}, Miss SLA ${num(
+      missSla,
+    )}, Expired ${num(expired)}"
         >
           <div class="wm-donut-hole">
             <strong>${num(totalFinal)}</strong>
@@ -9539,8 +11201,12 @@ window.initShader = function initShaderDisabled() {
             : `Lewat ${formatMinutesCompact(Math.abs(estimate.diffMinutes))}`;
       }
 
-      return `<article class="wm-gate-card ${status === "UNLOADING" ? "is-active" : "is-called"}">
-        <span class="wm-gate-badge">GATE ${esc(String(gateNumber).padStart(2, "0"))}</span>
+      return `<article class="wm-gate-card ${
+        status === "UNLOADING" ? "is-active" : "is-called"
+      }">
+        <span class="wm-gate-badge">GATE ${esc(
+          String(gateNumber).padStart(2, "0"),
+        )}</span>
         <strong>${esc(row.plat_number || "-")}</strong>
         <span class="wm-gate-driver">${esc(row.driver_name || "-")}</span>
         <em>${esc(note)}</em>
@@ -9951,17 +11617,27 @@ window.initShader = function initShaderDisabled() {
                 .map((row) => {
                   const st = String(row.status || "").toUpperCase();
                   return `<tr>
-                    <td class="wm-mono wm-queue">${esc(row.queue_no || "-")}</td>
-                    <td><span class="wm-status-pill ${wmStatusClass(st)}">${esc(wmStatusText(st))}</span></td>
+                    <td class="wm-mono wm-queue">${esc(
+                      row.queue_no || "-",
+                    )}</td>
+                    <td><span class="wm-status-pill ${wmStatusClass(st)}">${esc(
+                    wmStatusText(st),
+                  )}</span></td>
                     <td class="wm-vendor">${esc(row.vendor_name || "-")}</td>
                     <td>${esc(row.driver_name || "-")}</td>
                     <td class="wm-mono">${esc(row.plat_number || "-")}</td>
                     <td class="wm-mono wm-po">${esc(row.po_number || "-")}</td>
                     <td>${esc(row.fleet_type || "-")}</td>
                     <td class="wm-gate-text">${esc(row.gate || "-")}</td>
-                    <td class="wm-mono">${esc(formatDateTimeShort(getTicketRegisterTimeV7(row)))}</td>
-                    <td class="wm-mono">${esc(formatDateTimeShort(getTicketCalledTimeV7(row)))}</td>
-                    <td class="wm-mono">${esc(formatDateTimeShort(getTicketStartUnloadingTimeV7(row)))}</td>
+                    <td class="wm-mono">${esc(
+                      formatDateTimeShort(getTicketRegisterTimeV7(row)),
+                    )}</td>
+                    <td class="wm-mono">${esc(
+                      formatDateTimeShort(getTicketCalledTimeV7(row)),
+                    )}</td>
+                    <td class="wm-mono">${esc(
+                      formatDateTimeShort(getTicketStartUnloadingTimeV7(row)),
+                    )}</td>
                     <td>${wmWaitingMarkup(row)}</td>
                     <td>${wmSlaCountdown(row)}</td>
                   </tr>`;
@@ -10563,8 +12239,8 @@ window.initShader = function initShaderDisabled() {
     typeof window.checkerTicketCard === "function"
       ? window.checkerTicketCard
       : typeof checkerTicketCard === "function"
-        ? checkerTicketCard
-        : null;
+      ? checkerTicketCard
+      : null;
 
   window.getCheckerSectionRows = function getCheckerSectionRowsV15(
     section = getCheckerSection(),
@@ -10622,10 +12298,18 @@ window.initShader = function initShaderDisabled() {
         ${tabs
           .map(([key, label, count, icon]) => {
             const on = active === key;
-            return `<button type="button" onclick="setCheckerSection('${key}')" class="${on ? "bg-secondary-container text-on-secondary-container border-secondary-container" : "bg-surface-container/60 text-on-surface-variant border-outline-variant"} border rounded-xl px-2 py-3 font-bold text-[11px] sm:text-xs flex items-center justify-center gap-2">
+            return `<button type="button" onclick="setCheckerSection('${key}')" class="${
+              on
+                ? "bg-secondary-container text-on-secondary-container border-secondary-container"
+                : "bg-surface-container/60 text-on-surface-variant border-outline-variant"
+            } border rounded-xl px-2 py-3 font-bold text-[11px] sm:text-xs flex items-center justify-center gap-2">
               <span class="material-symbols-outlined text-base">${icon}</span>
               <span>${label}</span>
-              <span class="rounded-full px-2 py-0.5 text-[10px] ${on ? "bg-on-secondary-container/20" : "bg-surface-container-high"}">${count}</span>
+              <span class="rounded-full px-2 py-0.5 text-[10px] ${
+                on
+                  ? "bg-on-secondary-container/20"
+                  : "bg-surface-container-high"
+              }">${count}</span>
             </button>`;
           })
           .join("")}
@@ -10636,25 +12320,26 @@ window.initShader = function initShaderDisabled() {
 
   window.checkerStatusPill = function checkerStatusPillV15(status = "") {
     const value = String(status || "WAITING").toUpperCase();
-    const cls =
-      ["EXPIRED", "CANCELLED"].includes(value)
-        ? "bg-error/10 text-error border-error/30"
-        : value === "COMPLETED"
-          ? "bg-success/10 text-success border-success/30"
-          : value === "DONE GR"
-            ? "bg-secondary/10 text-secondary border-secondary/30"
-            : value === "WAITING GR"
-              ? "bg-tertiary/10 text-tertiary border-tertiary/30"
-              : value === "CHECKING"
-                ? "bg-primary/10 text-primary border-primary/30"
-                : value === "WAITING CHECKER"
-                  ? "bg-warning/10 text-warning border-warning/30"
-                  : value === "UNLOADING"
-                    ? "bg-warning/10 text-warning border-warning/30"
-                    : value === "CALLED"
-                      ? "bg-primary/10 text-primary border-primary/30"
-                      : "bg-surface-container-high text-on-surface-variant border-outline-variant";
-    return `<span class="inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-extrabold ${cls}">${esc(value)}</span>`;
+    const cls = ["EXPIRED", "CANCELLED"].includes(value)
+      ? "bg-error/10 text-error border-error/30"
+      : value === "COMPLETED"
+      ? "bg-success/10 text-success border-success/30"
+      : value === "DONE GR"
+      ? "bg-secondary/10 text-secondary border-secondary/30"
+      : value === "WAITING GR"
+      ? "bg-tertiary/10 text-tertiary border-tertiary/30"
+      : value === "CHECKING"
+      ? "bg-primary/10 text-primary border-primary/30"
+      : value === "WAITING CHECKER"
+      ? "bg-warning/10 text-warning border-warning/30"
+      : value === "UNLOADING"
+      ? "bg-warning/10 text-warning border-warning/30"
+      : value === "CALLED"
+      ? "bg-primary/10 text-primary border-primary/30"
+      : "bg-surface-container-high text-on-surface-variant border-outline-variant";
+    return `<span class="inline-flex items-center rounded-full border px-2 py-1 text-[10px] font-extrabold ${cls}">${esc(
+      value,
+    )}</span>`;
   };
   checkerStatusPill = window.checkerStatusPill;
 
@@ -10701,8 +12386,8 @@ window.initShader = function initShaderDisabled() {
         safe === "WAITING GR"
           ? "bg-success/10 border-success/30 text-success"
           : safe === "UNLOADING"
-            ? "bg-warning/10 border-warning/30 text-warning"
-            : "bg-primary/15 border-primary/30 text-primary"
+          ? "bg-warning/10 border-warning/30 text-warning"
+          : "bg-primary/15 border-primary/30 text-primary"
       }`;
     }
     if (icon)
@@ -10710,22 +12395,22 @@ window.initShader = function initShaderDisabled() {
         safe === "WAITING GR"
           ? "fact_check"
           : safe === "UNLOADING"
-            ? "warehouse"
-            : "campaign";
+          ? "warehouse"
+          : "campaign";
     if (label)
       label.textContent =
         safe === "WAITING GR"
           ? "FINISH UNLOADING → WAITING GR"
           : safe === "UNLOADING"
-            ? "MULAI UNLOADING"
-            : "PANGGIL DRIVER KE GATE";
+          ? "MULAI UNLOADING"
+          : "PANGGIL DRIVER KE GATE";
     setCheckerSubmitButtonState?.(
       "active",
       safe === "WAITING GR"
         ? "Selesai Unloading"
         : safe === "UNLOADING"
-          ? "Mulai Unloading"
-          : "Panggil ke Gate",
+        ? "Mulai Unloading"
+        : "Panggil ke Gate",
     );
   };
   updateCheckerStatusPreview = window.updateCheckerStatusPreview;
@@ -10735,7 +12420,9 @@ window.initShader = function initShaderDisabled() {
     const safeDone = Math.max(0, Number(done || 0));
     const pct = Math.min(100, Math.round((safeDone / safeTotal) * 100));
     return `<div class="mt-3">
-      <div class="flex justify-between text-[11px] font-bold text-on-surface-variant"><span>${esc(label)}</span><span>${safeDone}/${Number(total || 0)}</span></div>
+      <div class="flex justify-between text-[11px] font-bold text-on-surface-variant"><span>${esc(
+        label,
+      )}</span><span>${safeDone}/${Number(total || 0)}</span></div>
       <div class="h-2 rounded-full bg-surface-container-high mt-1 overflow-hidden"><div class="h-full rounded-full bg-${tone}" style="width:${pct}%"></div></div>
     </div>`;
   }
@@ -10751,17 +12438,42 @@ window.initShader = function initShaderDisabled() {
       row,
       "font-queue-id text-tertiary mt-1",
     );
-    return `<article class="checker-card rounded-2xl border border-outline-variant/40 bg-surface-container/45 p-4 shadow-sm" data-status="${esc(row.status)}" data-vendor="${esc(String(row.vendor_name || "").toLowerCase())}" data-queue="${esc(String(row.queue_no || "").toLowerCase())}" data-po="${esc(String(row.po_number || "").toLowerCase())}" data-plate="${esc(String(row.plat_number || "").toLowerCase())}">
-      <div class="flex items-start justify-between gap-3"><div><div class="font-queue-id text-primary text-2xl">${esc(row.queue_no || "-")}</div><div class="text-[11px] uppercase text-on-surface-variant font-bold mt-1">${esc(row.vendor_name || "-")}</div></div>${checkerStatusPill(row.status)}</div>
+    return `<article class="checker-card rounded-2xl border border-outline-variant/40 bg-surface-container/45 p-4 shadow-sm" data-status="${esc(
+      row.status,
+    )}" data-vendor="${esc(
+      String(row.vendor_name || "").toLowerCase(),
+    )}" data-queue="${esc(
+      String(row.queue_no || "").toLowerCase(),
+    )}" data-po="${esc(
+      String(row.po_number || "").toLowerCase(),
+    )}" data-plate="${esc(String(row.plat_number || "").toLowerCase())}">
+      <div class="flex items-start justify-between gap-3"><div><div class="font-queue-id text-primary text-2xl">${esc(
+        row.queue_no || "-",
+      )}</div><div class="text-[11px] uppercase text-on-surface-variant font-bold mt-1">${esc(
+      row.vendor_name || "-",
+    )}</div></div>${checkerStatusPill(row.status)}</div>
       <div class="grid grid-cols-2 gap-2 mt-4 text-xs">
-        <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Plat</div><div class="font-queue-id text-sm mt-1">${esc(row.plat_number || "-")}</div></div>
-        <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Gate</div><div class="font-bold text-sm mt-1">${esc(row.gate || "-")}</div></div>
+        <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Plat</div><div class="font-queue-id text-sm mt-1">${esc(
+          row.plat_number || "-",
+        )}</div></div>
+        <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Gate</div><div class="font-bold text-sm mt-1">${esc(
+          row.gate || "-",
+        )}</div></div>
         <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">PO</div><div class="font-bold mt-1">${poCount} PO</div></div>
         <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Menunggu</div><div>${waitMarkup}</div></div>
       </div>
-      ${checkerProgressBarV15(checkerDone, poCount, "Checker selesai", "primary")}
-      <div class="mt-3 text-xs text-on-surface-variant"><b>Checker aktif:</b> ${esc(names)}${checking ? ` · ${checking} sedang proses` : ""}</div>
-      <button type="button" onclick="openCheckerPoPanelV15('${esc(row.ticket_id)}')" class="mt-4 w-full bg-primary-container text-on-primary-container px-4 py-3 rounded-xl font-bold text-xs inline-flex items-center justify-center gap-2"><span class="material-symbols-outlined text-base">fact_check</span>Kelola PO Checker</button>
+      ${checkerProgressBarV15(
+        checkerDone,
+        poCount,
+        "Checker selesai",
+        "primary",
+      )}
+      <div class="mt-3 text-xs text-on-surface-variant"><b>Checker aktif:</b> ${esc(
+        names,
+      )}${checking ? ` · ${checking} sedang proses` : ""}</div>
+      <button type="button" onclick="openCheckerPoPanelV15('${esc(
+        row.ticket_id,
+      )}')" class="mt-4 w-full bg-primary-container text-on-primary-container px-4 py-3 rounded-xl font-bold text-xs inline-flex items-center justify-center gap-2"><span class="material-symbols-outlined text-base">fact_check</span>Kelola PO Checker</button>
     </article>`;
   }
 
@@ -10786,9 +12498,30 @@ window.initShader = function initShaderDisabled() {
           <input type="hidden" name="status" value="CALLED" />
           <input type="hidden" name="unload_sla" value="ON PROCESS" />
           <div class="grid grid-cols-1 gap-4">
-            ${textInput("vendor_name", "Vendor Name", "Pilih dari card", "", "", "required readonly")}
-            ${textInput("fleet_type", "Fleet Type", "Pilih dari card", "", "", "required readonly")}
-            ${textInput("plat_number", "Plat Number", "Pilih dari card", "", "", 'required readonly onblur="validatePlateInput(this)"')}
+            ${textInput(
+              "vendor_name",
+              "Vendor Name",
+              "Pilih dari card",
+              "",
+              "",
+              "required readonly",
+            )}
+            ${textInput(
+              "fleet_type",
+              "Fleet Type",
+              "Pilih dari card",
+              "",
+              "",
+              "required readonly",
+            )}
+            ${textInput(
+              "plat_number",
+              "Plat Number",
+              "Pilih dari card",
+              "",
+              "",
+              'required readonly onblur="validatePlateInput(this)"',
+            )}
             ${checkerGatePicker()}
             <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Status Berikutnya</span><div id="checker-status-box" class="bg-primary/15 border border-primary/30 rounded-lg px-4 py-3 text-primary font-bold flex items-center gap-2"><span id="checker-status-icon" class="material-symbols-outlined text-base">campaign</span><span id="checker-status-preview">PANGGIL DRIVER</span></div></label>
           </div>
@@ -10803,7 +12536,9 @@ window.initShader = function initShaderDisabled() {
     if (section === "checking") {
       return `<h3 class="font-headline-md text-headline-md mb-1">Checker Barang</h3>
         <p class="text-on-surface-variant mb-5">Satu ticket boleh dikerjakan banyak checker. Satu PO hanya dapat diklaim satu checker.</p>
-        <div class="rounded-xl border border-primary/25 bg-primary/10 p-4"><div class="text-xs uppercase font-bold text-on-surface-variant">Master Checker</div><div class="text-3xl font-extrabold text-primary mt-2">${num(mp.length)}</div><div class="text-xs text-on-surface-variant mt-1">Nama aktif dari sheet <b>inbound mp</b></div></div>
+        <div class="rounded-xl border border-primary/25 bg-primary/10 p-4"><div class="text-xs uppercase font-bold text-on-surface-variant">Master Checker</div><div class="text-3xl font-extrabold text-primary mt-2">${num(
+          mp.length,
+        )}</div><div class="text-xs text-on-surface-variant mt-1">Nama aktif dari sheet <b>inbound mp</b></div></div>
         <div class="mt-4 rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4 text-sm text-on-surface-variant"><b class="text-on-surface">Cara kerja</b><br/>Buka card ticket → pilih nama checker → pilih PO → Start. Setelah selesai, pilih nama yang sama dan Done Checker.</div>`;
     }
     return `<h3 class="font-headline-md text-headline-md mb-1">Data Selesai Checker</h3><p class="text-on-surface-variant">Admin wajib mengisi Actual Qty per PO sebelum Done GR. DONE GR adalah tahap akhir proses tiket.</p>`;
@@ -10817,21 +12552,46 @@ window.initShader = function initShaderDisabled() {
       section === "unloading"
         ? "Unloading"
         : section === "checking"
-          ? "Checker Barang"
-          : section === "selesai"
-            ? "Selesai"
-            : "Memanggil";
+        ? "Checker Barang"
+        : section === "selesai"
+        ? "Selesai"
+        : "Memanggil";
 
     return `<div class="grid grid-cols-1 xl:grid-cols-12 gap-gutter">
       <div class="xl:col-span-8 glass-card rounded-xl p-4 sm:p-6">
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4"><div><h3 class="font-headline-md text-headline-md mb-1">Checker Inbound</h3><p class="text-on-surface-variant">Flow: panggil → unloading → checker barang per PO → GR per PO.</p></div><button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-2 font-bold flex items-center gap-2 w-fit"><span class="material-symbols-outlined">refresh</span>Refresh</button></div>
         ${checkerSectionTabs()}
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${miniMetric("Memanggil", counts.memanggil, "text-primary")}${miniMetric("Unloading", counts.unloading, "text-warning")}${miniMetric("Checker Barang", counts.checking, "text-primary")}${miniMetric("Selesai", counts.selesai, "text-success")}</div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">${miniMetric(
+          "Memanggil",
+          counts.memanggil,
+          "text-primary",
+        )}${miniMetric(
+      "Unloading",
+      counts.unloading,
+      "text-warning",
+    )}${miniMetric(
+      "Checker Barang",
+      counts.checking,
+      "text-primary",
+    )}${miniMetric("Selesai", counts.selesai, "text-success")}</div>
         <input id="checker-mobile-search" oninput="filterCheckerCards()" class="form-input mb-4" placeholder="Cari queue / plat / vendor / PO / checker..." />
-        <div class="flex items-center justify-between mb-3"><div class="font-bold text-on-surface">${esc(sectionTitle)}</div><div class="text-xs text-on-surface-variant">${num(rows.length)} ticket</div></div>
-        <div id="checker-card-list" class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[68vh] overflow-y-auto pr-1">${rows.map((row, i) => checkerTicketCard(row, i)).join("") || `<div class="md:col-span-2 rounded-xl border border-dashed border-outline-variant p-8 text-center text-on-surface-variant">Belum ada data di section ${esc(sectionTitle)}.</div>`}</div>
+        <div class="flex items-center justify-between mb-3"><div class="font-bold text-on-surface">${esc(
+          sectionTitle,
+        )}</div><div class="text-xs text-on-surface-variant">${num(
+      rows.length,
+    )} ticket</div></div>
+        <div id="checker-card-list" class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[68vh] overflow-y-auto pr-1">${
+          rows.map((row, i) => checkerTicketCard(row, i)).join("") ||
+          `<div class="md:col-span-2 rounded-xl border border-dashed border-outline-variant p-8 text-center text-on-surface-variant">Belum ada data di section ${esc(
+            sectionTitle,
+          )}.</div>`
+        }</div>
       </div>
-      <div id="checker-desktop-action-panel" class="xl:col-span-4 glass-card rounded-xl p-4 sm:p-6">${["memanggil", "unloading"].includes(section) ? checkerStandardActionPanelV15() : checkerInfoPanelV15(section)}</div>
+      <div id="checker-desktop-action-panel" class="xl:col-span-4 glass-card rounded-xl p-4 sm:p-6">${
+        ["memanggil", "unloading"].includes(section)
+          ? checkerStandardActionPanelV15()
+          : checkerInfoPanelV15(section)
+      }</div>
     </div>`;
   };
   pageChecker = window.pageChecker;
@@ -10877,13 +12637,55 @@ window.initShader = function initShaderDisabled() {
     modal.className = "inbound-modal-v15";
     modal.innerHTML = `<div class="inbound-modal-backdrop-v15" onclick="closeInboundModalV15()"></div>
       <section class="inbound-modal-panel-v15" role="dialog" aria-modal="true">
-        <div class="inbound-modal-head-v15"><div><div class="font-queue-id text-primary text-2xl">${esc(ticket.queue_no || "-")}</div><div class="text-xs text-on-surface-variant mt-1">${esc(ticket.vendor_name || "-")} · ${esc(ticket.plat_number || "-")} · ${poRows.length} PO</div></div><button type="button" onclick="closeInboundModalV15()" class="thin-tab rounded-full p-2"><span class="material-symbols-outlined">close</span></button></div>
+        <div class="inbound-modal-head-v15"><div><div class="font-queue-id text-primary text-2xl">${esc(
+          ticket.queue_no || "-",
+        )}</div><div class="text-xs text-on-surface-variant mt-1">${esc(
+      ticket.vendor_name || "-",
+    )} · ${esc(ticket.plat_number || "-")} · ${
+      poRows.length
+    } PO</div></div><button type="button" onclick="closeInboundModalV15()" class="thin-tab rounded-full p-2"><span class="material-symbols-outlined">close</span></button></div>
         <div class="p-4 sm:p-6 overflow-y-auto">
-          ${!mp.length ? `<div class="rounded-xl border border-error/30 bg-error/10 text-error p-4 mb-4 font-bold">Master checker belum memiliki nama aktif.</div>` : ""}
+          ${
+            !mp.length
+              ? `<div class="rounded-xl border border-error/30 bg-error/10 text-error p-4 mb-4 font-bold">Master checker belum memiliki nama aktif.</div>`
+              : ""
+          }
           <label class="flex flex-col gap-2 mb-2"><span class="text-xs uppercase font-bold text-on-surface-variant">Cari Nama Checker</span><input id="checker-mp-search-v15" type="search" class="form-input" placeholder="Ketik nama atau MP ID..." autocomplete="off" /></label>
-          <label class="flex flex-col gap-2 mb-4"><span class="text-xs uppercase font-bold text-on-surface-variant">Nama Checker</span><select id="checker-mp-select-v15" class="form-select"><option value="">Pilih nama checker</option>${mp.map((item) => `<option value="${esc(item.checker_id || item.mp_id)}">${esc(item.checker_name)} · ${esc(item.checker_id || item.mp_id)}</option>`).join("")}</select><span class="text-[11px] text-on-surface-variant">Ketik nama atau MP ID di atas, lalu pilih dari dropdown.</span></label>
+          <label class="flex flex-col gap-2 mb-4"><span class="text-xs uppercase font-bold text-on-surface-variant">Nama Checker</span><select id="checker-mp-select-v15" class="form-select"><option value="">Pilih nama checker</option>${mp
+            .map(
+              (item) =>
+                `<option value="${esc(item.checker_id || item.mp_id)}">${esc(
+                  item.checker_name,
+                )} · ${esc(item.checker_id || item.mp_id)}</option>`,
+            )
+            .join(
+              "",
+            )}</select><span class="text-[11px] text-on-surface-variant">Ketik nama atau MP ID di atas, lalu pilih dari dropdown.</span></label>
           <div class="space-y-3" id="checker-po-list-v15">
-            ${poRows.map((po) => `<label class="checker-po-row-v15"><input type="checkbox" class="checker-po-choice-v15" value="${esc(po.ticket_po_id)}" /><div class="min-w-0 flex-1"><div class="font-queue-id text-sm break-all">${esc(po.po_number || "-")}</div><div class="text-[11px] text-on-surface-variant mt-1">Qty ${num(po.total_po_qty || 0)} · SKU ${num(po.count_po_sku || 0)}</div><div class="text-[11px] mt-1"><b>Checker:</b> ${esc(po.checker_name || "Belum dipilih")} · <b>Start:</b> ${esc(po.checker_started_at || "-")} · <b>Done:</b> ${esc(po.checker_done_at || "-")}</div></div><div class="flex flex-col items-end gap-1">${checkerPoStatusBadgeV15(po.checker_status)}<span class="text-[10px] text-on-surface-variant">GR: ${esc(po.gr_status || "PENDING")}</span></div></label>`).join("")}
+            ${poRows
+              .map(
+                (po) =>
+                  `<label class="checker-po-row-v15"><input type="checkbox" class="checker-po-choice-v15" value="${esc(
+                    po.ticket_po_id,
+                  )}" /><div class="min-w-0 flex-1"><div class="font-queue-id text-sm break-all">${esc(
+                    po.po_number || "-",
+                  )}</div><div class="text-[11px] text-on-surface-variant mt-1">Qty ${num(
+                    po.total_po_qty || 0,
+                  )} · SKU ${num(
+                    po.count_po_sku || 0,
+                  )}</div><div class="text-[11px] mt-1"><b>Checker:</b> ${esc(
+                    po.checker_name || "Belum dipilih",
+                  )} · <b>Start:</b> ${esc(
+                    po.checker_started_at || "-",
+                  )} · <b>Done:</b> ${esc(
+                    po.checker_done_at || "-",
+                  )}</div></div><div class="flex flex-col items-end gap-1">${checkerPoStatusBadgeV15(
+                    po.checker_status,
+                  )}<span class="text-[10px] text-on-surface-variant">GR: ${esc(
+                    po.gr_status || "PENDING",
+                  )}</span></div></label>`,
+              )
+              .join("")}
           </div>
         </div>
         <div class="inbound-modal-actions-v15"><button type="button" onclick="submitCheckerPoModalV15('start',this)" class="bg-primary-container text-on-primary-container rounded-xl px-4 py-3 font-bold flex-1">Start Checker</button><button type="button" onclick="submitCheckerPoModalV15('done',this)" class="bg-success/15 border border-success/30 text-success rounded-xl px-4 py-3 font-bold flex-1">Done Checker</button></div>
@@ -10893,10 +12695,13 @@ window.initShader = function initShaderDisabled() {
     const checkerSearch = document.getElementById("checker-mp-search-v15");
     const checkerSelect = document.getElementById("checker-mp-select-v15");
     checkerSearch?.addEventListener("input", () => {
-      const keyword = String(checkerSearch.value || "").trim().toLowerCase();
+      const keyword = String(checkerSearch.value || "")
+        .trim()
+        .toLowerCase();
       [...checkerSelect.options].forEach((option, index) => {
         if (index === 0) return;
-        option.hidden = !!keyword && !option.text.toLowerCase().includes(keyword);
+        option.hidden =
+          !!keyword && !option.text.toLowerCase().includes(keyword);
       });
     });
     document.body.classList.add("mobile-checker-action-sheet-open");
@@ -10910,9 +12715,13 @@ window.initShader = function initShaderDisabled() {
       safe === "DONE"
         ? "text-success bg-success/10 border-success/30"
         : safe === "CHECKING"
-          ? "text-primary bg-primary/10 border-primary/30"
-          : "text-warning bg-warning/10 border-warning/30";
-    return `<span data-checker-status="${esc(safe)}" class="inline-flex rounded-full border px-2 py-1 text-[10px] font-extrabold ${cls}">${esc(safe)}</span>`;
+        ? "text-primary bg-primary/10 border-primary/30"
+        : "text-warning bg-warning/10 border-warning/30";
+    return `<span data-checker-status="${esc(
+      safe,
+    )}" class="inline-flex rounded-full border px-2 py-1 text-[10px] font-extrabold ${cls}">${esc(
+      safe,
+    )}</span>`;
   };
 
   window.submitCheckerPoModalV15 = async function submitCheckerPoModalV15(
@@ -10931,7 +12740,10 @@ window.initShader = function initShaderDisabled() {
     ]
       .filter((input) => {
         const status = String(
-          input.closest(".checker-po-row-v15")?.querySelector("[data-checker-status]")?.dataset?.checkerStatus || "PENDING",
+          input
+            .closest(".checker-po-row-v15")
+            ?.querySelector("[data-checker-status]")?.dataset?.checkerStatus ||
+            "PENDING",
         ).toUpperCase();
         return status === allowedStatus;
       })
@@ -10983,32 +12795,44 @@ window.initShader = function initShaderDisabled() {
               actualQty > 0 ? actualQty : ""
             }" placeholder="Wajib isi" class="form-input actual-qty-input-v18" oninput="toggleDoneGrButtonV18(this)" />`
           : dropOff
-            ? `<span class="text-on-surface-variant">Tidak diperlukan</span>`
-            : `<span class="font-queue-id">${num(actualQty || 0)}</span>`;
+          ? `<span class="text-on-surface-variant">Tidak diperlukan</span>`
+          : `<span class="font-queue-id">${num(actualQty || 0)}</span>`;
         const actionMarkup = dropOff
           ? `<span class="text-xs font-bold text-on-surface-variant">Tidak perlu GR</span>`
           : canDoneGr
-            ? `<button type="button" data-actual-qty-button-v18="${esc(
-                po.ticket_po_id || "",
-              )}" onclick="doneGrPoV15('${esc(ticket.ticket_id)}','${esc(
-                po.ticket_po_id,
-              )}',this)" ${
-                actualQty > 0 ? "" : "disabled"
-              } class="bg-secondary-container text-on-secondary-container rounded-lg px-3 py-2 text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed">Done GR</button>`
-            : "-";
+          ? `<button type="button" data-actual-qty-button-v18="${esc(
+              po.ticket_po_id || "",
+            )}" onclick="doneGrPoV15('${esc(ticket.ticket_id)}','${esc(
+              po.ticket_po_id,
+            )}',this)" ${
+              actualQty > 0 ? "" : "disabled"
+            } class="bg-secondary-container text-on-secondary-container rounded-lg px-3 py-2 text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed">Done GR</button>`
+          : "-";
 
         return `<tr>
-          <td>${esc(po.po_number || (dropOff ? "DROP-OFF / TANPA PO" : "-"))}</td>
+          <td>${esc(
+            po.po_number || (dropOff ? "DROP-OFF / TANPA PO" : "-"),
+          )}</td>
           <td>${num(po.total_po_qty || 0)}</td>
           <td>${actualMarkup}</td>
           <td>${num(po.count_po_sku || 0)}</td>
-          <td>${esc(po.checker_name || (dropOff ? "Tidak perlu checker" : "-"))}</td>
-          <td>${dropOff ? `<span class="inline-flex rounded-full border px-2 py-1 text-[10px] font-extrabold text-on-surface-variant border-outline-variant">SKIPPED</span>` : checkerPoStatusBadgeV15(po.checker_status)}</td>
+          <td>${esc(
+            po.checker_name || (dropOff ? "Tidak perlu checker" : "-"),
+          )}</td>
+          <td>${
+            dropOff
+              ? `<span class="inline-flex rounded-full border px-2 py-1 text-[10px] font-extrabold text-on-surface-variant border-outline-variant">SKIPPED</span>`
+              : checkerPoStatusBadgeV15(po.checker_status)
+          }</td>
           <td>${esc(po.checker_started_at || "-")}</td>
           <td>${esc(po.checker_done_at || "-")}</td>
           <td>${esc(po.gr_status || (dropOff ? "SKIPPED" : "PENDING"))}</td>
           <td>${esc(po.done_gr_at || "-")}</td>
-          <td>${window.InboundTicketContracts.isCancelled(po) ? "CANCELLED" : esc(po.sla_status || po.unload_sla || "-")}</td>
+          <td>${
+            window.InboundTicketContracts.isCancelled(po)
+              ? "CANCELLED"
+              : esc(po.sla_status || po.unload_sla || "-")
+          }</td>
           <td>${actionMarkup} ${window.cancelActionMarkup(ticket, po)}</td>
         </tr>`;
       })
@@ -11024,7 +12848,32 @@ window.initShader = function initShaderDisabled() {
 
   window.reportTable = function reportTableV15(rows = []) {
     const role = String(getAuthUser?.()?.role || "").toUpperCase();
-    return `<div class="overflow-x-auto waiting-list-wrap-v15"><table id="report-table" class="w-full text-left waiting-list-table-v15"><thead class="bg-surface-container text-on-surface-variant"><tr>${["Action", "Detail", "Print", "Created", "Queue", "Vendor", "Fleet", "Plat", "PO", "Gate", "Status", "Call", "Menunggu", "PO Qty", "Actual Qty", "SKU", "Checker", "GR", "SLA"].map((header) => `<th class="px-4 py-3 font-label-sm uppercase">${header}</th>`).join("")}</tr></thead><tbody class="divide-y divide-outline-variant/10">
+    return `<div class="overflow-x-auto waiting-list-wrap-v15"><table id="report-table" class="w-full text-left waiting-list-table-v15"><thead class="bg-surface-container text-on-surface-variant"><tr>${[
+      "Action",
+      "Detail",
+      "Print",
+      "Created",
+      "Queue",
+      "Vendor",
+      "Fleet",
+      "Plat",
+      "PO",
+      "Gate",
+      "Status",
+      "Call",
+      "Menunggu",
+      "PO Qty",
+      "Actual Qty",
+      "SKU",
+      "Checker",
+      "GR",
+      "SLA",
+    ]
+      .map(
+        (header) =>
+          `<th class="px-4 py-3 font-label-sm uppercase">${header}</th>`,
+      )
+      .join("")}</tr></thead><tbody class="divide-y divide-outline-variant/10">
       ${
         rows
           .map((ticket, index) => {
@@ -11033,16 +12882,84 @@ window.initShader = function initShaderDisabled() {
               status === "EXPIRED"
                 ? "Expired"
                 : status === "COMPLETED" || ticket.all_done_gr
-                  ? "Selesai"
-                  : driverWaitingLabel(ticket);
+                ? "Selesai"
+                : driverWaitingLabel(ticket);
             const sla = getInboundSlaInfo(ticket);
-            const action = window.cancelActionMarkup(ticket) + (status === "WAITING GR" &&
-                  ["ADMIN", "SPV", "DEVELOPER"].includes(role)
-                ? `<span class="text-xs font-bold text-warning">GR ${ticket.gr_progress || "0/0"}</span>`
+            const action =
+              window.cancelActionMarkup(ticket) +
+              (status === "WAITING GR" &&
+              ["ADMIN", "SPV", "DEVELOPER"].includes(role)
+                ? `<span class="text-xs font-bold text-warning">GR ${
+                    ticket.gr_progress || "0/0"
+                  }</span>`
                 : "");
-            const detailId = `waiting-detail-${String(ticket.ticket_id).replace(/[^A-Za-z0-9_-]/g, "_")}`;
-            return `<tr class="hover:bg-primary/5"><td class="px-4 py-3">${action}</td><td class="px-4 py-3"><button type="button" onclick="toggleWaitingDetailV16('${detailId}')" class="thin-tab rounded-lg px-3 py-2 text-xs font-bold">Detail PO</button></td><td class="px-4 py-3"><button onclick="printWaitingListTicket(${index})" class="thin-tab rounded-lg px-3 py-2 font-bold text-xs">Print</button></td><td class="px-4 py-3 text-sm whitespace-nowrap">${esc(ticket.created_at || "-")}</td><td class="px-4 py-3 font-queue-id text-primary">${esc(ticket.queue_no || "-")}</td><td class="px-4 py-3 min-w-[190px]">${esc(ticket.vendor_name || "-")}</td><td class="px-4 py-3">${esc(ticket.fleet_type || "-")}</td><td class="px-4 py-3 font-queue-id">${esc(ticket.plat_number || "-")}</td><td class="px-4 py-3">${ticket.po_rows?.length || 1}</td><td class="px-4 py-3">${esc(ticket.gate || "-")}</td><td class="px-4 py-3">${checkerStatusPill(status)}</td><td class="px-4 py-3 font-bold">${num(ticket.call_count || 0)}</td><td class="px-4 py-3 font-queue-id whitespace-nowrap">${esc(wait)}</td><td class="px-4 py-3">${num(ticket.total_po_qty || 0)}</td><td class="px-4 py-3 font-queue-id">${num(ticket.actual_quantity || 0)}</td><td class="px-4 py-3">${num(ticket.count_po_sku || 0)}</td><td class="px-4 py-3 whitespace-nowrap">${esc(ticket.checker_progress || "0/0")}</td><td class="px-4 py-3 whitespace-nowrap">${esc(ticket.gr_progress || "0/0")}</td><td class="px-4 py-3 whitespace-nowrap"><span class="inline-flex rounded-full border px-2 py-1 text-xs font-bold ${sla.badgeClass}">${esc(sla.status)}</span></td></tr>
-          <tr id="${detailId}" class="hidden waiting-detail-row-v15"><td colspan="19" class="p-0"><div class="waiting-detail-panel-v15"><div class="flex flex-wrap gap-4 mb-4 text-xs"><span><b>Created:</b> ${esc(ticket.created_at || ticket.register_time || "-")}</span><span><b>Driver:</b> ${esc(ticket.driver_name || "-")} · ${esc(ticket.driver_phone || ticket.phone_number || "-")}</span><span><b>Ticket:</b> ${esc(ticket.ticket_type || "REG")} · Slot ${esc(ticket.slot || "-")} · Gate ${esc(ticket.gate || "-")}</span><span><b>Start Unloading:</b> ${esc(ticket.start_unloading_at || "-")}</span><span><b>Finish Unloading:</b> ${esc(ticket.finish_unloading_at || "-")}</span><span><b>Checker:</b> ${esc(ticket.checker_progress || "0/0")}</span><span><b>GR:</b> ${esc(ticket.gr_progress || "0/0")}</span><span><b>WA Ticket:</b> ${esc(ticket.wa_ticket_status || ticket.po_rows?.[0]?.wa_ticket_status || "-")}</span><span><b>WA Handover:</b> ${esc(ticket.wa_handover_status || ticket.po_rows?.[0]?.wa_handover_status || "-")}</span></div><div class="overflow-x-auto"><table class="po-detail-table-v15"><thead><tr><th>PO Number</th><th>PO Qty</th><th>Actual Qty</th><th>SKU</th><th>Checker</th><th>Status Checker</th><th>Start Checker</th><th>Done Checker</th><th>GR Status</th><th>Done GR</th><th>SLA</th><th>Action</th></tr></thead><tbody>${waitingPoDetailRowsV15(ticket, role)}</tbody></table></div></div></td></tr>`;
+            const detailId = `waiting-detail-${String(ticket.ticket_id).replace(
+              /[^A-Za-z0-9_-]/g,
+              "_",
+            )}`;
+            return `<tr class="hover:bg-primary/5"><td class="px-4 py-3">${action}</td><td class="px-4 py-3"><button type="button" onclick="toggleWaitingDetailV16('${detailId}')" class="thin-tab rounded-lg px-3 py-2 text-xs font-bold">Detail PO</button></td><td class="px-4 py-3"><button onclick="printWaitingListTicket(${index})" class="thin-tab rounded-lg px-3 py-2 font-bold text-xs">Print</button></td><td class="px-4 py-3 text-sm whitespace-nowrap">${esc(
+              ticket.created_at || "-",
+            )}</td><td class="px-4 py-3 font-queue-id text-primary">${esc(
+              ticket.queue_no || "-",
+            )}</td><td class="px-4 py-3 min-w-[190px]">${esc(
+              ticket.vendor_name || "-",
+            )}</td><td class="px-4 py-3">${esc(
+              ticket.fleet_type || "-",
+            )}</td><td class="px-4 py-3 font-queue-id">${esc(
+              ticket.plat_number || "-",
+            )}</td><td class="px-4 py-3">${
+              ticket.po_rows?.length || 1
+            }</td><td class="px-4 py-3">${esc(
+              ticket.gate || "-",
+            )}</td><td class="px-4 py-3">${checkerStatusPill(
+              status,
+            )}</td><td class="px-4 py-3 font-bold">${num(
+              ticket.call_count || 0,
+            )}</td><td class="px-4 py-3 font-queue-id whitespace-nowrap">${esc(
+              wait,
+            )}</td><td class="px-4 py-3">${num(
+              ticket.total_po_qty || 0,
+            )}</td><td class="px-4 py-3 font-queue-id">${num(
+              ticket.actual_quantity || 0,
+            )}</td><td class="px-4 py-3">${num(
+              ticket.count_po_sku || 0,
+            )}</td><td class="px-4 py-3 whitespace-nowrap">${esc(
+              ticket.checker_progress || "0/0",
+            )}</td><td class="px-4 py-3 whitespace-nowrap">${esc(
+              ticket.gr_progress || "0/0",
+            )}</td><td class="px-4 py-3 whitespace-nowrap"><span class="inline-flex rounded-full border px-2 py-1 text-xs font-bold ${
+              sla.badgeClass
+            }">${esc(sla.status)}</span></td></tr>
+          <tr id="${detailId}" class="hidden waiting-detail-row-v15"><td colspan="19" class="p-0"><div class="waiting-detail-panel-v15"><div class="flex flex-wrap gap-4 mb-4 text-xs"><span><b>Created:</b> ${esc(
+              ticket.created_at || ticket.register_time || "-",
+            )}</span><span><b>Driver:</b> ${esc(
+              ticket.driver_name || "-",
+            )} · ${esc(
+              ticket.driver_phone || ticket.phone_number || "-",
+            )}</span><span><b>Ticket:</b> ${esc(
+              ticket.ticket_type || "REG",
+            )} · Slot ${esc(ticket.slot || "-")} · Gate ${esc(
+              ticket.gate || "-",
+            )}</span><span><b>Start Unloading:</b> ${esc(
+              ticket.start_unloading_at || "-",
+            )}</span><span><b>Finish Unloading:</b> ${esc(
+              ticket.finish_unloading_at || "-",
+            )}</span><span><b>Checker:</b> ${esc(
+              ticket.checker_progress || "0/0",
+            )}</span><span><b>GR:</b> ${esc(
+              ticket.gr_progress || "0/0",
+            )}</span><span><b>WA Ticket:</b> ${esc(
+              ticket.wa_ticket_status ||
+                ticket.po_rows?.[0]?.wa_ticket_status ||
+                "-",
+            )}</span><span><b>WA Handover:</b> ${esc(
+              ticket.wa_handover_status ||
+                ticket.po_rows?.[0]?.wa_handover_status ||
+                "-",
+            )}</span></div><div class="overflow-x-auto"><table class="po-detail-table-v15"><thead><tr><th>PO Number</th><th>PO Qty</th><th>Actual Qty</th><th>SKU</th><th>Checker</th><th>Status Checker</th><th>Start Checker</th><th>Done Checker</th><th>GR Status</th><th>Done GR</th><th>SLA</th><th>Action</th></tr></thead><tbody>${waitingPoDetailRowsV15(
+              ticket,
+              role,
+            )}</tbody></table></div></div></td></tr>`;
           })
           .join("") ||
         `<tr><td colspan="19" class="px-6 py-8 text-center text-on-surface-variant">Belum ada waiting list.</td></tr>`
@@ -11053,7 +12970,9 @@ window.initShader = function initShaderDisabled() {
 
   window.pageLaporan = function pageLaporanV15() {
     const rows = state.dashboard?.report_preview || [];
-    return `<div class="glass-card rounded-xl p-4 sm:p-6"><div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6"><div><h3 class="font-headline-md text-headline-md">Waiting List</h3><p class="text-on-surface-variant">Satu kendaraan tampil satu baris. Admin wajib mengisi Actual Qty per PO sebelum Done GR. DONE GR adalah tahap akhir proses tiket.</p></div><div class="flex gap-2"><button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">refresh</span>Refresh</button><button onclick="exportCsv()" class="bg-primary-container text-on-primary-container px-5 py-3 rounded-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined">download</span>Export CSV</button></div></div>${reportTable(rows)}</div>`;
+    return `<div class="glass-card rounded-xl p-4 sm:p-6"><div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6"><div><h3 class="font-headline-md text-headline-md">Waiting List</h3><p class="text-on-surface-variant">Satu kendaraan tampil satu baris. Admin wajib mengisi Actual Qty per PO sebelum Done GR. DONE GR adalah tahap akhir proses tiket.</p></div><div class="flex gap-2"><button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">refresh</span>Refresh</button><button onclick="exportCsv()" class="bg-primary-container text-on-primary-container px-5 py-3 rounded-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined">download</span>Export CSV</button></div></div>${reportTable(
+      rows,
+    )}</div>`;
   };
   pageLaporan = window.pageLaporan;
 
@@ -11098,21 +13017,21 @@ window.initShader = function initShaderDisabled() {
           ? "LATE"
           : "TERCAPAI"
         : late
-          ? "SLA MISS"
-          : "ON PROCESS",
+        ? "SLA MISS"
+        : "ON PROCESS",
       label: final
         ? formatMinutesCompact(actualMinutes)
         : delta >= 0
-          ? `Sisa ${formatMinutesCompact(delta)}`
-          : `Lewat ${formatMinutesCompact(Math.abs(delta))}`,
+        ? `Sisa ${formatMinutesCompact(delta)}`
+        : `Lewat ${formatMinutesCompact(Math.abs(delta))}`,
       target_minutes: targetMinutes,
       actual_minutes: actualMinutes,
       delta_minutes: delta,
       badgeClass: late
         ? "bg-error/10 text-error border-error/30"
         : final
-          ? "bg-success/10 text-success border-success/30"
-          : "bg-warning/10 text-warning border-warning/30",
+        ? "bg-success/10 text-success border-success/30"
+        : "bg-warning/10 text-warning border-warning/30",
     };
   };
   getInboundSlaInfo = window.getInboundSlaInfo;
@@ -11203,7 +13122,20 @@ window.initShader = function initShaderDisabled() {
       [`Checker Barang ${row.checker_progress || "0/0"}`, 4],
       [`Done GR ${row.gr_progress || "0/0"}`, 6],
     ];
-    return `<div class="driver-timeline-v15">${items.map(([label, step]) => `<div class="driver-timeline-item-v15 ${current >= step ? "is-done" : current + 1 === step ? "is-active" : ""}"><span class="material-symbols-outlined">${current >= step ? "check_circle" : "radio_button_unchecked"}</span><span>${esc(label)}</span></div>`).join("")}</div>`;
+    return `<div class="driver-timeline-v15">${items
+      .map(
+        ([label, step]) =>
+          `<div class="driver-timeline-item-v15 ${
+            current >= step
+              ? "is-done"
+              : current + 1 === step
+              ? "is-active"
+              : ""
+          }"><span class="material-symbols-outlined">${
+            current >= step ? "check_circle" : "radio_button_unchecked"
+          }</span><span>${esc(label)}</span></div>`,
+      )
+      .join("")}</div>`;
   }
 
   window.pageDriverTrack = function pageDriverTrackV15() {
@@ -11215,7 +13147,47 @@ window.initShader = function initShaderDisabled() {
     const estimateText = row.start_unloading_at
       ? estimate.estimateText || row.sla_finished_at || "-"
       : "-";
-    return `<div class="min-h-[calc(100vh-80px)] flex items-center justify-center p-4"><div class="glass-card rounded-2xl p-5 sm:p-6 w-full max-w-[720px] border border-outline-variant/50"><div class="text-center mb-6"><div class="text-[12px] uppercase tracking-[0.35em] text-on-surface-variant font-extrabold">Inbound CBT</div><h1 class="text-2xl font-extrabold text-on-surface mt-2">Status Tiket Driver</h1><div id="driver-track-live-badge" class="mt-3 inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${found ? "bg-success/10 text-success border border-success/30" : "bg-warning/10 text-warning border border-warning/30"}">${found ? "LIVE DATA" : "PREVIEW / BELUM SYNC"}</div></div><div class="text-center border-y border-outline-variant/40 py-6"><div class="text-[12px] uppercase tracking-[0.45em] text-on-surface-variant font-extrabold">Nomor Antrian Anda</div><div class="font-queue-id text-[56px] sm:text-[76px] leading-none text-primary font-black mt-3">${esc(row.queue_no || "-")}</div></div><div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5"><div class="rounded-xl bg-surface-container/50 border border-primary/20 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Status</div><div id="driver-track-status" class="font-bold text-2xl mt-2">${esc(status)}</div><div class="mt-1 text-xs font-bold text-on-surface-variant">Gate: <span id="driver-track-gate">${esc(row.gate || "-")}</span></div></div><div class="rounded-xl bg-surface-container/50 border border-tertiary/20 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Target SLA Inbound</div><div id="driver-track-est-finish" class="font-queue-id text-2xl text-tertiary mt-2">${esc(estimateText)}</div><div class="mt-1 text-xs text-on-surface-variant">Start unloading sampai seluruh PO DONE GR</div></div><div class="rounded-xl bg-surface-container/50 border border-outline-variant/30 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Checker Barang</div><div id="driver-track-checker-progress" class="font-queue-id text-xl mt-2">${esc(row.checker_progress || "0/0")}</div></div><div class="rounded-xl bg-surface-container/50 border border-outline-variant/30 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Proses GR</div><div id="driver-track-gr-progress" class="font-queue-id text-xl mt-2">${esc(row.gr_progress || "0/0")}</div></div><div class="rounded-xl bg-surface-container/50 border border-outline-variant/30 p-4 sm:col-span-2"><div class="text-[10px] uppercase font-bold text-on-surface-variant">SLA</div><div id="driver-track-sla-delta" class="font-queue-id text-xl mt-2 ${sla.status === "LATE" || sla.status === "SLA MISS" ? "text-error" : "text-success"}">${esc(sla.label || sla.status)}</div></div></div>${driverTimelineV15(row)}<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5"><div class="rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Jam Menunggu</div><div id="driver-track-waiting" class="font-queue-id text-2xl text-tertiary mt-2">${esc(driverWaitingLabel(row))}</div></div><div class="rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Plat</div><div class="font-queue-id text-xl mt-2">${esc(row.plat_number || "-")}</div></div></div><div class="mt-4 rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4 space-y-2 text-sm"><div><b>Driver:</b> ${esc(row.driver_name || "-")}</div><div><b>Vendor:</b> ${esc(row.vendor_name || "-")}</div><div><b>PO:</b> ${esc(row.po_number || "-")}</div><div><b>Last Refresh:</b> <span id="driver-track-last-refresh">${esc(driverTrackLastRefreshAt || "-")}</span></div></div>${status === "EXPIRED" ? `<div class="mt-4 rounded-xl border border-error/30 bg-error/10 p-4 text-error font-bold">Tiket expired. Driver wajib registrasi ulang.</div>` : ""}<button onclick="refreshDriverTrackLiveData(false)" class="mt-5 w-full bg-primary-container text-on-primary-container rounded-lg px-5 py-3 font-bold flex items-center justify-center gap-2"><span class="material-symbols-outlined">refresh</span>Refresh Status Sekarang</button></div></div>`;
+    return `<div class="min-h-[calc(100vh-80px)] flex items-center justify-center p-4"><div class="glass-card rounded-2xl p-5 sm:p-6 w-full max-w-[720px] border border-outline-variant/50"><div class="text-center mb-6"><div class="text-[12px] uppercase tracking-[0.35em] text-on-surface-variant font-extrabold">Inbound CBT</div><h1 class="text-2xl font-extrabold text-on-surface mt-2">Status Tiket Driver</h1><div id="driver-track-live-badge" class="mt-3 inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${
+      found
+        ? "bg-success/10 text-success border border-success/30"
+        : "bg-warning/10 text-warning border border-warning/30"
+    }">${
+      found ? "LIVE DATA" : "PREVIEW / BELUM SYNC"
+    }</div></div><div class="text-center border-y border-outline-variant/40 py-6"><div class="text-[12px] uppercase tracking-[0.45em] text-on-surface-variant font-extrabold">Nomor Antrian Anda</div><div class="font-queue-id text-[56px] sm:text-[76px] leading-none text-primary font-black mt-3">${esc(
+      row.queue_no || "-",
+    )}</div></div><div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5"><div class="rounded-xl bg-surface-container/50 border border-primary/20 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Status</div><div id="driver-track-status" class="font-bold text-2xl mt-2">${esc(
+      status,
+    )}</div><div class="mt-1 text-xs font-bold text-on-surface-variant">Gate: <span id="driver-track-gate">${esc(
+      row.gate || "-",
+    )}</span></div></div><div class="rounded-xl bg-surface-container/50 border border-tertiary/20 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Target SLA Inbound</div><div id="driver-track-est-finish" class="font-queue-id text-2xl text-tertiary mt-2">${esc(
+      estimateText,
+    )}</div><div class="mt-1 text-xs text-on-surface-variant">Start unloading sampai seluruh PO DONE GR</div></div><div class="rounded-xl bg-surface-container/50 border border-outline-variant/30 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Checker Barang</div><div id="driver-track-checker-progress" class="font-queue-id text-xl mt-2">${esc(
+      row.checker_progress || "0/0",
+    )}</div></div><div class="rounded-xl bg-surface-container/50 border border-outline-variant/30 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Proses GR</div><div id="driver-track-gr-progress" class="font-queue-id text-xl mt-2">${esc(
+      row.gr_progress || "0/0",
+    )}</div></div><div class="rounded-xl bg-surface-container/50 border border-outline-variant/30 p-4 sm:col-span-2"><div class="text-[10px] uppercase font-bold text-on-surface-variant">SLA</div><div id="driver-track-sla-delta" class="font-queue-id text-xl mt-2 ${
+      sla.status === "LATE" || sla.status === "SLA MISS"
+        ? "text-error"
+        : "text-success"
+    }">${esc(sla.label || sla.status)}</div></div></div>${driverTimelineV15(
+      row,
+    )}<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5"><div class="rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Jam Menunggu</div><div id="driver-track-waiting" class="font-queue-id text-2xl text-tertiary mt-2">${esc(
+      driverWaitingLabel(row),
+    )}</div></div><div class="rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Plat</div><div class="font-queue-id text-xl mt-2">${esc(
+      row.plat_number || "-",
+    )}</div></div></div><div class="mt-4 rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4 space-y-2 text-sm"><div><b>Driver:</b> ${esc(
+      row.driver_name || "-",
+    )}</div><div><b>Vendor:</b> ${esc(
+      row.vendor_name || "-",
+    )}</div><div><b>PO:</b> ${esc(
+      row.po_number || "-",
+    )}</div><div><b>Last Refresh:</b> <span id="driver-track-last-refresh">${esc(
+      driverTrackLastRefreshAt || "-",
+    )}</span></div></div>${
+      status === "EXPIRED"
+        ? `<div class="mt-4 rounded-xl border border-error/30 bg-error/10 p-4 text-error font-bold">Tiket expired. Driver wajib registrasi ulang.</div>`
+        : ""
+    }<button onclick="refreshDriverTrackLiveData(false)" class="mt-5 w-full bg-primary-container text-on-primary-container rounded-lg px-5 py-3 font-bold flex items-center justify-center gap-2"><span class="material-symbols-outlined">refresh</span>Refresh Status Sekarang</button></div></div>`;
   };
   pageDriverTrack = window.pageDriverTrack;
 
@@ -11231,7 +13203,11 @@ window.initShader = function initShaderDisabled() {
     if (slaEl) {
       const sla = getInboundSlaInfo(row);
       slaEl.textContent = sla.label || sla.status;
-      slaEl.className = `font-queue-id text-xl mt-2 ${["LATE", "SLA MISS"].includes(sla.status) ? "text-error" : "text-success"}`;
+      slaEl.className = `font-queue-id text-xl mt-2 ${
+        ["LATE", "SLA MISS"].includes(sla.status)
+          ? "text-error"
+          : "text-success"
+      }`;
     }
   };
   refreshDriverTrackDom = window.refreshDriverTrackDom;
@@ -11294,7 +13270,9 @@ window.initShader = function initShaderDisabled() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `waiting-list-inbound-detail-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `waiting-list-inbound-detail-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -11372,19 +13350,31 @@ window.initShader = function initShaderDisabled() {
               return `<article class="security-lobby-ticket-v152">
                 <div class="security-lobby-ticket-top-v152">
                   <div>
-                    <div class="font-queue-id text-primary security-lobby-queue-v152">${esc(row.queue_no || "-")}</div>
-                    <div class="text-xs font-bold text-on-surface-variant mt-1">${esc(row.vendor_name || "-")}</div>
+                    <div class="font-queue-id text-primary security-lobby-queue-v152">${esc(
+                      row.queue_no || "-",
+                    )}</div>
+                    <div class="text-xs font-bold text-on-surface-variant mt-1">${esc(
+                      row.vendor_name || "-",
+                    )}</div>
                   </div>
                   <span class="inline-flex rounded-full border border-warning/30 bg-warning/10 text-warning px-3 py-1 text-xs font-extrabold">WAITING</span>
                 </div>
                 <div class="security-lobby-qr-image-wrap-v152">
-                  <img src="${esc(qrUrl)}" alt="QR status driver ${esc(row.queue_no || "")}" />
+                  <img src="${esc(qrUrl)}" alt="QR status driver ${esc(
+                row.queue_no || "",
+              )}" />
                 </div>
                 <div class="security-lobby-scan-label-v152">SCAN UNTUK BUKA STATUS TIKET</div>
                 <div class="security-lobby-ticket-info-v152">
-                  <div><span>Plat</span><b>${esc(row.plat_number || "-")}</b></div>
-                  <div><span>Driver</span><b>${esc(row.driver_name || "-")}</b></div>
-                  <div><span>Fleet</span><b>${esc(row.fleet_type || "-")}</b></div>
+                  <div><span>Plat</span><b>${esc(
+                    row.plat_number || "-",
+                  )}</b></div>
+                  <div><span>Driver</span><b>${esc(
+                    row.driver_name || "-",
+                  )}</b></div>
+                  <div><span>Fleet</span><b>${esc(
+                    row.fleet_type || "-",
+                  )}</b></div>
                   <div><span>Jumlah PO</span><b>${num(poCount)}</b></div>
                 </div>
               </article>`;
@@ -11881,6 +13871,11 @@ window.initShader = function initShaderDisabled() {
       role: "DEVELOPER",
       display_name: "Pandu Developer",
     },
+    {
+      username: "Astronauts",
+      role: "ASTRONAUTS",
+      display_name: "Astronauts",
+    },
   );
 
   ROLE_ACCESS.SPV = ["daftar", "checker", "panggil", "monitor", "laporan"];
@@ -11896,12 +13891,20 @@ window.initShader = function initShaderDisabled() {
     "setting",
     "debug",
   ];
+  ROLE_ACCESS.ASTRONAUTS = [
+    "monitor",
+    "commercial",
+    "laporan",
+    "dropoff",
+    "ba_reject",
+  ];
 
   ROLE_DEFAULT_PAGE.SPV = "daftar";
   ROLE_DEFAULT_PAGE.ADMIN = "laporan";
   ROLE_DEFAULT_PAGE.CHECKER = "checker";
   ROLE_DEFAULT_PAGE.SECURITY = "daftar";
   ROLE_DEFAULT_PAGE.DEVELOPER = "daftar";
+  ROLE_DEFAULT_PAGE.ASTRONAUTS = "monitor";
 
   // Session lama tidak boleh mempertahankan role/akun yang sudah dihapus.
   // Contoh: generic admin dari versi sebelumnya harus otomatis logout.
@@ -11920,12 +13923,13 @@ window.initShader = function initShaderDisabled() {
           .toLowerCase(),
     );
 
-    // Akun COMERCIAL divalidasi sepenuhnya oleh Supabase. Username tim dapat
+    // Akun COMERCIAL & ASTRONAUTS divalidasi sepenuhnya oleh backend. Username tim dapat
     // ditambah lewat secret tanpa harus menaruh daftar akun di browser.
-    if (!master && normalizeRole(stored.role) === "COMERCIAL") {
+    const roleUpper = normalizeRole(stored.role);
+    if (!master && (roleUpper === "COMERCIAL" || roleUpper === "ASTRONAUTS")) {
       return {
         ...stored,
-        role: "COMERCIAL",
+        role: roleUpper,
         display_name: stored.display_name || stored.username,
       };
     }
@@ -12132,7 +14136,11 @@ window.initShader = function initShaderDisabled() {
 
     const manual =
       typed && !exact
-        ? `<button type="button" data-manual-vendor="${esc(typed)}" onclick="useManualVendorV16(this.dataset.manualVendor)" class="w-full mb-2 px-3 py-3 rounded-lg border border-primary/30 bg-primary/10 text-left font-bold text-primary">Gunakan vendor manual: ${esc(typed)}</button>`
+        ? `<button type="button" data-manual-vendor="${esc(
+            typed,
+          )}" onclick="useManualVendorV16(this.dataset.manualVendor)" class="w-full mb-2 px-3 py-3 rounded-lg border border-primary/30 bg-primary/10 text-left font-bold text-primary">Gunakan vendor manual: ${esc(
+            typed,
+          )}</button>`
         : "";
 
     const optionsHtml = options
@@ -12140,7 +14148,13 @@ window.initShader = function initShaderDisabled() {
         const poCount = (state.options.po_number || []).filter((po) =>
           vendorMatchesFilter(getPoVendor(po), vendor),
         ).length;
-        return `<button type="button" onclick="handleVendorOptionSafeClick(event, '${poEncode(vendor)}')" class="w-full px-3 py-3 rounded-lg hover:bg-primary/10 text-left grid grid-cols-[1fr_auto] gap-3 border-b border-outline-variant/20 last:border-b-0"><span class="font-bold text-[12px] sm:text-[13px] text-on-surface break-words">${esc(vendor)}</span><span class="text-[10px] text-primary font-bold whitespace-nowrap">${num(poCount)} PO</span></button>`;
+        return `<button type="button" onclick="handleVendorOptionSafeClick(event, '${poEncode(
+          vendor,
+        )}')" class="w-full px-3 py-3 rounded-lg hover:bg-primary/10 text-left grid grid-cols-[1fr_auto] gap-3 border-b border-outline-variant/20 last:border-b-0"><span class="font-bold text-[12px] sm:text-[13px] text-on-surface break-words">${esc(
+          vendor,
+        )}</span><span class="text-[10px] text-primary font-bold whitespace-nowrap">${num(
+          poCount,
+        )} PO</span></button>`;
       })
       .join("");
 
@@ -12183,7 +14197,9 @@ window.initShader = function initShaderDisabled() {
     const order = ["prefix", "number", "suffix"];
     const part = String(input.dataset.vehiclePlatePart || "");
     return row.querySelector(
-      `[data-vehicle-plate-part="${order[order.indexOf(part) + direction] || "__none__"}"]`,
+      `[data-vehicle-plate-part="${
+        order[order.indexOf(part) + direction] || "__none__"
+      }"]`,
     );
   }
 
@@ -12434,9 +14450,11 @@ window.initShader = function initShaderDisabled() {
         const icon = item.done
           ? "check_circle"
           : item.active
-            ? "pending"
-            : "radio_button_unchecked";
-        return `<div class="driver-timeline-item-v16 ${cls}"><span class="material-symbols-outlined">${icon}</span><span>${esc(item.label)}</span></div>`;
+          ? "pending"
+          : "radio_button_unchecked";
+        return `<div class="driver-timeline-item-v16 ${cls}"><span class="material-symbols-outlined">${icon}</span><span>${esc(
+          item.label,
+        )}</span></div>`;
       })
       .join("")}</div>`;
   };
@@ -12456,23 +14474,60 @@ window.initShader = function initShaderDisabled() {
         <div class="text-center mb-6">
           <div class="text-[12px] uppercase tracking-[0.35em] text-on-surface-variant font-extrabold">Inbound CBT</div>
           <h1 class="text-2xl font-extrabold text-on-surface mt-2">Status Tiket Driver</h1>
-          <div id="driver-track-live-badge" class="mt-3 inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${found ? "bg-success/10 text-success border border-success/30" : "bg-warning/10 text-warning border border-warning/30"}">${found ? "LIVE DATA" : "PREVIEW / BELUM SYNC"}</div>
+          <div id="driver-track-live-badge" class="mt-3 inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${
+            found
+              ? "bg-success/10 text-success border border-success/30"
+              : "bg-warning/10 text-warning border border-warning/30"
+          }">${found ? "LIVE DATA" : "PREVIEW / BELUM SYNC"}</div>
         </div>
         <div class="text-center border-y border-outline-variant/40 py-6">
           <div class="text-[12px] uppercase tracking-[0.45em] text-on-surface-variant font-extrabold">Nomor Antrian Anda</div>
-          <div class="font-queue-id text-[56px] sm:text-[76px] leading-none text-primary font-black mt-3">${esc(row.queue_no || "-")}</div>
+          <div class="font-queue-id text-[56px] sm:text-[76px] leading-none text-primary font-black mt-3">${esc(
+            row.queue_no || "-",
+          )}</div>
         </div>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
-          <div class="rounded-xl bg-surface-container/50 border border-primary/20 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Status</div><div id="driver-track-status" class="font-bold text-2xl mt-2">${esc(status)}</div><div class="mt-1 text-xs font-bold text-on-surface-variant">Gate: <span id="driver-track-gate">${esc(row.gate || "-")}</span></div></div>
-          <div class="rounded-xl bg-surface-container/50 border border-tertiary/20 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Target SLA Inbound</div><div id="driver-track-est-finish" class="font-queue-id text-2xl text-tertiary mt-2">${esc(estimateText)}</div><div class="mt-1 text-xs text-on-surface-variant">Start unloading sampai PO terakhir DONE GR</div></div>
-          <div class="rounded-xl bg-surface-container/50 border border-outline-variant/30 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Checker Barang</div><div id="driver-track-checker-progress" class="font-queue-id text-xl mt-2">${esc(row.checker_progress || "0/0")}</div></div>
-          <div class="rounded-xl bg-surface-container/50 border border-outline-variant/30 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Proses GR</div><div id="driver-track-gr-progress" class="font-queue-id text-xl mt-2">${esc(row.gr_progress || "0/0")}</div></div>
-          <div class="rounded-xl bg-surface-container/50 border border-outline-variant/30 p-4 sm:col-span-2"><div class="text-[10px] uppercase font-bold text-on-surface-variant">SLA</div><div id="driver-track-sla-delta" class="font-queue-id text-xl mt-2 ${["LATE", "SLA MISS"].includes(sla.status) ? "text-error" : "text-success"}">${esc(sla.label || sla.status)}</div></div>
+          <div class="rounded-xl bg-surface-container/50 border border-primary/20 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Status</div><div id="driver-track-status" class="font-bold text-2xl mt-2">${esc(
+            status,
+          )}</div><div class="mt-1 text-xs font-bold text-on-surface-variant">Gate: <span id="driver-track-gate">${esc(
+      row.gate || "-",
+    )}</span></div></div>
+          <div class="rounded-xl bg-surface-container/50 border border-tertiary/20 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Target SLA Inbound</div><div id="driver-track-est-finish" class="font-queue-id text-2xl text-tertiary mt-2">${esc(
+            estimateText,
+          )}</div><div class="mt-1 text-xs text-on-surface-variant">Start unloading sampai PO terakhir DONE GR</div></div>
+          <div class="rounded-xl bg-surface-container/50 border border-outline-variant/30 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Checker Barang</div><div id="driver-track-checker-progress" class="font-queue-id text-xl mt-2">${esc(
+            row.checker_progress || "0/0",
+          )}</div></div>
+          <div class="rounded-xl bg-surface-container/50 border border-outline-variant/30 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Proses GR</div><div id="driver-track-gr-progress" class="font-queue-id text-xl mt-2">${esc(
+            row.gr_progress || "0/0",
+          )}</div></div>
+          <div class="rounded-xl bg-surface-container/50 border border-outline-variant/30 p-4 sm:col-span-2"><div class="text-[10px] uppercase font-bold text-on-surface-variant">SLA</div><div id="driver-track-sla-delta" class="font-queue-id text-xl mt-2 ${
+            ["LATE", "SLA MISS"].includes(sla.status)
+              ? "text-error"
+              : "text-success"
+          }">${esc(sla.label || sla.status)}</div></div>
         </div>
         ${driverTimelineV16(row)}
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5"><div class="rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Jam Menunggu</div><div id="driver-track-waiting" class="font-queue-id text-2xl text-tertiary mt-2">${esc(driverWaitingLabel(row))}</div></div><div class="rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Plat</div><div class="font-queue-id text-xl mt-2">${esc(row.plat_number || "-")}</div></div></div>
-        <div class="mt-4 rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4 space-y-2 text-sm"><div><b>Driver:</b> ${esc(row.driver_name || "-")}</div><div><b>Vendor:</b> ${esc(row.vendor_name || "-")}</div><div><b>PO:</b> ${esc(row.po_number || (row.ticket_type === "DROP-OFF" ? "DROP-OFF / TANPA PO" : "-"))}</div><div><b>Last Refresh:</b> <span id="driver-track-last-refresh">${esc(driverTrackLastRefreshAt || "-")}</span></div></div>
-        ${status === "EXPIRED" ? `<div class="mt-4 rounded-xl border border-error/30 bg-error/10 p-4 text-error font-bold">Tiket expired. Driver wajib registrasi ulang.</div>` : ""}
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5"><div class="rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Jam Menunggu</div><div id="driver-track-waiting" class="font-queue-id text-2xl text-tertiary mt-2">${esc(
+          driverWaitingLabel(row),
+        )}</div></div><div class="rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4"><div class="text-[10px] uppercase font-bold text-on-surface-variant">Plat</div><div class="font-queue-id text-xl mt-2">${esc(
+      row.plat_number || "-",
+    )}</div></div></div>
+        <div class="mt-4 rounded-xl border border-outline-variant/40 bg-surface-container/40 p-4 space-y-2 text-sm"><div><b>Driver:</b> ${esc(
+          row.driver_name || "-",
+        )}</div><div><b>Vendor:</b> ${esc(
+      row.vendor_name || "-",
+    )}</div><div><b>PO:</b> ${esc(
+      row.po_number ||
+        (row.ticket_type === "DROP-OFF" ? "DROP-OFF / TANPA PO" : "-"),
+    )}</div><div><b>Last Refresh:</b> <span id="driver-track-last-refresh">${esc(
+      driverTrackLastRefreshAt || "-",
+    )}</span></div></div>
+        ${
+          status === "EXPIRED"
+            ? `<div class="mt-4 rounded-xl border border-error/30 bg-error/10 p-4 text-error font-bold">Tiket expired. Driver wajib registrasi ulang.</div>`
+            : ""
+        }
         <button onclick="refreshDriverTrackLiveData(false)" class="mt-5 w-full bg-primary-container text-on-primary-container rounded-lg px-5 py-3 font-bold flex items-center justify-center gap-2"><span class="material-symbols-outlined">refresh</span>Refresh Status Sekarang</button>
       </div>
     </div>`;
@@ -12505,7 +14560,11 @@ window.initShader = function initShaderDisabled() {
     if (slaEl) {
       const sla = getInboundSlaInfo(row);
       slaEl.textContent = sla.label || sla.status;
-      slaEl.className = `font-queue-id text-xl mt-2 ${["LATE", "SLA MISS"].includes(sla.status) ? "text-error" : "text-success"}`;
+      slaEl.className = `font-queue-id text-xl mt-2 ${
+        ["LATE", "SLA MISS"].includes(sla.status)
+          ? "text-error"
+          : "text-success"
+      }`;
     }
   };
   try {
@@ -12839,7 +14898,9 @@ window.initShader = function initShaderDisabled() {
       query && !queryIsMaster && !queryIsRegistered
         ? `<button type="button" onpointerdown="preventDropdownBlurSelect(event)" onclick="event.preventDefault(); event.stopPropagation(); addPoFromSearch(); closePoDropdownV162()" class="w-full mb-2 px-3 py-3 rounded-lg bg-warning/10 border border-warning/30 hover:bg-warning/20 text-left touch-manipulation">
             <span class="block text-[10px] text-warning font-extrabold uppercase">PO tidak ada di master?</span>
-            <span class="block mt-1 font-queue-id text-[12px] sm:text-[13px] text-on-surface break-all">Gunakan PO manual: ${esc(query)}</span>
+            <span class="block mt-1 font-queue-id text-[12px] sm:text-[13px] text-on-surface break-all">Gunakan PO manual: ${esc(
+              query,
+            )}</span>
           </button>`
         : "";
 
@@ -12857,7 +14918,11 @@ window.initShader = function initShaderDisabled() {
           ? "PO tidak ada untuk vendor/filter tersebut, atau PO sudah pernah daftar."
           : "Belum ada PO available untuk vendor ini."
         : "Pilih Vendor Name dulu supaya list PO terfilter.";
-      list.innerHTML = `${manualAction}<div class="px-3 py-3 text-[12px] text-on-surface-variant">${message}${registeredCount ? `<div class="mt-1 text-warning font-bold">${registeredCount} PO sudah terdaftar dan disembunyikan.</div>` : ""}</div>`;
+      list.innerHTML = `${manualAction}<div class="px-3 py-3 text-[12px] text-on-surface-variant">${message}${
+        registeredCount
+          ? `<div class="mt-1 text-warning font-bold">${registeredCount} PO sudah terdaftar dan disembunyikan.</div>`
+          : ""
+      }</div>`;
       return;
     }
 
@@ -12868,15 +14933,29 @@ window.initShader = function initShaderDisabled() {
           const encoded = poEncode(po);
           const checked = window.__poBatchSelection.has(po);
           return `<label onpointerdown="window.__poDropdownInteracting=true; event.stopPropagation()" onclick="event.stopPropagation()" class="w-full px-3 py-3 rounded-lg hover:bg-primary/10 grid grid-cols-[auto_1fr_auto] gap-3 items-center border-b border-outline-variant/20 cursor-pointer touch-manipulation">
-            <input type="checkbox" data-po-batch-value="${encoded}" class="h-5 w-5 accent-primary" ${checked ? "checked" : ""} onchange="togglePoBatchChoice()" />
-            <span class="min-w-0"><span class="font-queue-id text-[12px] sm:text-[13px] break-all block">${esc(po)}</span><span class="text-[10px] text-on-surface-variant font-bold block">${esc(meta?.vendor_name || "-")}</span></span>
-            <span class="text-[10px] text-primary font-bold">SKU ${esc(meta?.count_po_sku || 0)}</span>
+            <input type="checkbox" data-po-batch-value="${encoded}" class="h-5 w-5 accent-primary" ${
+            checked ? "checked" : ""
+          } onchange="togglePoBatchChoice()" />
+            <span class="min-w-0"><span class="font-queue-id text-[12px] sm:text-[13px] break-all block">${esc(
+              po,
+            )}</span><span class="text-[10px] text-on-surface-variant font-bold block">${esc(
+            meta?.vendor_name || "-",
+          )}</span></span>
+            <span class="text-[10px] text-primary font-bold">SKU ${esc(
+              meta?.count_po_sku || 0,
+            )}</span>
           </label>`;
         })
         .join("")}
       </div>
       <div class="sticky bottom-0 bg-surface-container-lowest border-t border-outline-variant p-2">
-        <button id="po-batch-add-btn" type="button" ${window.__poBatchSelection.size ? "" : "disabled"} onpointerdown="event.preventDefault(); event.stopPropagation(); window.__poDropdownInteracting=true" onclick="applyPoBatchSelection(event)" class="w-full bg-primary-container text-on-primary-container rounded-lg px-4 py-3 font-bold disabled:opacity-50 disabled:cursor-not-allowed">${window.__poBatchSelection.size ? `Tambah ${window.__poBatchSelection.size} PO` : "Pilih PO"}</button>
+        <button id="po-batch-add-btn" type="button" ${
+          window.__poBatchSelection.size ? "" : "disabled"
+        } onpointerdown="event.preventDefault(); event.stopPropagation(); window.__poDropdownInteracting=true" onclick="applyPoBatchSelection(event)" class="w-full bg-primary-container text-on-primary-container rounded-lg px-4 py-3 font-bold disabled:opacity-50 disabled:cursor-not-allowed">${
+      window.__poBatchSelection.size
+        ? `Tambah ${window.__poBatchSelection.size} PO`
+        : "Pilih PO"
+    }</button>
       </div>`;
   };
   try {
@@ -13033,7 +15112,9 @@ window.initShader = function initShaderDisabled() {
     }
 
     const fleet = fleetCanonicalV163(selectEl.value || getFleetDefaultType());
-    hint.textContent = `${window.getFleetNote(fleet)} · ${window.getFleetSlaRuleTextV163(fleet)}`;
+    hint.textContent = `${window.getFleetNote(
+      fleet,
+    )} · ${window.getFleetSlaRuleTextV163(fleet)}`;
 
     const card = selectEl.closest?.(".vehicle-row");
     if (card) {
@@ -13225,10 +15306,18 @@ window.initShader = function initShaderDisabled() {
         ${tabs
           .map(([key, label, count, icon]) => {
             const on = active === key;
-            return `<button type="button" onclick="setCheckerSection('${key}')" class="${on ? "bg-secondary-container text-on-secondary-container border-secondary-container" : "bg-surface-container/60 text-on-surface-variant border-outline-variant"} border rounded-xl px-3 py-3 font-bold text-xs flex items-center justify-center gap-2">
+            return `<button type="button" onclick="setCheckerSection('${key}')" class="${
+              on
+                ? "bg-secondary-container text-on-secondary-container border-secondary-container"
+                : "bg-surface-container/60 text-on-surface-variant border-outline-variant"
+            } border rounded-xl px-3 py-3 font-bold text-xs flex items-center justify-center gap-2">
               <span class="material-symbols-outlined text-base">${icon}</span>
               <span>${label}</span>
-              <span class="rounded-full px-2 py-0.5 text-[10px] ${on ? "bg-on-secondary-container/20" : "bg-surface-container-high"}">${count}</span>
+              <span class="rounded-full px-2 py-0.5 text-[10px] ${
+                on
+                  ? "bg-on-secondary-container/20"
+                  : "bg-surface-container-high"
+              }">${count}</span>
             </button>`;
           })
           .join("")}
@@ -13275,7 +15364,9 @@ window.initShader = function initShaderDisabled() {
     const safeDone = Math.max(0, Number(done || 0));
     const pct = Math.min(100, Math.round((safeDone / safeTotal) * 100));
     return `<div class="mt-3">
-      <div class="flex justify-between gap-3 text-[11px] font-bold text-on-surface-variant"><span>${esc(label)}</span><span>${safeDone}/${Number(total || 0)}</span></div>
+      <div class="flex justify-between gap-3 text-[11px] font-bold text-on-surface-variant"><span>${esc(
+        label,
+      )}</span><span>${safeDone}/${Number(total || 0)}</span></div>
       <div class="h-2 rounded-full bg-surface-container-high mt-1 overflow-hidden"><div class="h-full rounded-full ${barClass}" style="width:${pct}%"></div></div>
     </div>`;
   }
@@ -13308,34 +15399,80 @@ window.initShader = function initShaderDisabled() {
     const finishLabel = dropOff
       ? "Selesai Bongkar"
       : checker.allDone
-        ? "Finish Unloading"
-        : `Menunggu Checker ${checker.done}/${checker.total}`;
+      ? "Finish Unloading"
+      : `Menunggu Checker ${checker.done}/${checker.total}`;
 
-    return `<article class="checker-card rounded-2xl border border-outline-variant/40 bg-surface-container/45 p-4 shadow-sm" data-status="${esc(row.status)}" data-vendor="${esc(String(row.vendor_name || "").toLowerCase())}" data-queue="${esc(String(row.queue_no || "").toLowerCase())}" data-po="${esc(String(row.po_number || "").toLowerCase())}" data-plate="${esc(String(row.plat_number || "").toLowerCase())}">
+    return `<article class="checker-card rounded-2xl border border-outline-variant/40 bg-surface-container/45 p-4 shadow-sm" data-status="${esc(
+      row.status,
+    )}" data-vendor="${esc(
+      String(row.vendor_name || "").toLowerCase(),
+    )}" data-queue="${esc(
+      String(row.queue_no || "").toLowerCase(),
+    )}" data-po="${esc(
+      String(row.po_number || "").toLowerCase(),
+    )}" data-plate="${esc(String(row.plat_number || "").toLowerCase())}">
       <div class="flex items-start justify-between gap-3">
-        <div><div class="font-queue-id text-primary text-2xl">${esc(row.queue_no || "-")}</div><div class="text-[11px] uppercase text-on-surface-variant font-bold mt-1">${esc(row.vendor_name || "-")}</div></div>
+        <div><div class="font-queue-id text-primary text-2xl">${esc(
+          row.queue_no || "-",
+        )}</div><div class="text-[11px] uppercase text-on-surface-variant font-bold mt-1">${esc(
+      row.vendor_name || "-",
+    )}</div></div>
         ${checkerStatusPill(row.status)}
       </div>
       <div class="grid grid-cols-2 gap-2 mt-4 text-xs">
-        <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Plat</div><div class="font-queue-id text-sm mt-1">${esc(row.plat_number || "-")}</div></div>
-        <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Gate</div><div class="font-bold text-sm mt-1 break-all">${esc(row.gate || "-")}</div></div>
-        <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Proses</div><div class="font-bold mt-1">${dropOff ? "DROP-OFF · tanpa Checker PO" : `${poCount} PO`}</div></div>
+        <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Plat</div><div class="font-queue-id text-sm mt-1">${esc(
+          row.plat_number || "-",
+        )}</div></div>
+        <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Gate</div><div class="font-bold text-sm mt-1 break-all">${esc(
+          row.gate || "-",
+        )}</div></div>
+        <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Proses</div><div class="font-bold mt-1">${
+          dropOff ? "DROP-OFF · tanpa Checker PO" : `${poCount} PO`
+        }</div></div>
         <div class="rounded-lg bg-surface-container/60 border border-outline-variant/30 p-3"><div class="text-[10px] uppercase text-on-surface-variant font-bold">Menunggu</div><div>${waitMarkup}</div></div>
       </div>
       ${
         dropOff
           ? `<div class="mt-3 rounded-xl border border-primary/25 bg-primary/10 p-4 text-xs text-on-surface-variant"><b class="text-on-surface">Flow DROP-OFF:</b> Panggil → Mulai Bongkar → Selesai Bongkar. Tidak ada Start/Done Checker PO dan tidak ada Done GR.</div>`
-          : `${checkerProgressBarV165(checker.done, checker.total, "Checking selesai", "bg-primary-container")}
-             ${checkerProgressBarV165(gr.done, gr.total, "GR selesai", "bg-success")}
-             <div class="mt-3 text-xs text-on-surface-variant"><b>Checker aktif:</b> ${esc(names || "Belum ada")}${checker.checking ? ` · ${checker.checking} sedang proses` : ""}</div>`
+          : `${checkerProgressBarV165(
+              checker.done,
+              checker.total,
+              "Checking selesai",
+              "bg-primary-container",
+            )}
+             ${checkerProgressBarV165(
+               gr.done,
+               gr.total,
+               "GR selesai",
+               "bg-success",
+             )}
+             <div class="mt-3 text-xs text-on-surface-variant"><b>Checker aktif:</b> ${esc(
+               names || "Belum ada",
+             )}${
+              checker.checking ? ` · ${checker.checking} sedang proses` : ""
+            }</div>`
       }
-      <div class="grid ${dropOff ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2"} gap-2 mt-4">
+      <div class="grid ${
+        dropOff ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2"
+      } gap-2 mt-4">
         ${
           dropOff
             ? ""
-            : `<button type="button" onclick="openCheckerPoPanelV15('${esc(row.ticket_id)}')" class="bg-primary-container text-on-primary-container px-4 py-3 rounded-xl font-bold text-xs inline-flex items-center justify-center gap-2"><span class="material-symbols-outlined text-base">fact_check</span>Kelola PO</button>`
+            : `<button type="button" onclick="openCheckerPoPanelV15('${esc(
+                row.ticket_id,
+              )}')" class="bg-primary-container text-on-primary-container px-4 py-3 rounded-xl font-bold text-xs inline-flex items-center justify-center gap-2"><span class="material-symbols-outlined text-base">fact_check</span>Kelola PO</button>`
         }
-        <button type="button" ${finishDisabled ? "disabled" : ""} onclick="finishUnloadingTicketV165('${esc(row.ticket_id)}', this)" class="${finishDisabled ? "bg-surface-container-high text-on-surface-variant opacity-60 cursor-not-allowed" : "bg-success/15 border border-success/30 text-success hover:brightness-110"} px-4 py-3 rounded-xl font-bold text-xs inline-flex items-center justify-center gap-2"><span class="material-symbols-outlined text-base">task_alt</span><span>${esc(finishLabel)}</span></button>
+        <button type="button" ${
+          finishDisabled ? "disabled" : ""
+        } onclick="finishUnloadingTicketV165('${esc(
+      row.ticket_id,
+    )}', this)" class="${
+      finishDisabled
+        ? "bg-surface-container-high text-on-surface-variant opacity-60 cursor-not-allowed"
+        : "bg-success/15 border border-success/30 text-success hover:brightness-110"
+    } px-4 py-3 rounded-xl font-bold text-xs inline-flex items-center justify-center gap-2"><span class="material-symbols-outlined text-base">task_alt</span><span>${esc(
+      finishLabel,
+    )}</span></button>
       </div>
     </article>`;
   }
@@ -13459,9 +15596,30 @@ window.initShader = function initShaderDisabled() {
           <input type="hidden" name="status" value="CALLED" />
           <input type="hidden" name="unload_sla" value="ON PROCESS" />
           <div class="grid grid-cols-1 gap-4">
-            ${textInput("vendor_name", "Vendor Name", "Pilih dari card", "", "", "required readonly")}
-            ${textInput("fleet_type", "Fleet Type", "Pilih dari card", "", "", "required readonly")}
-            ${textInput("plat_number", "Plat Number", "Pilih dari card", "", "", 'required readonly onblur="validatePlateInput(this)"')}
+            ${textInput(
+              "vendor_name",
+              "Vendor Name",
+              "Pilih dari card",
+              "",
+              "",
+              "required readonly",
+            )}
+            ${textInput(
+              "fleet_type",
+              "Fleet Type",
+              "Pilih dari card",
+              "",
+              "",
+              "required readonly",
+            )}
+            ${textInput(
+              "plat_number",
+              "Plat Number",
+              "Pilih dari card",
+              "",
+              "",
+              'required readonly onblur="validatePlateInput(this)"',
+            )}
             ${checkerGatePicker()}
             <label class="flex flex-col gap-2"><span class="font-label-sm text-label-sm text-on-surface-variant uppercase">Status Berikutnya</span><div id="checker-status-box" class="bg-primary/15 border border-primary/30 rounded-lg px-4 py-3 text-primary font-bold flex items-center gap-2"><span id="checker-status-icon" class="material-symbols-outlined text-base">campaign</span><span id="checker-status-preview">PANGGIL DRIVER</span></div></label>
           </div>
@@ -13511,14 +15669,14 @@ window.initShader = function initShaderDisabled() {
       section === "process"
         ? "Bongkar & Checking"
         : section === "selesai"
-          ? "Selesai"
-          : "Memanggil";
+        ? "Selesai"
+        : "Memanggil";
     const rightPanel =
       section === "memanggil"
         ? checkerStandardActionPanelV165()
         : section === "process"
-          ? checkerProcessInfoPanelV165(rows)
-          : checkerFinishedInfoPanelV165();
+        ? checkerProcessInfoPanelV165(rows)
+        : checkerFinishedInfoPanelV165();
 
     return `<div class="grid grid-cols-1 xl:grid-cols-12 gap-gutter">
       <div class="xl:col-span-9 glass-card rounded-xl p-4 sm:p-6">
@@ -13528,8 +15686,17 @@ window.initShader = function initShaderDisabled() {
         </div>
         ${checkerSectionTabs()}
         <input id="checker-mobile-search" oninput="filterCheckerCards()" class="form-input mb-4" placeholder="Cari queue / plat / vendor / PO / checker..." />
-        <div class="flex items-center justify-between mb-3"><div class="font-bold text-on-surface">${esc(sectionTitle)}</div><div class="text-xs text-on-surface-variant">${num(rows.length)} ticket</div></div>
-        <div id="checker-card-list" class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[72vh] overflow-y-auto pr-1">${rows.map((row, i) => checkerTicketCard(row, i)).join("") || `<div class="md:col-span-2 rounded-xl border border-dashed border-outline-variant p-8 text-center text-on-surface-variant">Belum ada data di section ${esc(sectionTitle)}.</div>`}</div>
+        <div class="flex items-center justify-between mb-3"><div class="font-bold text-on-surface">${esc(
+          sectionTitle,
+        )}</div><div class="text-xs text-on-surface-variant">${num(
+      rows.length,
+    )} ticket</div></div>
+        <div id="checker-card-list" class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[72vh] overflow-y-auto pr-1">${
+          rows.map((row, i) => checkerTicketCard(row, i)).join("") ||
+          `<div class="md:col-span-2 rounded-xl border border-dashed border-outline-variant p-8 text-center text-on-surface-variant">Belum ada data di section ${esc(
+            sectionTitle,
+          )}.</div>`
+        }</div>
       </div>
       <div id="checker-desktop-action-panel" class="xl:col-span-3 glass-card rounded-xl p-4 sm:p-6">${rightPanel}</div>
     </div>`;
@@ -13962,7 +16129,8 @@ window.initShader = function initShaderDisabled() {
       }
 
       const rowDate = operationalDateV181(row);
-      if (filters.dateFrom && rowDate && rowDate < filters.dateFrom) return false;
+      if (filters.dateFrom && rowDate && rowDate < filters.dateFrom)
+        return false;
       if (filters.dateTo && rowDate && rowDate > filters.dateTo) return false;
 
       if (
@@ -13976,10 +16144,17 @@ window.initShader = function initShaderDisabled() {
 
       if (filters.grStatus) {
         const poRows = Array.isArray(row.po_rows) ? row.po_rows : [];
-        const grStatuses = poRows.map((po) => String(po.gr_status || "PENDING").toUpperCase());
+        const grStatuses = poRows.map((po) =>
+          String(po.gr_status || "PENDING").toUpperCase(),
+        );
         const wanted = String(filters.grStatus).toUpperCase();
         if (wanted === "BELUM DONE GR") {
-          if (!grStatuses.some((status) => !["DONE GR", "CANCELLED"].includes(status))) return false;
+          if (
+            !grStatuses.some(
+              (status) => !["DONE GR", "CANCELLED"].includes(status),
+            )
+          )
+            return false;
         } else if (!grStatuses.some((status) => status === wanted)) {
           return false;
         }
@@ -14031,7 +16206,9 @@ window.initShader = function initShaderDisabled() {
     return `<option value="">${esc(allLabel)}</option>${values
       .map(
         (value) =>
-          `<option value="${esc(value)}" ${String(value) === String(selected) ? "selected" : ""}>${esc(value)}</option>`,
+          `<option value="${esc(value)}" ${
+            String(value) === String(selected) ? "selected" : ""
+          }>${esc(value)}</option>`,
       )
       .join("")}`;
   }
@@ -14073,8 +16250,16 @@ window.initShader = function initShaderDisabled() {
     return `<form id="waiting-list-filter-form-v181" onsubmit="applyWaitingListFiltersV181(event)" class="mb-5 rounded-xl border border-outline-variant/40 bg-surface-container/35 p-4">
       <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4">
         <div>
-          <div class="font-bold text-on-surface flex items-center gap-2"><span class="material-symbols-outlined text-primary">filter_alt</span>Filter Waiting List ${activeCount ? `<span class="inline-flex rounded-full bg-primary/10 text-primary px-2 py-1 text-[10px]">${activeCount} aktif</span>` : ""}</div>
-          <div class="text-xs text-on-surface-variant mt-1">Menampilkan ${num(filteredRows.length)} dari ${num(allRows.length)} kendaraan. Maksimal ${num(f.pageSize)} baris per halaman.</div>
+          <div class="font-bold text-on-surface flex items-center gap-2"><span class="material-symbols-outlined text-primary">filter_alt</span>Filter Waiting List ${
+            activeCount
+              ? `<span class="inline-flex rounded-full bg-primary/10 text-primary px-2 py-1 text-[10px]">${activeCount} aktif</span>`
+              : ""
+          }</div>
+          <div class="text-xs text-on-surface-variant mt-1">Menampilkan ${num(
+            filteredRows.length,
+          )} dari ${num(allRows.length)} kendaraan. Maksimal ${num(
+      f.pageSize,
+    )} baris per halaman.</div>
         </div>
         <div class="flex flex-wrap gap-2">
           <button type="button" onclick="resetWaitingListFiltersV181()" class="thin-tab rounded-lg px-4 py-2 text-sm font-bold flex items-center gap-1"><span class="material-symbols-outlined text-base">restart_alt</span>Reset</button>
@@ -14082,15 +16267,45 @@ window.initShader = function initShaderDisabled() {
         </div>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8 gap-3">
-        <label class="sm:col-span-2 flex flex-col gap-1"><span class="text-[10px] uppercase font-bold text-on-surface-variant">Cari</span><input id="waiting-filter-search-v181" class="form-input" value="${esc(f.search)}" placeholder="Queue, plat, vendor, PO, checker..." /></label>
-        <label class="flex flex-col gap-1"><span class="text-[10px] uppercase font-bold text-on-surface-variant">Tanggal Operasional</span><input id="waiting-filter-date-v181" type="date" class="form-input" value="${esc(f.operationalDate)}" /></label>
-        <label class="flex flex-col gap-1"><span class="text-[10px] uppercase font-bold text-on-surface-variant">Dari Tanggal</span><input id="waiting-filter-date-from-v181" type="date" class="form-input" value="${esc(f.dateFrom)}" /></label>
-        <label class="flex flex-col gap-1"><span class="text-[10px] uppercase font-bold text-on-surface-variant">Sampai Tanggal</span><input id="waiting-filter-date-to-v181" type="date" class="form-input" value="${esc(f.dateTo)}" /></label>
-        <label class="flex flex-col gap-1"><span class="text-[10px] uppercase font-bold text-on-surface-variant">Status</span><select id="waiting-filter-status-v181" class="form-select">${optionListV181(statuses, f.status, "Semua Status")}</select></label>
-        <label class="flex flex-col gap-1"><span class="text-[10px] uppercase font-bold text-on-surface-variant">Status GR PO</span><select id="waiting-filter-gr-v181" class="form-select"><option value="">Semua GR</option><option value="BELUM DONE GR" ${f.grStatus === "BELUM DONE GR" ? "selected" : ""}>Belum Done GR</option><option value="WAITING GR" ${f.grStatus === "WAITING GR" ? "selected" : ""}>Waiting GR</option><option value="DONE GR" ${f.grStatus === "DONE GR" ? "selected" : ""}>Done GR</option></select></label>
-        <label class="flex flex-col gap-1"><span class="text-[10px] uppercase font-bold text-on-surface-variant">Tipe Ticket</span><select id="waiting-filter-type-v181" class="form-select">${optionListV181(ticketTypes, f.ticketType, "Semua Tipe")}</select></label>
-        <label class="flex flex-col gap-1"><span class="text-[10px] uppercase font-bold text-on-surface-variant">Slot</span><select id="waiting-filter-slot-v181" class="form-select">${optionListV181(slots, f.slot, "Semua Slot")}</select></label>
-        <label class="flex flex-col gap-1"><span class="text-[10px] uppercase font-bold text-on-surface-variant">Gate</span><select id="waiting-filter-gate-v181" class="form-select">${optionListV181(gates, f.gate, "Semua Gate")}</select></label>
+        <label class="sm:col-span-2 flex flex-col gap-1"><span class="text-[10px] uppercase font-bold text-on-surface-variant">Cari</span><input id="waiting-filter-search-v181" class="form-input" value="${esc(
+          f.search,
+        )}" placeholder="Queue, plat, vendor, PO, checker..." /></label>
+        <label class="flex flex-col gap-1"><span class="text-[10px] uppercase font-bold text-on-surface-variant">Tanggal Operasional</span><input id="waiting-filter-date-v181" type="date" class="form-input" value="${esc(
+          f.operationalDate,
+        )}" /></label>
+        <label class="flex flex-col gap-1"><span class="text-[10px] uppercase font-bold text-on-surface-variant">Dari Tanggal</span><input id="waiting-filter-date-from-v181" type="date" class="form-input" value="${esc(
+          f.dateFrom,
+        )}" /></label>
+        <label class="flex flex-col gap-1"><span class="text-[10px] uppercase font-bold text-on-surface-variant">Sampai Tanggal</span><input id="waiting-filter-date-to-v181" type="date" class="form-input" value="${esc(
+          f.dateTo,
+        )}" /></label>
+        <label class="flex flex-col gap-1"><span class="text-[10px] uppercase font-bold text-on-surface-variant">Status</span><select id="waiting-filter-status-v181" class="form-select">${optionListV181(
+          statuses,
+          f.status,
+          "Semua Status",
+        )}</select></label>
+        <label class="flex flex-col gap-1"><span class="text-[10px] uppercase font-bold text-on-surface-variant">Status GR PO</span><select id="waiting-filter-gr-v181" class="form-select"><option value="">Semua GR</option><option value="BELUM DONE GR" ${
+          f.grStatus === "BELUM DONE GR" ? "selected" : ""
+        }>Belum Done GR</option><option value="WAITING GR" ${
+      f.grStatus === "WAITING GR" ? "selected" : ""
+    }>Waiting GR</option><option value="DONE GR" ${
+      f.grStatus === "DONE GR" ? "selected" : ""
+    }>Done GR</option></select></label>
+        <label class="flex flex-col gap-1"><span class="text-[10px] uppercase font-bold text-on-surface-variant">Tipe Ticket</span><select id="waiting-filter-type-v181" class="form-select">${optionListV181(
+          ticketTypes,
+          f.ticketType,
+          "Semua Tipe",
+        )}</select></label>
+        <label class="flex flex-col gap-1"><span class="text-[10px] uppercase font-bold text-on-surface-variant">Slot</span><select id="waiting-filter-slot-v181" class="form-select">${optionListV181(
+          slots,
+          f.slot,
+          "Semua Slot",
+        )}</select></label>
+        <label class="flex flex-col gap-1"><span class="text-[10px] uppercase font-bold text-on-surface-variant">Gate</span><select id="waiting-filter-gate-v181" class="form-select">${optionListV181(
+          gates,
+          f.gate,
+          "Semua Gate",
+        )}</select></label>
       </div>
     </form>`;
   }
@@ -14101,11 +16316,23 @@ window.initShader = function initShaderDisabled() {
     const end = Math.min(totalRows, page * pageSize);
 
     return `<div class="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-      <div class="text-xs text-on-surface-variant">Baris ${num(start)}–${num(end)} dari ${num(totalRows)} · Halaman ${num(page)}/${num(totalPages)}</div>
+      <div class="text-xs text-on-surface-variant">Baris ${num(start)}–${num(
+      end,
+    )} dari ${num(totalRows)} · Halaman ${num(page)}/${num(totalPages)}</div>
       <div class="flex flex-wrap items-center gap-2">
-        <label class="flex items-center gap-2 text-xs text-on-surface-variant">Baris/halaman<select onchange="setWaitingListPageSizeV181(this.value)" class="form-select !w-auto !py-2"><option value="25" ${pageSize === 25 ? "selected" : ""}>25</option><option value="50" ${pageSize === 50 ? "selected" : ""}>50</option><option value="100" ${pageSize === 100 ? "selected" : ""}>100</option></select></label>
-        <button type="button" onclick="changeWaitingListPageV181(-1)" ${page <= 1 ? "disabled" : ""} class="thin-tab rounded-lg px-3 py-2 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed">Sebelumnya</button>
-        <button type="button" onclick="changeWaitingListPageV181(1)" ${page >= totalPages ? "disabled" : ""} class="thin-tab rounded-lg px-3 py-2 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed">Berikutnya</button>
+        <label class="flex items-center gap-2 text-xs text-on-surface-variant">Baris/halaman<select onchange="setWaitingListPageSizeV181(this.value)" class="form-select !w-auto !py-2"><option value="25" ${
+          pageSize === 25 ? "selected" : ""
+        }>25</option><option value="50" ${
+      pageSize === 50 ? "selected" : ""
+    }>50</option><option value="100" ${
+      pageSize === 100 ? "selected" : ""
+    }>100</option></select></label>
+        <button type="button" onclick="changeWaitingListPageV181(-1)" ${
+          page <= 1 ? "disabled" : ""
+        } class="thin-tab rounded-lg px-3 py-2 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed">Sebelumnya</button>
+        <button type="button" onclick="changeWaitingListPageV181(1)" ${
+          page >= totalPages ? "disabled" : ""
+        } class="thin-tab rounded-lg px-3 py-2 text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed">Berikutnya</button>
       </div>
     </div>`;
   }
@@ -14120,8 +16347,10 @@ window.initShader = function initShaderDisabled() {
       "";
     f.operationalDate =
       document.getElementById("waiting-filter-date-v181")?.value || "";
-    f.dateFrom = document.getElementById("waiting-filter-date-from-v181")?.value || "";
-    f.dateTo = document.getElementById("waiting-filter-date-to-v181")?.value || "";
+    f.dateFrom =
+      document.getElementById("waiting-filter-date-from-v181")?.value || "";
+    f.dateTo =
+      document.getElementById("waiting-filter-date-to-v181")?.value || "";
     f.status =
       document.getElementById("waiting-filter-status-v181")?.value || "";
     f.grStatus = document.getElementById("waiting-filter-gr-v181")?.value || "";
@@ -14220,7 +16449,11 @@ window.initShader = function initShaderDisabled() {
 
     return `<div class="glass-card rounded-xl p-4 sm:p-6">
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-        <div><h3 class="font-headline-md text-headline-md">Waiting List</h3><p class="text-on-surface-variant">Satu kendaraan tampil satu baris. ${usingHistory ? "Menampilkan history MotherDuck sesuai filter tanggal; CSV mengikuti hasil filter ini." : "Default menampilkan operasional aktif. Pilih tanggal atau range tanggal untuk menarik history Completed dari MotherDuck."}</p></div>
+        <div><h3 class="font-headline-md text-headline-md">Waiting List</h3><p class="text-on-surface-variant">Satu kendaraan tampil satu baris. ${
+          usingHistory
+            ? "Menampilkan history MotherDuck sesuai filter tanggal; CSV mengikuti hasil filter ini."
+            : "Default menampilkan operasional aktif. Pilih tanggal atau range tanggal untuk menarik history Completed dari MotherDuck."
+        }</p></div>
         <div class="flex flex-wrap gap-2"><button onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-3 font-bold flex items-center gap-2"><span class="material-symbols-outlined">refresh</span>Refresh</button><button onclick="doneGrBatchV19()" class="bg-secondary-container text-on-secondary-container px-4 py-3 rounded-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined">playlist_add_check</span>Simpan Semua Actual Qty</button><button onclick="exportCsv()" class="bg-primary-container text-on-primary-container px-5 py-3 rounded-lg font-bold flex items-center gap-2"><span class="material-symbols-outlined">download</span>Export CSV</button></div>
       </div>
       ${filterPanelV181(allRows, filteredRows)}
@@ -14237,7 +16470,9 @@ window.initShader = function initShaderDisabled() {
 // V19 export must win over legacy exports registered earlier in this file.
 if (window.__exportCsvV19) {
   window.exportCsv = window.__exportCsvV19;
-  try { exportCsv = window.exportCsv; } catch (error) {}
+  try {
+    exportCsv = window.exportCsv;
+  } catch (error) {}
 }
 
 /* ==========================================================================
@@ -14248,32 +16483,57 @@ if (window.__exportCsvV19) {
   if (window.__waitingMonitorCommandCenterV19Installed) return;
   window.__waitingMonitorCommandCenterV19Installed = true;
 
-  const safeStatus = (row = {}) => String(row.status || "WAITING").toUpperCase();
-  const isTerminal = (status) => ["DONE GR", "COMPLETED", "EXPIRED", "CANCELLED"].includes(status);
+  const safeStatus = (row = {}) =>
+    String(row.status || "WAITING").toUpperCase();
+  const isTerminal = (status) =>
+    ["DONE GR", "COMPLETED", "EXPIRED", "CANCELLED"].includes(status);
   const displayStatus = (status) =>
-    ({ UNLOADING: "BONGKAR", "WAITING GR": "WAITING GR", "DONE GR": "DONE GR" }[status] || status);
+    ({ UNLOADING: "BONGKAR", "WAITING GR": "WAITING GR", "DONE GR": "DONE GR" }[
+      status
+    ] || status);
   const statusStyle = (status) => {
-    if (status === "UNLOADING") return "background:rgb(var(--primary) / .12);color:rgb(var(--primary));";
-    if (status === "WAITING GR" || status === "DONE GR") return "background:rgb(var(--success) / .12);color:rgb(var(--success));";
-    if (status === "CALLED") return "background:rgb(var(--warning) / .14);color:rgb(var(--warning));";
-    if (status === "EXPIRED") return "background:rgb(var(--error) / .12);color:rgb(var(--error));";
+    if (status === "UNLOADING")
+      return "background:rgb(var(--primary) / .12);color:rgb(var(--primary));";
+    if (status === "WAITING GR" || status === "DONE GR")
+      return "background:rgb(var(--success) / .12);color:rgb(var(--success));";
+    if (status === "CALLED")
+      return "background:rgb(var(--warning) / .14);color:rgb(var(--warning));";
+    if (status === "EXPIRED")
+      return "background:rgb(var(--error) / .12);color:rgb(var(--error));";
     return "background:rgb(var(--outline-variant) / .22);color:rgb(var(--on-surface-variant));";
   };
-  const countStatus = (rows, status) => rows.filter((row) => safeStatus(row) === status).length;
-  const numV19 = (value) => new Intl.NumberFormat("id-ID").format(Number(value || 0));
+  const countStatus = (rows, status) =>
+    rows.filter((row) => safeStatus(row) === status).length;
+  const numV19 = (value) =>
+    new Intl.NumberFormat("id-ID").format(Number(value || 0));
   const rowWaiting = (row) => {
     const start = row.register_time || row.created_at || "";
-    const end = isTerminal(safeStatus(row)) ? (row.completed_at || row.cancelled_at || row.expired_at || row.updated_at || "") : "";
-    return typeof liveWaitingText === "function" ? liveWaitingText(start, end) : "-";
+    const end = isTerminal(safeStatus(row))
+      ? row.completed_at ||
+        row.cancelled_at ||
+        row.expired_at ||
+        row.updated_at ||
+        ""
+      : "";
+    return typeof liveWaitingText === "function"
+      ? liveWaitingText(start, end)
+      : "-";
   };
   const riskSort = (a, b) => {
     const aSla = getInboundSlaInfo(a);
     const bSla = getInboundSlaInfo(b);
-    return Number(aSla.delta_minutes ?? 999999) - Number(bSla.delta_minutes ?? 999999);
+    return (
+      Number(aSla.delta_minutes ?? 999999) -
+      Number(bSla.delta_minutes ?? 999999)
+    );
   };
 
   function metricV19(label, value, note, tone = "") {
-    return `<article class="wm19-kpi ${tone}"><div class="wm19-kpi-label">${esc(label)}</div><div class="wm19-kpi-value">${numV19(value)}</div><div class="wm19-kpi-note">${esc(note)}</div></article>`;
+    return `<article class="wm19-kpi ${tone}"><div class="wm19-kpi-label">${esc(
+      label,
+    )}</div><div class="wm19-kpi-value">${numV19(
+      value,
+    )}</div><div class="wm19-kpi-note">${esc(note)}</div></article>`;
   }
 
   function flowV19(rows) {
@@ -14286,11 +16546,28 @@ if (window.__exportCsvV19) {
     ];
     const active = rows.filter((row) => !isTerminal(safeStatus(row)));
     const total = Math.max(active.length, 1);
-    return `<article class="wm19-card"><header class="wm19-card-head"><div><h3>Alur Antrian</h3><p>Distribusi kendaraan aktif berdasarkan status aktual.</p></div><span class="wm19-chip">${numV19(active.length)} aktif</span></header><div class="wm19-flow"><div class="wm19-flow-top"><b>Queue live</b><span>Realtime</span></div><div class="wm19-bar">${statuses.map(([status,,color]) => `<i style="width:${(countStatus(active, status) / total) * 100}%;background:${color}"></i>`).join("")}</div><div class="wm19-legend">${statuses.map(([status,label,color]) => `<span><i style="display:inline-block;width:7px;height:7px;margin-right:4px;border-radius:50%;background:${color}"></i>${label}<b>${numV19(countStatus(active,status))}</b></span>`).join("")}</div></div></article>`;
+    return `<article class="wm19-card"><header class="wm19-card-head"><div><h3>Alur Antrian</h3><p>Distribusi kendaraan aktif berdasarkan status aktual.</p></div><span class="wm19-chip">${numV19(
+      active.length,
+    )} aktif</span></header><div class="wm19-flow"><div class="wm19-flow-top"><b>Queue live</b><span>Realtime</span></div><div class="wm19-bar">${statuses
+      .map(
+        ([status, , color]) =>
+          `<i style="width:${
+            (countStatus(active, status) / total) * 100
+          }%;background:${color}"></i>`,
+      )
+      .join("")}</div><div class="wm19-legend">${statuses
+      .map(
+        ([status, label, color]) =>
+          `<span><i style="display:inline-block;width:7px;height:7px;margin-right:4px;border-radius:50%;background:${color}"></i>${label}<b>${numV19(
+            countStatus(active, status),
+          )}</b></span>`,
+      )
+      .join("")}</div></div></article>`;
   }
 
   function gateListV22(row = {}) {
-    if (typeof parseGateList === "function") return parseGateList(row.gate || "");
+    if (typeof parseGateList === "function")
+      return parseGateList(row.gate || "");
     return String(row.gate || "")
       .split(",")
       .map((gate) => gate.trim())
@@ -14304,10 +16581,1204 @@ if (window.__exportCsvV19) {
     return `${site} ${number}`;
   }
 
+  const wmIdleStateV27 = {
+    gate: "",
+    range: "today",
+    status: "all",
+  };
+
+  function wmIdleDateKeyV27(value) {
+    const date = parseInboundDateSafe(value);
+    if (!date) return "";
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Jakarta",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(date);
+  }
+
+  function wmIdleTodayKeyV27() {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Jakarta",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+  }
+
+  function wmIdleStartV27(row = {}) {
+    return getTicketRawValueV7(row, [
+      "start_unloading_at",
+      "start unloading at",
+      "unloading_start_at",
+      "checker_started_at",
+      "checker started at",
+    ]);
+  }
+
+  function wmIdleEndV27(row = {}) {
+    return getTicketRawValueV7(row, [
+      "finish_unloading_at",
+      "finish unloading at",
+      "waiting_gr_at",
+      "waiting gr at",
+      "checker_done_at",
+      "checker done at",
+      "done_gr_at",
+      "done gr at",
+      "completed_at",
+      "completed at",
+    ]);
+  }
+
+  function wmIdleFormatV27(minutes) {
+    if (!Number.isFinite(Number(minutes))) return "-";
+    const total = Math.max(0, Math.round(Number(minutes)));
+    const hours = Math.floor(total / 60);
+    const mins = total % 60;
+    if (!hours) return `${mins}m`;
+    return `${hours}j ${String(mins).padStart(2, "0")}m`;
+  }
+
+  function wmIdleRowsForRangeV27(rows = [], range = wmIdleStateV27.range) {
+    if (range === "all") return rows;
+    const today = wmIdleTodayKeyV27();
+    return rows.filter((row) => {
+      const key = wmIdleDateKeyV27(
+        wmIdleStartV27(row) ||
+          row.operational_date ||
+          row.register_time ||
+          row.created_at ||
+          row.Timestamp ||
+          "",
+      );
+      return key === today;
+    });
+  }
+
+  function wmGateIdleStatsV27(rows = [], gate = "") {
+    const gateKey = String(gate || "")
+      .trim()
+      .toUpperCase();
+    const now = new Date();
+    const todayKey = wmIdleTodayKeyV27();
+    const OP_START_HOUR = 9;
+    const OP_END_HOUR = 20;
+
+    const jakartaPoint = (dateKey, hour) =>
+      dateKey
+        ? new Date(`${dateKey}T${String(hour).padStart(2, "0")}:00:00+07:00`)
+        : null;
+
+    const allObservedDateKeys = [
+      ...new Set(
+        rows
+          .map((row) =>
+            wmIdleDateKeyV27(
+              wmIdleStartV27(row) ||
+                row.operational_date ||
+                row.register_time ||
+                row.created_at ||
+                row.Timestamp ||
+                "",
+            ),
+          )
+          .filter(Boolean),
+      ),
+    ].sort();
+
+    const requestedDateKeys =
+      wmIdleStateV27.range === "today"
+        ? [todayKey]
+        : allObservedDateKeys.length
+        ? allObservedDateKeys
+        : [todayKey];
+
+    // Satu window per hari. Jam di luar 09:00-20:00 WIB TIDAK masuk denominator idle/utilization.
+    const windows = requestedDateKeys
+      .map((dateKey) => {
+        const start = jakartaPoint(dateKey, OP_START_HOUR);
+        const hardEnd = jakartaPoint(dateKey, OP_END_HOUR);
+        if (!start || !hardEnd) return null;
+
+        let end = hardEnd;
+        if (dateKey === todayKey) {
+          if (now <= start) end = start; // operasional belum mulai
+          else if (now < hardEnd) end = now; // berjalan sampai saat ini
+        }
+
+        return {
+          dateKey,
+          start,
+          end,
+          hardEnd,
+          minutes: Math.max(0, (end.getTime() - start.getTime()) / 60000),
+        };
+      })
+      .filter(Boolean);
+
+    const gateRows = rows.filter((row) =>
+      gateListV22(row).some(
+        (item) => String(item).trim().toUpperCase() === gateKey,
+      ),
+    );
+
+    const rawSessions = gateRows
+      .map((row) => {
+        const startValue = wmIdleStartV27(row);
+        const endValue = wmIdleEndV27(row);
+        const start = parseInboundDateSafe(startValue);
+        const parsedEnd = parseInboundDateSafe(endValue);
+        return {
+          row,
+          start,
+          end: parsedEnd,
+          startValue,
+          endValue,
+          dateKey: wmIdleDateKeyV27(
+            startValue ||
+              row.operational_date ||
+              row.register_time ||
+              row.created_at ||
+              row.Timestamp ||
+              "",
+          ),
+        };
+      })
+      .filter((item) => item.start)
+      .sort((a, b) => a.start.getTime() - b.start.getTime());
+
+    const intervals = [];
+    const mergedBusyAll = [];
+    const operationalSessions = [];
+
+    windows.forEach((windowInfo) => {
+      if (windowInfo.minutes <= 0) return;
+
+      const windowStartMs = windowInfo.start.getTime();
+      const windowEndMs = windowInfo.end.getTime();
+
+      const dayBusy = rawSessions
+        .map((item) => {
+          const rawStartMs = item.start.getTime();
+          // Tanpa timestamp selesai, hanya anggap masih busy bila statusnya memang masih aktif.
+          const status = safeStatus(item.row);
+          let rawEndMs = item.end
+            ? item.end.getTime()
+            : status === "UNLOADING"
+            ? windowEndMs
+            : rawStartMs;
+
+          const startMs = Math.max(rawStartMs, windowStartMs);
+          const endMs = Math.min(rawEndMs, windowEndMs);
+          if (endMs <= startMs) return null;
+
+          return {
+            startMs,
+            endMs,
+            sessions: [item],
+            dateKey: windowInfo.dateKey,
+          };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.startMs - b.startMs);
+
+      const mergedBusy = [];
+      dayBusy.forEach((item) => {
+        const last = mergedBusy[mergedBusy.length - 1];
+        if (!last || item.startMs > last.endMs) {
+          mergedBusy.push({
+            startMs: item.startMs,
+            endMs: item.endMs,
+            sessions: [...item.sessions],
+            dateKey: item.dateKey,
+          });
+        } else {
+          last.endMs = Math.max(last.endMs, item.endMs);
+          last.sessions.push(...item.sessions);
+        }
+      });
+
+      mergedBusyAll.push(...mergedBusy);
+      mergedBusy.forEach((block) => {
+        block.sessions.forEach((session) => {
+          if (!operationalSessions.includes(session))
+            operationalSessions.push(session);
+        });
+      });
+
+      let cursor = windowStartMs;
+
+      const pushIdle = (fromMs, toMs, previous = null, current = null) => {
+        if (toMs <= fromMs) return;
+        intervals.push({
+          gate,
+          dateKey: windowInfo.dateKey,
+          previous: previous || {
+            row: {},
+            end: new Date(fromMs),
+            endValue: new Date(fromMs).toISOString(),
+          },
+          current: current || {
+            row: {},
+            start: new Date(toMs),
+            startValue: new Date(toMs).toISOString(),
+          },
+          idleStart: new Date(fromMs),
+          idleEnd: new Date(toMs),
+          idleMinutes: (toMs - fromMs) / 60000,
+        });
+      };
+
+      mergedBusy.forEach((block, index) => {
+        if (block.startMs > cursor) {
+          const previousBlock = mergedBusy[index - 1];
+          const previousSession = previousBlock
+            ? previousBlock.sessions[previousBlock.sessions.length - 1]
+            : null;
+          const currentSession = block.sessions[0] || null;
+          pushIdle(cursor, block.startMs, previousSession, currentSession);
+        }
+        cursor = Math.max(cursor, block.endMs);
+      });
+
+      // Gate kosong seluruh window juga masuk sini karena cursor masih = 09:00.
+      if (cursor < windowEndMs) {
+        const previousBlock = mergedBusy[mergedBusy.length - 1];
+        const previousSession = previousBlock
+          ? previousBlock.sessions[previousBlock.sessions.length - 1]
+          : null;
+        pushIdle(cursor, windowEndMs, previousSession, null);
+      }
+    });
+
+    const totalWindowMinutes = windows.reduce(
+      (sum, item) => sum + item.minutes,
+      0,
+    );
+    const busyMinutes = mergedBusyAll.reduce(
+      (sum, item) => sum + (item.endMs - item.startMs) / 60000,
+      0,
+    );
+    const totalIdle = Math.max(0, totalWindowMinutes - busyMinutes);
+    const avgIdle = intervals.length ? totalIdle / intervals.length : 0;
+    const maxIdle = intervals.length
+      ? Math.max(...intervals.map((item) => item.idleMinutes))
+      : 0;
+    const minIdle = intervals.length
+      ? Math.min(...intervals.map((item) => item.idleMinutes))
+      : 0;
+
+    // Breakdown start unloading per jam hanya jam operasional 09-19.
+    const hourly = Array.from(
+      { length: OP_END_HOUR - OP_START_HOUR },
+      (_, idx) => {
+        const hour = OP_START_HOUR + idx;
+        return {
+          hour,
+          label: `${String(hour).padStart(2, "0")}:00–${String(
+            hour + 1,
+          ).padStart(2, "0")}:00`,
+          count: 0,
+        };
+      },
+    );
+
+    operationalSessions.forEach((item) => {
+      const hour = wmBusyHourWibV28(item.startValue);
+      if (hour >= OP_START_HOUR && hour < OP_END_HOUR) {
+        const bucket = hourly.find((entry) => entry.hour === hour);
+        if (bucket) bucket.count += 1;
+      }
+    });
+
+    const peakHour = hourly.reduce(
+      (best, item) => (item.count > best.count ? item : best),
+      hourly[0] || { hour: OP_START_HOUR, label: "09:00–10:00", count: 0 },
+    );
+
+    const activeNow = gateRows
+      .filter((row) => ["CALLED", "UNLOADING"].includes(safeStatus(row)))
+      .sort(
+        (a, b) =>
+          Number(safeStatus(b) === "UNLOADING") -
+          Number(safeStatus(a) === "UNLOADING"),
+      );
+    const currentStatus = activeNow.some(
+      (row) => safeStatus(row) === "UNLOADING",
+    )
+      ? "BONGKAR"
+      : activeNow.length
+      ? "DIPANGGIL"
+      : "KOSONG";
+
+    return {
+      gate,
+      sessions: operationalSessions,
+      rawSessions,
+      intervals,
+      busyBlocks: mergedBusyAll,
+      windows,
+      hourly,
+      peakHour,
+      currentStatus,
+      activeNow,
+      avgIdle,
+      maxIdle,
+      minIdle,
+      totalIdle,
+      busyMinutes,
+      totalWindowMinutes,
+      idlePercentage: totalWindowMinutes
+        ? (totalIdle / totalWindowMinutes) * 100
+        : 0,
+      utilizationPercentage: totalWindowMinutes
+        ? (busyMinutes / totalWindowMinutes) * 100
+        : 0,
+      sampleCount: intervals.length,
+      periodStart: windows[0]?.start || null,
+      periodEnd: windows[windows.length - 1]?.end || null,
+      operationalStartHour: OP_START_HOUR,
+      operationalEndHour: OP_END_HOUR,
+    };
+  }
+
+  function wmAllGateIdleStatsV27(rows = []) {
+    const configured =
+      Array.isArray(state.options?.gate) && state.options.gate.length
+        ? state.options.gate
+        : typeof getCibitungGateOptions === "function"
+        ? getCibitungGateOptions()
+        : [];
+    return [
+      ...new Set(
+        configured
+          .map((gate) => String(gate || "").trim())
+          .filter((gate) => gate && !gate.toUpperCase().startsWith("STL-")),
+      ),
+    ].map((gate) => wmGateIdleStatsV27(rows, gate));
+  }
+  function wmIdleDateTimeShortV30(value) {
+    const date = value instanceof Date ? value : parseInboundDateSafe(value);
+
+    if (!date || Number.isNaN(date.getTime())) return "-";
+
+    return new Intl.DateTimeFormat("id-ID", {
+      timeZone: "Asia/Jakarta",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).format(date);
+  }
+  function wmIdleModalV27(rows = []) {
+    const gate = wmIdleStateV27.gate;
+    if (!gate) return "";
+    const stats = wmGateIdleStatsV27(rows, gate);
+    const intervals = stats.intervals.filter((item) => {
+      if (wmIdleStateV27.status === "high") return item.idleMinutes >= 30;
+      if (wmIdleStateV27.status === "medium")
+        return item.idleMinutes >= 15 && item.idleMinutes < 30;
+      if (wmIdleStateV27.status === "low") return item.idleMinutes < 15;
+      return true;
+    });
+
+    const periodLabel =
+      wmIdleStateV27.range === "today"
+        ? `${wmIdleTodayKeyV27()} · 09:00–${
+            stats.periodEnd
+              ? new Intl.DateTimeFormat("id-ID", {
+                  timeZone: "Asia/Jakarta",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hourCycle: "h23",
+                }).format(stats.periodEnd)
+              : "09:00"
+          } WIB`
+        : `Semua data · hanya window 09:00–20:00 WIB`;
+
+    const busyRows = stats.hourly
+      .map(
+        (item) => `<tr>
+          <td><b>${esc(item.label)}</b></td>
+          <td>${numV19(item.count)} unit</td>
+          <td>${
+            item.count === stats.peakHour.count && item.count > 0
+              ? '<span class="wm19-chip danger">PEAK</span>'
+              : "-"
+          }</td>
+        </tr>`,
+      )
+      .join("");
+
+    const activeDetail = stats.activeNow.length
+      ? stats.activeNow
+          .map(
+            (row) => `<div class="wm27-active-unit">
+              <b>${esc(row.queue_no || "-")}</b>
+              <span>${esc(row.plat_number || "-")}</span>
+              <small>${esc(safeStatus(row))}</small>
+            </div>`,
+          )
+          .join("")
+      : `<div class="wm19-empty">Gate sedang kosong.</div>`;
+
+    return `<div class="wm27-modal-backdrop" id="wm27-idle-modal" onclick="if(event.target===this)wmCloseGateIdleV27()">
+      <section class="wm27-modal" role="dialog" aria-modal="true" aria-label="Detail utilisasi ${esc(
+        gate,
+      )}">
+        <header class="wm27-modal-head">
+          <div>
+            <div class="wm19-eyebrow">DETAIL UTILISASI GATE</div>
+            <h3>${esc(gateLabelV22(gate))}</h3>
+            <p>${esc(gate)} · ${esc(periodLabel)} · status saat ini: <b>${esc(
+      stats.currentStatus,
+    )}</b></p>
+          </div>
+          <button type="button" class="wm27-close" onclick="wmCloseGateIdleV27()" aria-label="Tutup">×</button>
+        </header>
+
+        <div class="wm27-idle-kpis">
+          <article><span>UNIT BONGKAR</span><b>${numV19(
+            stats.sessions.length,
+          )}</b><small>Aktivitas di window operasional</small></article>
+          <article><span>BUSY TIME</span><b>${esc(
+            wmIdleFormatV27(stats.busyMinutes),
+          )}</b><small>Gate sedang digunakan</small></article>
+          <article><span>IDLE TIME</span><b>${esc(
+            wmIdleFormatV27(stats.totalIdle),
+          )}</b><small>Gate kosong 09:00–20:00</small></article>
+          <article><span>UTILIZATION</span><b>${esc(
+            wmBusyNumberV28(stats.utilizationPercentage, 1),
+          )}%</b><small>Busy ÷ waktu operasional</small></article>
+          <article><span>AVERAGE IDLE</span><b>${esc(
+            wmIdleFormatV27(stats.avgIdle),
+          )}</b><small>${numV19(
+      stats.sampleCount,
+    )} interval idle</small></article>
+          <article><span>LONGEST IDLE</span><b>${esc(
+            wmIdleFormatV27(stats.maxIdle),
+          )}</b><small>Idle terlama</small></article>
+          <article><span>PEAK HOUR</span><b>${
+            stats.peakHour?.count ? esc(stats.peakHour.label) : "-"
+          }</b><small>${numV19(
+      stats.peakHour?.count || 0,
+    )} start unloading</small></article>
+          <article><span>STATUS</span><b>${esc(
+            stats.currentStatus,
+          )}</b><small>${
+      stats.activeNow.length
+        ? `${numV19(stats.activeNow.length)} unit aktif`
+        : "Siap digunakan"
+    }</small></article>
+        </div>
+
+        <div class="wm27-toolbar">
+          <label>Periode
+            <select onchange="wmSetIdleRangeV27(this.value)">
+              <option value="today" ${
+                wmIdleStateV27.range === "today" ? "selected" : ""
+              }>Hari ini</option>
+              <option value="all" ${
+                wmIdleStateV27.range === "all" ? "selected" : ""
+              }>Semua data tersedia</option>
+            </select>
+          </label>
+          <label>Kategori idle
+            <select onchange="wmSetIdleStatusV27(this.value)">
+              <option value="all" ${
+                wmIdleStateV27.status === "all" ? "selected" : ""
+              }>Semua</option>
+              <option value="low" ${
+                wmIdleStateV27.status === "low" ? "selected" : ""
+              }>&lt; 15 menit</option>
+              <option value="medium" ${
+                wmIdleStateV27.status === "medium" ? "selected" : ""
+              }>15–29 menit</option>
+              <option value="high" ${
+                wmIdleStateV27.status === "high" ? "selected" : ""
+              }>≥ 30 menit</option>
+            </select>
+          </label>
+          <button type="button" class="wm27-download" onclick="wmDownloadGateIdleCsvV27()">Download CSV</button>
+        </div>
+
+        <div class="wm27-detail-grid-v30" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin:14px 0;">
+          <article class="wm19-card" style="padding:14px;">
+            <header class="wm19-card-head"><div><h3>Jam Sibuk</h3><p>Jumlah start unloading per jam, hanya 09:00–20:00 WIB.</p></div></header>
+            <div class="wm27-table-wrap">
+              <table class="wm27-table"><thead><tr><th>JAM</th><th>UNIT</th><th>STATUS</th></tr></thead><tbody>${busyRows}</tbody></table>
+            </div>
+          </article>
+          <article class="wm19-card" style="padding:14px;">
+            <header class="wm19-card-head"><div><h3>Unit Aktif Saat Ini</h3><p>Kondisi gate realtime dari CALLED / UNLOADING.</p></div></header>
+            <div style="display:grid;gap:8px;">${activeDetail}</div>
+          </article>
+        </div>
+
+        <div class="wm27-table-wrap">
+          <table class="wm27-table">
+            <thead><tr><th>TANGGAL</th><th>IDLE MULAI</th><th>IDLE SELESAI</th><th>QUEUE SEBELUMNYA</th><th>QUEUE BERIKUTNYA</th><th>IDLE</th></tr></thead>
+            <tbody>${
+              intervals.length
+                ? intervals
+                    .map(
+                      (item) => `<tr>
+                <td>${esc(item.dateKey || "-")}</td>
+                <td>${esc(wmIdleDateTimeShortV30(item.idleStart))}</td>
+<td>${esc(wmIdleDateTimeShortV30(item.idleEnd))}</td>
+                <td class="wm19-queue">${esc(
+                  item.previous?.row?.queue_no || "-",
+                )}</td>
+                <td class="wm19-queue">${esc(
+                  item.current?.row?.queue_no || "-",
+                )}</td>
+                <td><b>${esc(wmIdleFormatV27(item.idleMinutes))}</b></td>
+              </tr>`,
+                    )
+                    .join("")
+                : `<tr><td colspan="6" class="wm19-empty">Belum ada interval idle pada window operasional ini.</td></tr>`
+            }</tbody>
+          </table>
+        </div>
+        <footer class="wm27-modal-foot">Idle hanya dihitung ketika gate kosong pada jam operasional 09:00–20:00 WIB. Waktu di luar jam tersebut tidak masuk idle maupun utilization.</footer>
+      </section>
+    </div>`;
+  }
+
+  function wmRenderIdleModalV27() {
+    document.getElementById("wm27-idle-modal")?.remove();
+    if (!wmIdleStateV27.gate) return;
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      wmIdleModalV27(
+        Array.isArray(state.dashboard?.queue) ? state.dashboard.queue : [],
+      ),
+    );
+  }
+
+  window.wmOpenGateIdleV27 = function wmOpenGateIdleV27(gate) {
+    wmIdleStateV27.gate = String(gate || "").trim();
+    wmIdleStateV27.status = "all";
+    wmRenderIdleModalV27();
+  };
+  // V31 - Reliable Gate Card Click Handler
+  if (!window.__wmGateIdleClickBoundV31) {
+    window.__wmGateIdleClickBoundV31 = true;
+
+    document.addEventListener("click", function (event) {
+      const card = event.target.closest(".wm19-gate-card[data-gate]");
+      if (!card) return;
+
+      const gate = String(card.dataset.gate || "").trim();
+      if (!gate) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (typeof window.wmOpenGateIdleV27 === "function") {
+        window.wmOpenGateIdleV27(gate);
+      }
+    });
+  }
+  window.wmCloseGateIdleV27 = function wmCloseGateIdleV27() {
+    wmIdleStateV27.gate = "";
+    document.getElementById("wm27-idle-modal")?.remove();
+  };
+
+  window.wmSetIdleRangeV27 = function wmSetIdleRangeV27(range) {
+    wmIdleStateV27.range = range === "all" ? "all" : "today";
+    wmRenderIdleModalV27();
+  };
+
+  window.wmSetIdleStatusV27 = function wmSetIdleStatusV27(status) {
+    wmIdleStateV27.status = ["low", "medium", "high"].includes(status)
+      ? status
+      : "all";
+    wmRenderIdleModalV27();
+  };
+
+  window.wmDownloadGateIdleCsvV27 = function wmDownloadGateIdleCsvV27() {
+    const rows = Array.isArray(state.dashboard?.queue)
+      ? state.dashboard.queue
+      : [];
+    const stats = wmGateIdleStatsV27(rows, wmIdleStateV27.gate);
+    const intervals = stats.intervals.filter((item) => {
+      if (wmIdleStateV27.status === "high") return item.idleMinutes >= 30;
+      if (wmIdleStateV27.status === "medium")
+        return item.idleMinutes >= 15 && item.idleMinutes < 30;
+      if (wmIdleStateV27.status === "low") return item.idleMinutes < 15;
+      return true;
+    });
+    const headers = [
+      "Gate",
+      "Periode",
+      "Jam Operasional",
+      "Status Gate",
+      "Unit Bongkar",
+      "Busy Time",
+      "Idle Time",
+      "Utilization %",
+      "Tanggal Idle",
+      "Idle Mulai",
+      "Idle Selesai",
+      "Queue Sebelumnya",
+      "Queue Berikutnya",
+      "Idle Menit",
+      "Idle",
+    ];
+    const body = intervals.map((item) => [
+      stats.gate,
+      wmIdleStateV27.range === "today" ? wmIdleTodayKeyV27() : "ALL",
+      "09:00-20:00 WIB",
+      stats.currentStatus,
+      stats.sessions.length,
+      wmIdleFormatV27(stats.busyMinutes),
+      wmIdleFormatV27(stats.totalIdle),
+      Math.round(stats.utilizationPercentage * 100) / 100,
+      item.dateKey || "",
+      item.idleStart ? item.idleStart.toISOString() : "",
+      item.idleEnd ? item.idleEnd.toISOString() : "",
+      item.previous?.row?.queue_no || "",
+      item.current?.row?.queue_no || "",
+      Math.round(item.idleMinutes * 100) / 100,
+      wmIdleFormatV27(item.idleMinutes),
+    ]);
+    const escapeCsv = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const csv =
+      "\ufeff" +
+      [headers, ...body]
+        .map((line) => line.map(escapeCsv).join(","))
+        .join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `gate-idle-${String(stats.gate || "gate")
+      .replace(/[^a-z0-9]+/gi, "-")
+      .toLowerCase()}-${wmIdleStateV27.range}.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  window.wmDownloadAllGateIdleCsvV27 = function wmDownloadAllGateIdleCsvV27() {
+    const rows = Array.isArray(state.dashboard?.queue)
+      ? state.dashboard.queue
+      : [];
+    const stats = wmAllGateIdleStatsV27(rows);
+    const headers = [
+      "Gate",
+      "Periode",
+      "Average Idle Menit",
+      "Average Idle",
+      "Max Idle Menit",
+      "Max Idle",
+      "Total Idle Menit",
+      "Total Idle",
+      "Interval Valid",
+      "Unit Bongkar",
+    ];
+    const body = stats.map((item) => [
+      item.gate,
+      wmIdleStateV27.range === "today" ? wmIdleTodayKeyV27() : "ALL",
+      item.avgIdle === null ? "" : Math.round(item.avgIdle * 100) / 100,
+      wmIdleFormatV27(item.avgIdle),
+      item.maxIdle === null ? "" : Math.round(item.maxIdle * 100) / 100,
+      wmIdleFormatV27(item.maxIdle),
+      Math.round(item.totalIdle * 100) / 100,
+      wmIdleFormatV27(item.totalIdle),
+      item.sampleCount,
+      item.sessions.length,
+    ]);
+    const escapeCsv = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const csv =
+      "\ufeff" +
+      [headers, ...body]
+        .map((line) => line.map(escapeCsv).join(","))
+        .join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `gate-idle-summary-${
+      wmIdleStateV27.range
+    }-${wmIdleTodayKeyV27()}.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  /* V28 — BUSY HOUR MONITORING */
+  const wmBusyStateV28 = {
+    range: "today",
+    gate: "ALL",
+  };
+
+  function wmConfiguredGatesV28() {
+    const configured =
+      Array.isArray(state.options?.gate) && state.options.gate.length
+        ? state.options.gate
+        : typeof getCibitungGateOptions === "function"
+        ? getCibitungGateOptions()
+        : [];
+    return [
+      ...new Set(
+        configured
+          .map((gate) => String(gate || "").trim())
+          .filter((gate) => gate && !gate.toUpperCase().startsWith("STL-")),
+      ),
+    ];
+  }
+
+  function wmBusyHourWibV28(value) {
+    const date = parseInboundDateSafe(value);
+    if (!date) return null;
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Jakarta",
+      hour: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(date);
+    const hour = Number(parts.find((part) => part.type === "hour")?.value);
+    return Number.isFinite(hour) ? hour : null;
+  }
+
+  function wmBusyRowsForRangeV28(rows = [], range = wmBusyStateV28.range) {
+    const prepared = rows
+      .map((row) => {
+        const startValue = wmIdleStartV27(row);
+        const start = parseInboundDateSafe(startValue);
+        return {
+          row,
+          startValue,
+          start,
+          dateKey: wmIdleDateKeyV27(startValue),
+          hour: wmBusyHourWibV28(startValue),
+          gates: gateListV22(row)
+            .map((gate) => String(gate || "").trim())
+            .filter(Boolean),
+        };
+      })
+      .filter(
+        (item) =>
+          item.start &&
+          Number.isInteger(item.hour) &&
+          item.hour >= 0 &&
+          item.hour <= 23,
+      );
+
+    if (range === "all") return prepared;
+    const today = wmIdleTodayKeyV27();
+    return prepared.filter((item) => item.dateKey === today);
+  }
+
+  function wmBusyStatsV28(rows = []) {
+    const allPrepared = wmBusyRowsForRangeV28(rows);
+    const selectedGate = String(wmBusyStateV28.gate || "ALL").trim();
+    const prepared =
+      selectedGate === "ALL"
+        ? allPrepared
+        : allPrepared.filter((item) =>
+            item.gates.some(
+              (gate) => gate.toUpperCase() === selectedGate.toUpperCase(),
+            ),
+          );
+
+    const dateKeys = [
+      ...new Set(prepared.map((item) => item.dateKey).filter(Boolean)),
+    ];
+    const dayCount = Math.max(dateKeys.length, 1);
+    const buckets = Array.from({ length: 24 }, (_, hour) => ({
+      hour,
+      label: `${String(hour).padStart(2, "0")}:00–${String(
+        (hour + 1) % 24,
+      ).padStart(2, "0")}:00`,
+      count: 0,
+      averagePerDay: 0,
+      percentage: 0,
+    }));
+
+    prepared.forEach((item) => {
+      buckets[item.hour].count += 1;
+    });
+
+    const totalUnits = prepared.length;
+    buckets.forEach((bucket) => {
+      bucket.averagePerDay = bucket.count / dayCount;
+      bucket.percentage = totalUnits ? (bucket.count / totalUnits) * 100 : 0;
+    });
+
+    const metric = (bucket) =>
+      wmBusyStateV28.range === "all" ? bucket.averagePerDay : bucket.count;
+    const peak = buckets.reduce(
+      (best, item) => (metric(item) > metric(best) ? item : best),
+      buckets[0],
+    );
+
+    const configuredGates = wmConfiguredGatesV28();
+    const gateCounts = configuredGates
+      .map((gate) => ({
+        gate,
+        count: allPrepared.filter((item) =>
+          item.gates.some(
+            (itemGate) => itemGate.toUpperCase() === gate.toUpperCase(),
+          ),
+        ).length,
+      }))
+      .sort((a, b) => b.count - a.count || a.gate.localeCompare(b.gate));
+
+    const busiestGate = gateCounts.find((item) => item.count > 0) || null;
+    const averagePerHour = totalUnits / (dayCount * 24);
+
+    return {
+      selectedGate,
+      prepared,
+      buckets,
+      peak,
+      totalUnits,
+      dayCount,
+      averagePerHour,
+      busiestGate,
+      gateCounts,
+      metricLabel: wmBusyStateV28.range === "all" ? "avg unit/hari" : "unit",
+    };
+  }
+
+  function wmBusyNumberV28(value, digits = 1) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return "-";
+    return num.toLocaleString("id-ID", {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    });
+  }
+
+  function wmBusyPanelV28(rows = []) {
+    const stats = wmBusyStatsV28(rows);
+    const maxMetric = Math.max(
+      ...stats.buckets.map((bucket) =>
+        wmBusyStateV28.range === "all" ? bucket.averagePerDay : bucket.count,
+      ),
+      1,
+    );
+    const gates = wmConfiguredGatesV28();
+    const peakValue =
+      wmBusyStateV28.range === "all"
+        ? wmBusyNumberV28(stats.peak.averagePerDay, 1)
+        : numV19(stats.peak.count);
+    const busiestGateLabel = stats.busiestGate
+      ? `${gateLabelV22(stats.busiestGate.gate)} · ${numV19(
+          stats.busiestGate.count,
+        )} unit`
+      : "-";
+
+    const bars = stats.buckets
+      .map((bucket) => {
+        const value =
+          wmBusyStateV28.range === "all" ? bucket.averagePerDay : bucket.count;
+        const height = value > 0 ? Math.max(8, (value / maxMetric) * 100) : 2;
+        const isPeak = bucket.hour === stats.peak.hour && value > 0;
+        return `<div class="wm28-hour-col ${
+          isPeak ? "is-peak" : ""
+        }" title="${esc(bucket.label)} · ${esc(
+          wmBusyNumberV28(value, wmBusyStateV28.range === "all" ? 1 : 0),
+        )} ${esc(stats.metricLabel)}">
+        <div class="wm28-hour-value">${
+          value > 0
+            ? esc(
+                wmBusyNumberV28(value, wmBusyStateV28.range === "all" ? 1 : 0),
+              )
+            : ""
+        }</div>
+        <div class="wm28-hour-track"><i style="height:${height}%"></i></div>
+        <small>${String(bucket.hour).padStart(2, "0")}</small>
+      </div>`;
+      })
+      .join("");
+
+    return `<article id="wm28-busy-panel" class="wm19-card wm28-busy-card">
+      <header class="wm19-card-head wm28-busy-head">
+        <div>
+          <h3>Jam Sibuk Gate</h3>
+          <p>Distribusi start unloading per jam WIB. Gunakan filter untuk melihat seluruh gate atau gate tertentu.</p>
+        </div>
+        <div class="wm28-busy-actions">
+          <label>Periode
+            <select onchange="wmSetBusyRangeV28(this.value)">
+              <option value="today" ${
+                wmBusyStateV28.range === "today" ? "selected" : ""
+              }>Hari ini</option>
+              <option value="all" ${
+                wmBusyStateV28.range === "all" ? "selected" : ""
+              }>Semua data tersedia</option>
+            </select>
+          </label>
+          <label>Gate
+            <select onchange="wmSetBusyGateV28(this.value)">
+              <option value="ALL" ${
+                stats.selectedGate === "ALL" ? "selected" : ""
+              }>Semua gate</option>
+              ${gates
+                .map(
+                  (gate) =>
+                    `<option value="${esc(gate)}" ${
+                      stats.selectedGate === gate ? "selected" : ""
+                    }>${esc(gateLabelV22(gate))} · ${esc(gate)}</option>`,
+                )
+                .join("")}
+            </select>
+          </label>
+          <button type="button" class="wm27-download" onclick="wmDownloadBusyHourCsvV28()">Download CSV</button>
+        </div>
+      </header>
+      <div class="wm28-busy-kpis">
+        <article><span>PEAK HOUR</span><b>${
+          stats.totalUnits ? esc(stats.peak.label) : "-"
+        }</b><small>Jam start unloading tertinggi</small></article>
+        <article><span>PEAK VOLUME</span><b>${
+          stats.totalUnits ? `${esc(peakValue)} ${esc(stats.metricLabel)}` : "-"
+        }</b><small>${
+      wmBusyStateV28.range === "all"
+        ? `${numV19(stats.dayCount)} hari data`
+        : "Hari berjalan"
+    }</small></article>
+        <article><span>AVG UNIT / JAM</span><b>${esc(
+          wmBusyNumberV28(stats.averagePerHour, 1),
+        )}</b><small>Rata-rata 24 jam</small></article>
+        <article><span>GATE TERSIBUK</span><b>${esc(
+          busiestGateLabel,
+        )}</b><small>Berdasarkan start unloading</small></article>
+      </div>
+      <div class="wm28-chart-wrap">
+        <div class="wm28-chart-y"><span>TINGGI</span><span>RENDAH</span></div>
+        <div class="wm28-hour-chart">${bars}</div>
+      </div>
+      <footer class="wm19-foot">
+        ${numV19(stats.totalUnits)} start unloading · ${
+      wmBusyStateV28.range === "all"
+        ? `${numV19(
+            stats.dayCount,
+          )} hari data · bar menunjukkan rata-rata unit per hari pada jam tersebut`
+        : "bar menunjukkan jumlah unit hari ini"
+    }.
+      </footer>
+    </article>`;
+  }
+
+  function wmRenderBusyPanelV28() {
+    const panel = document.getElementById("wm28-busy-panel");
+    if (!panel) return;
+    const rows = Array.isArray(state.dashboard?.queue)
+      ? state.dashboard.queue
+      : [];
+    panel.outerHTML = wmBusyPanelV28(rows);
+  }
+
+  window.wmSetBusyRangeV28 = function wmSetBusyRangeV28(range) {
+    wmBusyStateV28.range = range === "all" ? "all" : "today";
+    wmRenderBusyPanelV28();
+  };
+
+  window.wmSetBusyGateV28 = function wmSetBusyGateV28(gate) {
+    const candidate = String(gate || "ALL").trim();
+    wmBusyStateV28.gate = candidate || "ALL";
+    wmRenderBusyPanelV28();
+  };
+
+  window.wmDownloadBusyHourCsvV28 = function wmDownloadBusyHourCsvV28() {
+    const rows = Array.isArray(state.dashboard?.queue)
+      ? state.dashboard.queue
+      : [];
+    const selectedGate = String(wmBusyStateV28.gate || "ALL").trim() || "ALL";
+    const configuredGates = wmConfiguredGatesV28();
+    const gates =
+      selectedGate === "ALL"
+        ? configuredGates
+        : configuredGates.filter(
+            (gate) => gate.toUpperCase() === selectedGate.toUpperCase(),
+          );
+
+    const prepared = wmBusyRowsForRangeV28(rows, wmBusyStateV28.range);
+    const todayKey = wmIdleTodayKeyV27();
+    const dateKeys = [
+      ...new Set(prepared.map((item) => item.dateKey).filter(Boolean)),
+    ].sort();
+    if (wmBusyStateV28.range === "today" && !dateKeys.includes(todayKey)) {
+      dateKeys.push(todayKey);
+    }
+
+    const formatDateId = (dateKey) => {
+      const parts = String(dateKey || "").split("-");
+      return parts.length === 3
+        ? `${parts[2]}/${parts[1]}/${parts[0]}`
+        : dateKey;
+    };
+    const formatDuration = (minutes) => {
+      const totalSeconds = Math.max(0, Math.round(Number(minutes || 0) * 60));
+      const hours = Math.floor(totalSeconds / 3600);
+      const mins = Math.floor((totalSeconds % 3600) / 60);
+      const secs = totalSeconds % 60;
+      return `${String(hours).padStart(2, "0")}:${String(mins).padStart(
+        2,
+        "0",
+      )}:${String(secs).padStart(2, "0")}`;
+    };
+    const wibParts = (value) => {
+      const date = value instanceof Date ? value : parseInboundDateSafe(value);
+      if (!date) return null;
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Jakarta",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hourCycle: "h23",
+      }).formatToParts(date);
+      const get = (type) =>
+        parts.find((part) => part.type === type)?.value || "";
+      return {
+        dateKey: `${get("year")}-${get("month")}-${get("day")}`,
+        hour: Number(get("hour")),
+        minute: Number(get("minute")),
+        second: Number(get("second")),
+      };
+    };
+    const bucketPosition = (dateKey, hour, minute = 0, second = 0) => {
+      const [year, month, day] = String(dateKey || "")
+        .split("-")
+        .map(Number);
+      return Date.UTC(year, month - 1, day, hour, minute, second);
+    };
+
+    const idleByGate = new Map();
+    gates.forEach((gate) => {
+      const gateKey = gate.toUpperCase();
+      const sessions = rows
+        .filter((row) =>
+          gateListV22(row).some(
+            (item) =>
+              String(item || "")
+                .trim()
+                .toUpperCase() === gateKey,
+          ),
+        )
+        .map((row) => {
+          const start = parseInboundDateSafe(wmIdleStartV27(row));
+          const end = parseInboundDateSafe(wmIdleEndV27(row));
+          return { row, start, end };
+        })
+        .filter((item) => item.start)
+        .sort((a, b) => a.start.getTime() - b.start.getTime());
+
+      const intervals = [];
+      for (let i = 1; i < sessions.length; i += 1) {
+        const previous = sessions[i - 1];
+        const current = sessions[i];
+        if (!previous.end || current.start <= previous.end) continue;
+
+        const startPart = wibParts(previous.end);
+        const endPart = wibParts(current.start);
+        if (!startPart || !endPart) continue;
+
+        const startPos = bucketPosition(
+          startPart.dateKey,
+          startPart.hour,
+          startPart.minute,
+          startPart.second,
+        );
+        const endPos = bucketPosition(
+          endPart.dateKey,
+          endPart.hour,
+          endPart.minute,
+          endPart.second,
+        );
+        if (endPos <= startPos) continue;
+        intervals.push({ startPos, endPos });
+      }
+      idleByGate.set(gate, intervals);
+    });
+
+    const headers = [
+      "Tanggal",
+      "Gate",
+      "Gate ID",
+      "Jam WIB",
+      "Idle Time",
+      "Idle Menit",
+      "Idle % dari 1 Jam",
+      "Total Start Unloading",
+    ];
+    const body = [];
+
+    dateKeys.forEach((dateKey) => {
+      gates.forEach((gate) => {
+        const intervals = idleByGate.get(gate) || [];
+        for (let hour = 0; hour < 24; hour += 1) {
+          const bucketStart = bucketPosition(dateKey, hour);
+          const bucketEnd = bucketStart + 60 * 60 * 1000;
+          let idleMs = 0;
+          intervals.forEach((interval) => {
+            const overlap =
+              Math.min(interval.endPos, bucketEnd) -
+              Math.max(interval.startPos, bucketStart);
+            if (overlap > 0) idleMs += overlap;
+          });
+          const idleMinutes = idleMs / 60000;
+          const startCount = prepared.filter(
+            (item) =>
+              item.dateKey === dateKey &&
+              item.hour === hour &&
+              item.gates.some(
+                (itemGate) => itemGate.toUpperCase() === gate.toUpperCase(),
+              ),
+          ).length;
+          body.push([
+            formatDateId(dateKey),
+            gateLabelV22(gate),
+            gate,
+            `${String(hour).padStart(2, "0")}:00-${String(
+              (hour + 1) % 24,
+            ).padStart(2, "0")}:00`,
+            formatDuration(idleMinutes),
+            Math.round(idleMinutes * 100) / 100,
+            Math.round((Math.min(idleMinutes, 60) / 60) * 10000) / 100,
+            startCount,
+          ]);
+        }
+      });
+    });
+
+    const escapeCsv = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const csv =
+      "\ufeff" +
+      [headers, ...body]
+        .map((line) => line.map(escapeCsv).join(","))
+        .join("\r\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `gate-busy-hour-idle-${String(selectedGate || "all")
+      .replace(/[^a-z0-9]+/gi, "-")
+      .toLowerCase()}-${wmBusyStateV28.range}-${wmIdleTodayKeyV27()}.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
   function gatePanelV22(rows) {
-    const configured = Array.isArray(state.options?.gate) && state.options.gate.length
-      ? state.options.gate
-      : typeof getCibitungGateOptions === "function"
+    const configured =
+      Array.isArray(state.options?.gate) && state.options.gate.length
+        ? state.options.gate
+        : typeof getCibitungGateOptions === "function"
         ? getCibitungGateOptions()
         : [];
     const gates = [
@@ -14317,36 +17788,97 @@ if (window.__exportCsvV19) {
           .filter((gate) => gate && !gate.toUpperCase().startsWith("STL-")),
       ),
     ];
-    const activeRows = rows.filter((row) => ["CALLED", "UNLOADING"].includes(safeStatus(row)));
+    const activeRows = rows.filter((row) =>
+      ["CALLED", "UNLOADING"].includes(safeStatus(row)),
+    );
     const assignments = gates.map((gate) => {
       const tickets = activeRows.filter((row) =>
-        gateListV22(row).some((item) => item.toUpperCase() === gate.toUpperCase()),
+        gateListV22(row).some(
+          (item) => item.toUpperCase() === gate.toUpperCase(),
+        ),
       );
-      tickets.sort((a, b) => Number(safeStatus(b) === "UNLOADING") - Number(safeStatus(a) === "UNLOADING"));
-      return { gate, tickets };
+      tickets.sort(
+        (a, b) =>
+          Number(safeStatus(b) === "UNLOADING") -
+          Number(safeStatus(a) === "UNLOADING"),
+      );
+      return { gate, tickets, idle: wmGateIdleStatsV27(rows, gate) };
     });
     const used = assignments.filter((item) => item.tickets.length).length;
-    const unloading = assignments.filter((item) => item.tickets.some((row) => safeStatus(row) === "UNLOADING")).length;
-    const called = assignments.filter((item) => item.tickets.length && !item.tickets.some((row) => safeStatus(row) === "UNLOADING")).length;
-    const cards = assignments.map(({ gate, tickets }) => {
-      if (!tickets.length) {
-        return `<article class="wm19-gate-card is-empty" aria-label="${esc(gate)} kosong"><div class="wm19-gate-top"><b>${esc(gateLabelV22(gate))}</b><span>KOSONG</span></div><small>${esc(gate)}</small><div class="wm19-gate-empty-label">Siap digunakan</div></article>`;
-      }
-      const first = tickets[0];
-      const status = tickets.some((row) => safeStatus(row) === "UNLOADING") ? "UNLOADING" : "CALLED";
-      const statusLabel = status === "UNLOADING" ? "BONGKAR" : "DIPANGGIL";
-      let timing = status === "UNLOADING" ? "Sedang bongkar" : "Menunggu masuk gate";
-      if (status === "UNLOADING") {
-        const estimate = getUnloadingEstimateInfo(first);
-        if (estimate.diffMinutes !== null) {
-          timing = estimate.diffMinutes >= 0
-            ? `Sisa ${formatMinutesCompact(estimate.diffMinutes)}`
-            : `Lewat ${formatMinutesCompact(Math.abs(estimate.diffMinutes))}`;
+    const unloading = assignments.filter((item) =>
+      item.tickets.some((row) => safeStatus(row) === "UNLOADING"),
+    ).length;
+    const called = assignments.filter(
+      (item) =>
+        item.tickets.length &&
+        !item.tickets.some((row) => safeStatus(row) === "UNLOADING"),
+    ).length;
+    const cards = assignments
+      .map(({ gate, tickets, idle }) => {
+        const idleLine = `<div class="wm27-gate-idle"><span>Idle gate</span><b>${esc(
+          wmIdleFormatV27(idle.totalIdle),
+        )}</b><small>${esc(
+          wmBusyNumberV28(idle.utilizationPercentage, 1),
+        )}% utilization</small></div>`;
+        if (!tickets.length) {
+          return `<button type="button" class="wm19-gate-card is-empty" data-gate="${esc(
+            gate,
+          )}" onclick="wmOpenGateIdleV27(this.dataset.gate)" aria-label="Buka monitoring idle ${esc(
+            gate,
+          )}"><div class="wm19-gate-top"><b>${esc(
+            gateLabelV22(gate),
+          )}</b><span>KOSONG</span></div><small>${esc(
+            gate,
+          )}</small><div class="wm19-gate-empty-label">Siap digunakan</div>${idleLine}</button>`;
         }
-      }
-      return `<button type="button" class="wm19-gate-card ${status === "UNLOADING" ? "is-unloading" : "is-called"}" data-gate="${esc(gate)}" onclick="wmFilterGateV22(this.dataset.gate)" aria-label="Filter Queue Operasional untuk ${esc(gate)}"><div class="wm19-gate-top"><b>${esc(gateLabelV22(gate))}</b><span>${statusLabel}</span></div><small>${esc(gate)}</small><strong>${esc(first.queue_no || "-")}</strong><div class="wm19-gate-vehicle"><b>${esc(first.plat_number || "-")}</b><span>${esc(first.driver_name || first.vendor_name || "-")}</span></div><div class="wm19-gate-bottom"><em>${esc(timing)}</em>${tickets.length > 1 ? `<span>+${tickets.length - 1} unit</span>` : ""}</div></button>`;
-    }).join("");
-    return `<article class="wm19-card wm19-gate-panel"><header class="wm19-card-head wm19-gate-head"><div><h3>Visibilitas Gate Bongkar</h3><p>Klik gate aktif untuk memfilter Queue Operasional. Tiket Drop-Off tetap terpisah.</p></div><div class="wm19-gate-summary"><span><i class="is-unloading"></i>${numV19(unloading)} bongkar</span><span><i class="is-called"></i>${numV19(called)} dipanggil</span><b>${numV19(used)}/${numV19(gates.length)} digunakan</b></div></header><div class="wm19-gate-grid">${cards || `<div class="wm19-empty">Konfigurasi gate belum tersedia.</div>`}</div></article>`;
+        const first = tickets[0];
+        const status = tickets.some((row) => safeStatus(row) === "UNLOADING")
+          ? "UNLOADING"
+          : "CALLED";
+        const statusLabel = status === "UNLOADING" ? "BONGKAR" : "DIPANGGIL";
+        let timing =
+          status === "UNLOADING" ? "Sedang bongkar" : "Menunggu masuk gate";
+        if (status === "UNLOADING") {
+          const estimate = getUnloadingEstimateInfo(first);
+          if (estimate.diffMinutes !== null) {
+            timing =
+              estimate.diffMinutes >= 0
+                ? `Sisa ${formatMinutesCompact(estimate.diffMinutes)}`
+                : `Lewat ${formatMinutesCompact(
+                    Math.abs(estimate.diffMinutes),
+                  )}`;
+          }
+        }
+        return `<button type="button" class="wm19-gate-card ${
+          status === "UNLOADING" ? "is-unloading" : "is-called"
+        }" data-gate="${esc(
+          gate,
+        )}" onclick="wmOpenGateIdleV27(this.dataset.gate)" aria-label="Buka monitoring idle ${esc(
+          gate,
+        )}"><div class="wm19-gate-top"><b>${esc(
+          gateLabelV22(gate),
+        )}</b><span>${statusLabel}</span></div><small>${esc(
+          gate,
+        )}</small><strong>${esc(
+          first.queue_no || "-",
+        )}</strong><div class="wm19-gate-vehicle"><b>${esc(
+          first.plat_number || "-",
+        )}</b><span>${esc(
+          first.driver_name || first.vendor_name || "-",
+        )}</span></div><div class="wm19-gate-bottom"><em>${esc(timing)}</em>${
+          tickets.length > 1 ? `<span>+${tickets.length - 1} unit</span>` : ""
+        }</div>${idleLine}</button>`;
+      })
+      .join("");
+    return `<article class="wm19-card wm19-gate-panel"><header class="wm19-card-head wm19-gate-head"><div><h3>Visibilitas Gate Bongkar</h3><p>Klik card gate untuk melihat unit bongkar, busy time, idle time, utilization, jam sibuk, riwayat idle, dan download data.</p></div><div class="wm19-gate-summary"><span><i class="is-unloading"></i>${numV19(
+      unloading,
+    )} bongkar</span><span><i class="is-called"></i>${numV19(
+      called,
+    )} dipanggil</span><b>${numV19(used)}/${numV19(
+      gates.length,
+    )} digunakan</b><button type="button" class="wm27-summary-download" onclick="wmDownloadAllGateIdleCsvV27()">Download idle</button></div></header><div class="wm19-gate-grid">${
+      cards || `<div class="wm19-empty">Konfigurasi gate belum tersedia.</div>`
+    }</div></article>`;
   }
 
   function riskListV19(rows) {
@@ -14354,36 +17886,155 @@ if (window.__exportCsvV19) {
       .filter((row) => {
         const status = safeStatus(row);
         const sla = getInboundSlaInfo(row);
-        return !isTerminal(status) && (sla.status === "SLA MISS" || Number(sla.delta_minutes) <= 60);
+        return (
+          !isTerminal(status) &&
+          (sla.status === "SLA MISS" || Number(sla.delta_minutes) <= 60)
+        );
       })
       .sort(riskSort)
       .slice(0, 4);
-    return `<article class="wm19-card"><header class="wm19-card-head"><div><h3>Prioritas SLA</h3><p>Unit yang perlu diproses lebih dulu.</p></div><span class="wm19-chip danger">${numV19(riskRows.length)} berisiko</span></header><div class="wm19-risk-list">${riskRows.length ? riskRows.map((row) => { const sla = getInboundSlaInfo(row); const delta = Number(sla.delta_minutes); const label = delta < 0 ? `+${formatMinutesCompact(Math.abs(delta))}` : formatMinutesCompact(delta); return `<div class="wm19-risk-row"><div class="wm19-queue">${esc(row.queue_no || "-")}</div><div><b>${esc(row.vendor_name || "-")}</b><small>${esc(displayStatus(safeStatus(row)))} · ${esc(row.plat_number || "-")} · ${esc(row.checker_progress || `${row.ticket_po_count || 0} PO`)}</small></div><div class="wm19-risk-sla">${esc(label)}<small>${delta < 0 ? "LEWAT SLA" : "TERSISA"}</small></div></div>`; }).join("") : `<div class="wm19-empty">Belum ada kendaraan dalam zona risiko SLA.</div>`}</div></article>`;
+    return `<article class="wm19-card"><header class="wm19-card-head"><div><h3>Prioritas SLA</h3><p>Unit yang perlu diproses lebih dulu.</p></div><span class="wm19-chip danger">${numV19(
+      riskRows.length,
+    )} berisiko</span></header><div class="wm19-risk-list">${
+      riskRows.length
+        ? riskRows
+            .map((row) => {
+              const sla = getInboundSlaInfo(row);
+              const delta = Number(sla.delta_minutes);
+              const label =
+                delta < 0
+                  ? `+${formatMinutesCompact(Math.abs(delta))}`
+                  : formatMinutesCompact(delta);
+              return `<div class="wm19-risk-row"><div class="wm19-queue">${esc(
+                row.queue_no || "-",
+              )}</div><div><b>${esc(row.vendor_name || "-")}</b><small>${esc(
+                displayStatus(safeStatus(row)),
+              )} · ${esc(row.plat_number || "-")} · ${esc(
+                row.checker_progress || `${row.ticket_po_count || 0} PO`,
+              )}</small></div><div class="wm19-risk-sla">${esc(label)}<small>${
+                delta < 0 ? "LEWAT SLA" : "TERSISA"
+              }</small></div></div>`;
+            })
+            .join("")
+        : `<div class="wm19-empty">Belum ada kendaraan dalam zona risiko SLA.</div>`
+    }</div></article>`;
   }
 
   function breakdownV19(rows) {
     const active = rows.filter((row) => !isTerminal(safeStatus(row)));
     const breakdown = [
       ["Menunggu panggil", countStatus(active, "WAITING"), "blue"],
-      ["Menunggu checker", active.filter((row) => ["WAITING CHECKER", "CHECKING"].includes(safeStatus(row))).length, "purple"],
+      [
+        "Menunggu checker",
+        active.filter((row) =>
+          ["WAITING CHECKER", "CHECKING"].includes(safeStatus(row)),
+        ).length,
+        "purple",
+      ],
       ["Menunggu Done GR", countStatus(active, "WAITING GR"), "orange"],
-      ["Gate digunakan", active.filter((row) => ["CALLED", "UNLOADING"].includes(safeStatus(row))).length, "green"],
+      [
+        "Gate digunakan",
+        active.filter((row) =>
+          ["CALLED", "UNLOADING"].includes(safeStatus(row)),
+        ).length,
+        "green",
+      ],
     ];
     const max = Math.max(...breakdown.map((item) => item[1]), 1);
-    const bottleneck = [...breakdown].sort((a,b) => b[1] - a[1])[0];
-    return `<article class="wm19-card"><header class="wm19-card-head"><div><h3>Breakdown Bottleneck</h3><p>Tahap yang paling menahan aliran inbound.</p></div><span class="wm19-chip">live</span></header><div class="wm19-breakdown">${breakdown.map(([label,value,tone]) => `<div class="wm19-break-row"><span>${label}</span><div class="wm19-mini"><i style="width:${(value / max) * 100}%;${tone === "purple" ? "background:linear-gradient(90deg,#a78bfa,#6d28d9)" : tone === "orange" ? "background:linear-gradient(90deg,#fbbf24,#d97706)" : tone === "green" ? "background:linear-gradient(90deg,#4ade80,#16a34a)" : ""}"></i></div><b>${numV19(value)}</b></div>`).join("")}<div class="wm19-insight"><b>Insight operasional</b><br/>Bottleneck terbesar ada di tahap <b>${esc(bottleneck[0])}</b> (${numV19(bottleneck[1])} unit). Gunakan filter status untuk langsung follow-up unit terkait.</div></div></article>`;
+    const bottleneck = [...breakdown].sort((a, b) => b[1] - a[1])[0];
+    return `<article class="wm19-card"><header class="wm19-card-head"><div><h3>Breakdown Bottleneck</h3><p>Tahap yang paling menahan aliran inbound.</p></div><span class="wm19-chip">live</span></header><div class="wm19-breakdown">${breakdown
+      .map(
+        ([label, value, tone]) =>
+          `<div class="wm19-break-row"><span>${label}</span><div class="wm19-mini"><i style="width:${
+            (value / max) * 100
+          }%;${
+            tone === "purple"
+              ? "background:linear-gradient(90deg,#a78bfa,#6d28d9)"
+              : tone === "orange"
+              ? "background:linear-gradient(90deg,#fbbf24,#d97706)"
+              : tone === "green"
+              ? "background:linear-gradient(90deg,#4ade80,#16a34a)"
+              : ""
+          }"></i></div><b>${numV19(value)}</b></div>`,
+      )
+      .join(
+        "",
+      )}<div class="wm19-insight"><b>Insight operasional</b><br/>Bottleneck terbesar ada di tahap <b>${esc(
+      bottleneck[0],
+    )}</b> (${numV19(
+      bottleneck[1],
+    )} unit). Gunakan filter status untuk langsung follow-up unit terkait.</div></div></article>`;
   }
 
   function tableV19(rows) {
-    const sorted = [...rows].sort((a,b) => riskSort(a,b) || String(a.queue_no || "").localeCompare(String(b.queue_no || "")));
-    return `<article class="wm19-card wm19-table-card"><header class="wm19-card-head"><div><h3>Queue Operasional</h3><p>Panel utama untuk action SPV. Prioritas SLA tertinggi berada paling atas.</p></div><span class="wm19-chip">${numV19(rows.length)} total</span></header><div class="wm19-table-wrap"><table id="monitor-unified-table" class="wm19-table"><thead><tr><th>QUEUE</th><th>VENDOR / PLAT</th><th>STATUS</th><th>GATE</th><th>MENUNGGU</th><th>SLA</th><th>PROGRESS PO</th></tr></thead><tbody>${sorted.map((row) => { const status = safeStatus(row); const sla = getInboundSlaInfo(row); const slaText = sla.status === "SLA MISS" || sla.status === "LATE" ? sla.label : (sla.label || "On track"); const slaColor = (sla.status === "SLA MISS" || sla.status === "LATE") ? "color:rgb(var(--error))" : sla.status === "ON PROCESS" ? "color:rgb(var(--warning))" : "color:rgb(var(--success))"; return `<tr data-wm19-row="1"><td class="wm19-queue">${esc(row.queue_no || "-")}</td><td><b style="display:block;color:rgb(var(--on-surface));font-size:12px">${esc(row.vendor_name || "-")}</b>${esc(row.plat_number || "-")}</td><td><span class="wm19-status" style="${statusStyle(status)}">${esc(displayStatus(status))}</span></td><td>${esc(row.gate || "-")}</td><td>${esc(rowWaiting(row))}</td><td style="font-weight:800;${slaColor}">${esc(slaText)}</td><td>${esc(row.checker_progress || row.gr_progress || `${row.ticket_po_count || 0} PO`)}</td></tr>`; }).join("") || `<tr><td colspan="7" class="wm19-empty">Belum ada data antrian.</td></tr>`}</tbody></table></div><footer class="wm19-foot">Menampilkan seluruh <b>${numV19(rows.length)} kendaraan</b> · scroll di dalam panel · urutan berdasarkan risiko SLA.</footer></article>`;
+    const sorted = [...rows].sort(
+      (a, b) =>
+        riskSort(a, b) ||
+        String(a.queue_no || "").localeCompare(String(b.queue_no || "")),
+    );
+    return `<article class="wm19-card wm19-table-card"><header class="wm19-card-head"><div><h3>Queue Operasional</h3><p>Panel utama untuk action SPV. Prioritas SLA tertinggi berada paling atas.</p></div><span class="wm19-chip">${numV19(
+      rows.length,
+    )} total</span></header><div class="wm19-table-wrap"><table id="monitor-unified-table" class="wm19-table"><thead><tr><th>QUEUE</th><th>VENDOR / PLAT</th><th>STATUS</th><th>GATE</th><th>MENUNGGU</th><th>SLA</th><th>PROGRESS PO</th></tr></thead><tbody>${
+      sorted
+        .map((row) => {
+          const status = safeStatus(row);
+          const sla = getInboundSlaInfo(row);
+          const slaText =
+            sla.status === "SLA MISS" || sla.status === "LATE"
+              ? sla.label
+              : sla.label || "On track";
+          const slaColor =
+            sla.status === "SLA MISS" || sla.status === "LATE"
+              ? "color:rgb(var(--error))"
+              : sla.status === "ON PROCESS"
+              ? "color:rgb(var(--warning))"
+              : "color:rgb(var(--success))";
+          return `<tr data-wm19-row="1" data-status="${esc(
+            status,
+          )}"><td class="wm19-queue">${esc(
+            row.queue_no || "-",
+          )}</td><td><b style="display:block;color:rgb(var(--on-surface));font-size:12px">${esc(
+            row.vendor_name || "-",
+          )}</b>${esc(
+            row.plat_number || "-",
+          )}</td><td><span class="wm19-status" style="${statusStyle(
+            status,
+          )}">${esc(displayStatus(status))}</span></td><td>${esc(
+            row.gate || "-",
+          )}</td><td>${esc(
+            rowWaiting(row),
+          )}</td><td style="font-weight:800;${slaColor}">${esc(
+            slaText,
+          )}</td><td>${esc(
+            row.checker_progress ||
+              row.gr_progress ||
+              `${row.ticket_po_count || 0} PO`,
+          )}</td></tr>`;
+        })
+        .join("") ||
+      `<tr><td colspan="7" class="wm19-empty">Belum ada data antrian.</td></tr>`
+    }</tbody></table></div><footer class="wm19-foot">Menampilkan seluruh <b>${numV19(
+      rows.length,
+    )} kendaraan</b> · scroll di dalam panel · urutan berdasarkan risiko SLA.</footer></article>`;
   }
 
   window.wmFilterV19 = function wmFilterV19(input) {
-    const query = String(input?.value || "").trim().toLowerCase();
+    const searchInput =
+      input?.id === "wm19-search"
+        ? input
+        : document.getElementById("wm19-search");
+    const query = String(searchInput?.value || "")
+      .trim()
+      .toLowerCase();
+    const statusFilter = String(
+      document.getElementById("wm27-status-filter")?.value || "ALL",
+    ).toUpperCase();
     let visible = 0;
     document.querySelectorAll("[data-wm19-row]").forEach((row) => {
-      const show = !query || row.textContent.toLowerCase().includes(query);
+      const textOk = !query || row.textContent.toLowerCase().includes(query);
+      const rowStatus = String(row.dataset.status || "").toUpperCase();
+      const statusOk = statusFilter === "ALL" || rowStatus === statusFilter;
+      const show = textOk && statusOk;
       row.style.display = show ? "" : "none";
       if (show) visible += 1;
     });
@@ -14396,54 +18047,411 @@ if (window.__exportCsvV19) {
     if (!input) return;
     input.value = String(gate || "");
     window.wmFilterV19(input);
-    document.querySelector(".wm19-table-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    document
+      .querySelector(".wm19-table-card")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   window.pageMonitor = function pageMonitorCommandCenterV19() {
-    const rows = Array.isArray(state.dashboard?.queue) ? state.dashboard.queue : [];
+    const rows = Array.isArray(state.dashboard?.queue)
+      ? state.dashboard.queue
+      : [];
     const active = rows.filter((row) => !isTerminal(safeStatus(row)));
-    const slaMiss = active.filter((row) => ["SLA MISS", "LATE"].includes(getInboundSlaInfo(row).status)).length;
+    const slaMiss = active.filter((row) =>
+      ["SLA MISS", "LATE"].includes(getInboundSlaInfo(row).status),
+    ).length;
     const waiting = countStatus(active, "WAITING");
     const unloading = countStatus(active, "UNLOADING");
     const waitingGr = countStatus(active, "WAITING GR");
     const completed = countStatus(rows, "COMPLETED");
-    const riskCount = active.filter((row) => { const delta = Number(getInboundSlaInfo(row).delta_minutes); return getInboundSlaInfo(row).status === "SLA MISS" || delta <= 60; }).length;
+    const riskCount = active.filter((row) => {
+      const delta = Number(getInboundSlaInfo(row).delta_minutes);
+      return getInboundSlaInfo(row).status === "SLA MISS" || delta <= 60;
+    }).length;
     setTimeout(() => window.wmRefreshLiveSlaCells?.(), 0);
-    return `<div class="wm-command-v19"><section class="wm19-hero"><div><div class="wm19-eyebrow">OPERASIONAL / WAITING MONITOR</div><h2 class="wm19-title">Waiting Monitor</h2><p class="wm19-subtitle">SLA, gate, bottleneck, dan queue prioritas dari data inbound yang sedang berjalan.</p></div><div class="flex items-center gap-3"><span class="wm19-live"><i></i>LIVE DATA</span><button type="button" onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-2 text-xs font-bold">↻ Refresh data</button></div></section>${riskCount ? `<div class="wm19-alert"><strong>⚠ ${numV19(riskCount)} kendaraan mendekati atau melewati batas SLA.</strong><span>Prioritaskan unit pada panel Prioritas SLA.</span><button type="button" onclick="document.querySelector('.wm19-risk-list')?.scrollIntoView({behavior:'smooth'})">Lihat prioritas →</button></div>` : ""}<section class="wm19-kpis">${metricV19("ANTRIAN AKTIF",active.length,"Waiting · Called · Bongkar · GR","blue")}${metricV19("MENUNGGU PANGGIL",waiting,"Butuh follow-up security","warning")}${metricV19("SEDANG BONGKAR",unloading,"Checker dan gate berjalan","blue")}${metricV19("SLA BERISIKO",slaMiss, slaMiss ? "Butuh action segera" : "Tidak ada SLA miss",slaMiss ? "danger" : "good")}${metricV19("SELESAI HARI INI",completed,"Ticket completed","good")}</section><section class="wm19-filter"><span class="material-symbols-outlined text-on-surface-variant">search</span><input id="wm19-search" oninput="wmFilterV19(this)" placeholder="Cari queue, plat, vendor, gate, PO, atau checker…"/><span id="wm19-result-count" class="wm19-result">${numV19(rows.length)} kendaraan tampil</span></section>${gatePanelV22(rows)}<section class="wm19-layout"><div class="wm19-main">${tableV19(rows)}</div><aside class="wm19-side">${riskListV19(rows)}${flowV19(rows)}${breakdownV19(rows)}</aside></section></div>`;
+    return `<div class="wm-command-v19"><section class="wm19-hero"><div><div class="wm19-eyebrow">OPERASIONAL / WAITING MONITOR</div><h2 class="wm19-title">Waiting Monitor</h2><p class="wm19-subtitle">SLA, gate, bottleneck, queue prioritas, dan idle gate dari data inbound yang tersedia.</p></div><div class="flex items-center gap-3"><span class="wm19-live"><i></i>LIVE DATA</span><button type="button" onclick="refreshDashboard()" class="thin-tab rounded-lg px-4 py-2 text-xs font-bold">Refresh data</button></div></section>${
+      riskCount
+        ? `<div class="wm19-alert"><strong>${numV19(
+            riskCount,
+          )} kendaraan mendekati atau melewati batas SLA.</strong><span>Prioritaskan unit pada panel Prioritas SLA.</span><button type="button" onclick="document.querySelector('.wm19-risk-list')?.scrollIntoView({behavior:'smooth'})">Lihat prioritas</button></div>`
+        : ""
+    }<section class="wm19-kpis">${metricV19(
+      "ANTRIAN AKTIF",
+      active.length,
+      "Waiting · Called · Bongkar · GR",
+      "blue",
+    )}${metricV19(
+      "MENUNGGU PANGGIL",
+      waiting,
+      "Butuh follow-up security",
+      "warning",
+    )}${metricV19(
+      "SEDANG BONGKAR",
+      unloading,
+      "Checker dan gate berjalan",
+      "blue",
+    )}${metricV19(
+      "SLA BERISIKO",
+      slaMiss,
+      slaMiss ? "Butuh action segera" : "Tidak ada SLA miss",
+      slaMiss ? "danger" : "good",
+    )}${metricV19(
+      "SELESAI HARI INI",
+      completed,
+      "Ticket completed",
+      "good",
+    )}</section><section class="wm19-filter"><span class="material-symbols-outlined text-on-surface-variant">search</span><input id="wm19-search" oninput="wmFilterV19(this)" placeholder="Cari queue, plat, vendor, gate, PO, atau checker…"/><select id="wm27-status-filter" onchange="wmFilterV19()"><option value="ALL">Semua status</option><option value="WAITING">Waiting</option><option value="CALLED">Dipanggil</option><option value="UNLOADING">Bongkar</option><option value="WAITING GR">Waiting GR</option><option value="COMPLETED">Completed</option></select><span id="wm19-result-count" class="wm19-result">${numV19(
+      rows.length,
+    )} kendaraan tampil</span></section>${gatePanelV22(rows)}${wmBusyPanelV28(
+      rows,
+    )}<section class="wm19-layout"><div class="wm19-main">${tableV19(
+      rows,
+    )}</div><aside class="wm19-side">${riskListV19(rows)}${flowV19(
+      rows,
+    )}${breakdownV19(rows)}</aside></section></div>`;
   };
-  try { pageMonitor = window.pageMonitor; } catch (error) {}
+  try {
+    pageMonitor = window.pageMonitor;
+  } catch (error) {}
 })();
 
 /* V20 — Modul BA Reject mandiri: lookup product, preview A4, simpan, cetak. */
 (function installBaRejectV20() {
-  const BA_REASONS = ["MSLOR","BARANG RUSAK","KURANG KIRIM","TIDAK DATANG","LEBIH KIRIM","BARANG TIDAK ADA DI PO","TOLAK BEDA SKU","TOLAK BEDA GRAMASI","SALAH BAWA BARANG"];
-  const ba = { items: [{ sku_number:"", product_id:"", product_name:"", quantity:"", reason:"" }], docs:[], selected:null };
-  const e = (v) => String(v ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-  const wibDate = () => new Date().toLocaleDateString("en-CA", { timeZone:"Asia/Jakarta" });
-  const day = (date) => ["MINGGU","SENIN","SELASA","RABU","KAMIS","JUMAT","SABTU"][new Date(`${date}T12:00:00Z`).getUTCDay()] || "";
-  const val = (field) => document.querySelector(`[data-ba-field="${field}"]`)?.value || "";
-  const setVal = (field, value) => { const input=document.querySelector(`[data-ba-field="${field}"]`); if(input) input.value=value||""; };
-  const opts = () => BA_REASONS.map((x)=>`<option value="${e(x)}">${e(x)}</option>`).join("");
+  const BA_REASONS = [
+    "MSLOR",
+    "BARANG RUSAK",
+    "KURANG KIRIM",
+    "TIDAK DATANG",
+    "LEBIH KIRIM",
+    "BARANG TIDAK ADA DI PO",
+    "TOLAK BEDA SKU",
+    "TOLAK BEDA GRAMASI",
+    "SALAH BAWA BARANG",
+  ];
+  const ba = {
+    items: [
+      {
+        sku_number: "",
+        product_id: "",
+        product_name: "",
+        quantity: "",
+        reason: "",
+      },
+    ],
+    docs: [],
+    selected: null,
+  };
+  const e = (v) =>
+    String(v ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  const wibDate = () =>
+    new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
+  const day = (date) =>
+    ["MINGGU", "SENIN", "SELASA", "RABU", "KAMIS", "JUMAT", "SABTU"][
+      new Date(`${date}T12:00:00Z`).getUTCDay()
+    ] || "";
+  const val = (field) =>
+    document.querySelector(`[data-ba-field="${field}"]`)?.value || "";
+  const setVal = (field, value) => {
+    const input = document.querySelector(`[data-ba-field="${field}"]`);
+    if (input) input.value = value || "";
+  };
+  const opts = () =>
+    BA_REASONS.map((x) => `<option value="${e(x)}">${e(x)}</option>`).join("");
   const master = () => state.dashboard?.raw?.tablev2 || [];
 
-  function poOptions() { const seen=new Set(); return master().filter((r)=>{const po=String(r.po_number||r.po||"").trim();if(!po||seen.has(po))return false;seen.add(po);return true;}).slice(0,5000).map((r)=>`<option value="${e(r.po_number||r.po)}"></option>`).join(""); }
-  function preview(doc=null, items=null) {
-    const d=doc||{ba_number:"Nomor otomatis setelah Simpan BA",ba_date:val("ba_date"),day_name:day(val("ba_date")),po_number:val("po_number"),supplier_name:val("supplier_name"),note:val("note")};
-    const rows=(items||ba.items).filter((x)=>x.sku_number||x.product_name).map((x)=>`<tr><td>${e(x.sku_number||"-")}</td><td>${e(x.product_name||"-")}</td><td>${e(x.quantity||"-")}</td><td>${e(x.reason||"-")}</td></tr>`).join("")||"<tr><td>-</td><td>-</td><td>-</td><td>-</td></tr>";
-    const date=String(d.ba_date||"").split("-").reverse().join("/")||"__/__/____";
-    return `<article class="bg-white text-black rounded-xl border border-outline-variant shadow-sm overflow-hidden font-serif"><div class="relative p-6 sm:p-9"><div class="absolute right-0 top-0 w-28 h-20 bg-[#193d73]" style="clip-path:polygon(36% 0,100% 0,100% 100%)"></div><div class="absolute right-0 top-0 w-20 h-16 bg-[#d82308]" style="clip-path:polygon(0 0,100% 0,100% 100%)"></div><div class="border-b-[3px] border-[#193d73] pb-3 pr-24 text-[10px] leading-4"><b>PT Astro Technologies Indonesia</b><br/>Graha Antero 5th-6th floor, Jl. Tomang Raya no. 27, Tomang, West Jakarta, 11440<br/>Ph. +6221 58909787 &nbsp;|&nbsp; Em: info@astronauts.id</div><div class="mt-4 text-center text-xs leading-5"><b class="uppercase">Form Berita Acara Penolakan Barang</b><br/>PT Astro Technologies Indonesia<br/><b>Tanggal ${e(date)}</b><br/><b>Nomor: ${e(d.ba_number||"-")}</b></div><div class="mt-5 text-[11px] leading-5"><b>Pada hari ${e(d.day_name||"-")}, ${e(date)}, terdapat BARANG REJECT / KURANG KIRIM / BARANG LEBIH, berikut detailnya :</b><br/><b>NOMOR PO : ${e(d.po_number||"-")}</b><br/><b>NOTE : ${e(d.note||"-")}</b></div><div class="mt-3 overflow-x-auto"><table class="w-full border-collapse text-[10px]"><thead><tr class="bg-slate-100"><th>SKU</th><th>DESKRIPSI</th><th>QTY</th><th>REASON</th></tr></thead><tbody>${rows}</tbody></table></div><p class="mt-3 text-[10px]">Surat ini akan diberikan secara fisik dan digital file ${e(d.supplier_name||"-")}</p><p class="mt-4 text-[10px]">Demikian berita acara penolakan barang ini kami sampaikan. Atas perhatian dan kerjasamanya kami ucapkan terimakasih.</p><div class="mt-5 grid grid-cols-2 sm:grid-cols-4 text-center text-[10px] font-bold"><div class="border border-black h-20 flex items-end justify-center pb-2">Admin</div><div class="border border-l-0 border-black h-20 flex items-end justify-center pb-2">Admin LP</div><div class="border border-black sm:border-l-0 h-20 flex items-end justify-center pb-2">SPV / Leader</div><div class="border border-l-0 border-black h-20 flex items-end justify-center pb-2">Supplier/Principal</div></div></div></article>`;
+  function poOptions() {
+    const seen = new Set();
+    return master()
+      .filter((r) => {
+        const po = String(r.po_number || r.po || "").trim();
+        if (!po || seen.has(po)) return false;
+        seen.add(po);
+        return true;
+      })
+      .slice(0, 5000)
+      .map((r) => `<option value="${e(r.po_number || r.po)}"></option>`)
+      .join("");
   }
-  function renderPreview(){const target=document.getElementById("ba-preview-v20");if(target)target.innerHTML=preview(ba.selected?.document||null,ba.selected?.items||null);}
-  async function lookup(index, query){query=String(query||"").trim();if(!query)return;try{const product=await motherDuckApiGet("product_lookup",{q:query});if(!product)return showToast("SKU / Product ID tidak ditemukan. Isi deskripsi manual bila perlu.","error");ba.items[index]={...ba.items[index],...product};renderItems();renderPreview();showToast("Produk ditemukan: "+product.product_name,"success");}catch(err){showToast(err.message||"Lookup produk gagal","error");}}
-  function renderItems(){const root=document.getElementById("ba-items-v20");if(!root)return;root.innerHTML=ba.items.map((x,i)=>`<div class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1.7fr_.75fr_1.3fr_auto] gap-2 rounded-xl border border-outline-variant bg-surface-container-low p-3" data-ba-item="${i}"><input data-ba-item-field="sku_number" class="form-input" placeholder="Scan / SKU" value="${e(x.sku_number)}"/><input data-ba-item-field="product_id" class="form-input" placeholder="Product ID" value="${e(x.product_id)}"/><input data-ba-item-field="product_name" class="form-input" placeholder="Deskripsi (boleh edit manual)" value="${e(x.product_name)}"/><input data-ba-item-field="quantity" class="form-input" placeholder="Qty" value="${e(x.quantity)}"/><select data-ba-item-field="reason" class="form-input"><option value="">- Pilih reason -</option>${opts()}</select><button type="button" data-ba-remove="${i}" class="rounded-lg px-3 py-2 text-error hover:bg-error-container"><span class="material-symbols-outlined">close</span></button></div>`).join("");ba.items.forEach((x,i)=>{const s=root.querySelector(`[data-ba-item="${i}"] select`);if(s)s.value=x.reason||"";});root.querySelectorAll("[data-ba-item-field]").forEach((input)=>input.addEventListener("input",(event)=>{const i=Number(event.target.closest("[data-ba-item]").dataset.baItem);ba.items[i][event.target.dataset.baItemField]=event.target.value;renderPreview();}));root.querySelectorAll("[data-ba-remove]").forEach((button)=>button.addEventListener("click",()=>{ba.items.splice(Number(button.dataset.baRemove),1);if(!ba.items.length)ba.items.push({sku_number:"",product_id:"",product_name:"",quantity:"",reason:""});renderItems();renderPreview();}));root.querySelectorAll('[data-ba-item-field="sku_number"],[data-ba-item-field="product_id"]').forEach((input)=>input.addEventListener("keydown",(event)=>{if(event.key==="Enter"){event.preventDefault();lookup(Number(event.target.closest("[data-ba-item]").dataset.baItem),event.target.value);}}));}
-  function syncSupplier(){const po=val("po_number");const match=master().find((r)=>String(r.po_number||r.po||"").trim()===po.trim());if(match&&!val("supplier_name"))setVal("supplier_name",match.vendor_name||match.company_name||"");renderPreview();}
-  async function loadHistory(){try{ba.docs=await motherDuckApiGet("ba_list");}catch{ba.docs=[];}const root=document.getElementById("ba-history-v20");if(!root)return;root.innerHTML=`<h3 class="font-extrabold">BA terakhir</h3><div class="mt-2 space-y-2">${ba.docs.length?ba.docs.slice(0,8).map((d)=>`<button type="button" data-ba-open="${e(d.ba_id)}" class="w-full text-left rounded-xl border border-outline-variant p-3 hover:bg-surface-container"><b>${e(d.ba_number)}</b><span class="block text-xs text-on-surface-variant">${e(d.po_number||"Tanpa PO")} · ${e(d.supplier_name||"-")} · ${d.item_count||0} item</span></button>`).join(""):'<p class="text-sm text-on-surface-variant">Belum ada BA tersimpan.</p>'}</div>`;root.querySelectorAll("[data-ba-open]").forEach((button)=>button.addEventListener("click",async()=>{try{ba.selected=await motherDuckApiGet("ba_detail",{ba_id:button.dataset.baOpen});renderPreview();showToast("Preview BA "+ba.selected.document.ba_number,"success");}catch(err){showToast(err.message||"Gagal membuka BA","error");}}));}
-  async function save(){const button=document.getElementById("ba-save-v20"),payload={ba_date:val("ba_date"),day_name:val("day_name"),po_number:val("po_number"),supplier_name:val("supplier_name"),note:val("note"),items:ba.items};if(!payload.supplier_name)return showToast("Supplier / Principal wajib diisi.","error");if(!payload.items.some((x)=>x.sku_number||x.product_name))return showToast("Isi minimal satu barang.","error");try{button.disabled=true;ba.selected=await motherDuckApiPost("create_ba",payload);renderPreview();await loadHistory();showToast("BA tersimpan: "+ba.selected.document.ba_number,"success");}catch(err){showToast(err.message||"Gagal menyimpan BA","error");}finally{button.disabled=false;}}
-  function print(){const source=document.getElementById("ba-preview-v20");const win=window.open("","_blank","width=960,height=760");if(!win)return showToast("Izinkan popup untuk mencetak BA.","error");win.document.write(`<!doctype html><html><head><title>BA Reject</title><script src="https://cdn.tailwindcss.com"><\/script><style>@page{size:A4;margin:0}body{background:#fff}table{border-collapse:collapse}th,td{border:1px solid #555;padding:5px}th{text-align:center;background:#f0f0f0}</style></head><body>${source.innerHTML}<script>window.onload=()=>window.print()<\/script></body></html>`);win.document.close();}
-  window.pageBaRejectV20=()=>`<div class="max-w-[1500px] mx-auto space-y-5"><div class="rounded-2xl bg-gradient-to-r from-primary to-[#193d73] text-on-primary p-6 shadow-lg"><div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><div class="text-[11px] font-bold tracking-[.18em] uppercase opacity-80">Dokumen terpisah</div><h2 class="mt-1 text-2xl font-extrabold">BA Reject / Penolakan Barang</h2><p class="mt-1 text-sm opacity-85">Tidak mengubah status ticket atau proses Checker. Data BA tersimpan di MotherDuck.</p></div><button type="button" id="ba-print-v20" class="rounded-xl bg-white px-4 py-3 font-bold text-primary"><span class="material-symbols-outlined align-middle mr-1">print</span>Cetak BA</button></div></div><div class="grid grid-cols-1 xl:grid-cols-[minmax(390px,.9fr)_minmax(0,1.3fr)] gap-5"><section class="rounded-2xl bg-surface-container-lowest border border-outline-variant p-5 shadow-sm"><div class="flex items-center justify-between"><h3 class="font-extrabold text-lg">Informasi dokumen</h3><span class="text-xs text-on-surface-variant">Nomor dibuat server saat simpan</span></div><div class="mt-4 grid sm:grid-cols-2 gap-3"><label class="field-label">Tanggal<input data-ba-field="ba_date" type="date" class="form-input mt-1" value="${wibDate()}"/></label><label class="field-label">Hari<input data-ba-field="day_name" class="form-input mt-1 bg-surface-container" readonly value="${day(wibDate())}"/></label><label class="field-label sm:col-span-2">Nomor PO<input data-ba-field="po_number" list="ba-po-options-v20" class="form-input mt-1" placeholder="Pilih / ketik manual nomor PO"/><datalist id="ba-po-options-v20">${poOptions()}</datalist></label><label class="field-label sm:col-span-2">Supplier / Principal<input data-ba-field="supplier_name" class="form-input mt-1" placeholder="Auto dari PO, tetap bisa diketik manual"/></label><label class="field-label sm:col-span-2">Note<textarea data-ba-field="note" class="form-input mt-1 min-h-20" placeholder="Opsional..."></textarea></label></div><div class="mt-6 flex items-center justify-between"><h3 class="font-extrabold text-lg">Daftar barang reject</h3><button type="button" id="ba-add-item-v20" class="rounded-lg border border-primary px-3 py-2 text-sm font-bold text-primary">+ Tambah barang</button></div><p class="mt-1 text-xs text-on-surface-variant">Scan SKU atau isi Product ID lalu tekan Enter. Deskripsi otomatis terisi dan tetap dapat diedit.</p><div id="ba-items-v20" class="mt-3 space-y-2"></div><button type="button" id="ba-save-v20" class="mt-5 w-full rounded-xl bg-primary px-4 py-3 font-bold text-on-primary"><span class="material-symbols-outlined align-middle mr-1">save</span>Simpan BA & buat nomor</button><div id="ba-history-v20" class="mt-6 border-t border-outline-variant pt-5"></div></section><section><div id="ba-preview-v20" class="sticky top-4"></div></section></div></div>`;
-  window.initBaRejectV20=()=>{ba.selected=null;renderItems();renderPreview();document.querySelectorAll("[data-ba-field]").forEach((input)=>input.addEventListener("input",()=>{if(input.dataset.baField==="ba_date")setVal("day_name",day(input.value));renderPreview();}));document.querySelector('[data-ba-field="po_number"]')?.addEventListener("change",syncSupplier);document.getElementById("ba-add-item-v20")?.addEventListener("click",()=>{ba.items.push({sku_number:"",product_id:"",product_name:"",quantity:"",reason:""});renderItems();});document.getElementById("ba-save-v20")?.addEventListener("click",save);document.getElementById("ba-print-v20")?.addEventListener("click",print);loadHistory();};
-  pageMeta.ba_reject={title:"BA Reject",subtitle:"Buat, simpan, dan cetak berita acara penolakan barang"};["SPV","ADMIN","DEVELOPER"].forEach((role)=>{ROLE_ACCESS[role]=Array.isArray(ROLE_ACCESS[role])?ROLE_ACCESS[role]:[];if(!ROLE_ACCESS[role].includes("ba_reject"))ROLE_ACCESS[role].push("ba_reject");});
-  const previousRender=renderPage;renderPage=function(page,toast=true){if(String(page||"")!=="ba_reject")return previousRender.call(this,page,toast);if(!isLoggedIn()||!canAccessPage("ba_reject"))return previousRender.call(this,getDefaultPageForRole(),toast);state.page="ba_reject";document.getElementById("page-title").textContent=pageMeta.ba_reject.title;document.getElementById("page-subtitle").textContent=pageMeta.ba_reject.subtitle;document.getElementById("page-root").innerHTML=window.pageBaRejectV20();applyRoleAccessUI();updateActiveNav("ba_reject");history.replaceState(null,"","#ba_reject");setTimeout(window.initBaRejectV20,0);if(toast)showToast("Buka menu BA Reject");};window.renderPage=renderPage;
+  function preview(doc = null, items = null) {
+    const d = doc || {
+      ba_number: "Nomor otomatis setelah Simpan BA",
+      ba_date: val("ba_date"),
+      day_name: day(val("ba_date")),
+      po_number: val("po_number"),
+      supplier_name: val("supplier_name"),
+      note: val("note"),
+    };
+    const rows =
+      (items || ba.items)
+        .filter((x) => x.sku_number || x.product_name)
+        .map(
+          (x) =>
+            `<tr><td>${e(x.sku_number || "-")}</td><td>${e(
+              x.product_name || "-",
+            )}</td><td>${e(x.quantity || "-")}</td><td>${e(
+              x.reason || "-",
+            )}</td></tr>`,
+        )
+        .join("") || "<tr><td>-</td><td>-</td><td>-</td><td>-</td></tr>";
+    const date =
+      String(d.ba_date || "")
+        .split("-")
+        .reverse()
+        .join("/") || "__/__/____";
+    return `<article class="bg-white text-black rounded-xl border border-outline-variant shadow-sm overflow-hidden font-serif"><div class="relative p-6 sm:p-9"><div class="absolute right-0 top-0 w-28 h-20 bg-[#193d73]" style="clip-path:polygon(36% 0,100% 0,100% 100%)"></div><div class="absolute right-0 top-0 w-20 h-16 bg-[#d82308]" style="clip-path:polygon(0 0,100% 0,100% 100%)"></div><div class="border-b-[3px] border-[#193d73] pb-3 pr-24 text-[10px] leading-4"><b>PT Astro Technologies Indonesia</b><br/>Graha Antero 5th-6th floor, Jl. Tomang Raya no. 27, Tomang, West Jakarta, 11440<br/>Ph. +6221 58909787 &nbsp;|&nbsp; Em: info@astronauts.id</div><div class="mt-4 text-center text-xs leading-5"><b class="uppercase">Form Berita Acara Penolakan Barang</b><br/>PT Astro Technologies Indonesia<br/><b>Tanggal ${e(
+      date,
+    )}</b><br/><b>Nomor: ${e(
+      d.ba_number || "-",
+    )}</b></div><div class="mt-5 text-[11px] leading-5"><b>Pada hari ${e(
+      d.day_name || "-",
+    )}, ${e(
+      date,
+    )}, terdapat BARANG REJECT / KURANG KIRIM / BARANG LEBIH, berikut detailnya :</b><br/><b>NOMOR PO : ${e(
+      d.po_number || "-",
+    )}</b><br/><b>NOTE : ${e(
+      d.note || "-",
+    )}</b></div><div class="mt-3 overflow-x-auto"><table class="w-full border-collapse text-[10px]"><thead><tr class="bg-slate-100"><th>SKU</th><th>DESKRIPSI</th><th>QTY</th><th>REASON</th></tr></thead><tbody>${rows}</tbody></table></div><p class="mt-3 text-[10px]">Surat ini akan diberikan secara fisik dan digital file ${e(
+      d.supplier_name || "-",
+    )}</p><p class="mt-4 text-[10px]">Demikian berita acara penolakan barang ini kami sampaikan. Atas perhatian dan kerjasamanya kami ucapkan terimakasih.</p><div class="mt-5 grid grid-cols-2 sm:grid-cols-4 text-center text-[10px] font-bold"><div class="border border-black h-20 flex items-end justify-center pb-2">Admin</div><div class="border border-l-0 border-black h-20 flex items-end justify-center pb-2">Admin LP</div><div class="border border-black sm:border-l-0 h-20 flex items-end justify-center pb-2">SPV / Leader</div><div class="border border-l-0 border-black h-20 flex items-end justify-center pb-2">Supplier/Principal</div></div></div></article>`;
+  }
+  function renderPreview() {
+    const target = document.getElementById("ba-preview-v20");
+    if (target)
+      target.innerHTML = preview(
+        ba.selected?.document || null,
+        ba.selected?.items || null,
+      );
+  }
+  async function lookup(index, query) {
+    query = String(query || "").trim();
+    if (!query) return;
+    try {
+      const product = await motherDuckApiGet("product_lookup", { q: query });
+      if (!product)
+        return showToast(
+          "SKU / Product ID tidak ditemukan. Isi deskripsi manual bila perlu.",
+          "error",
+        );
+      ba.items[index] = { ...ba.items[index], ...product };
+      renderItems();
+      renderPreview();
+      showToast("Produk ditemukan: " + product.product_name, "success");
+    } catch (err) {
+      showToast(err.message || "Lookup produk gagal", "error");
+    }
+  }
+  function renderItems() {
+    const root = document.getElementById("ba-items-v20");
+    if (!root) return;
+    root.innerHTML = ba.items
+      .map(
+        (x, i) =>
+          `<div class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_1.7fr_.75fr_1.3fr_auto] gap-2 rounded-xl border border-outline-variant bg-surface-container-low p-3" data-ba-item="${i}"><input data-ba-item-field="sku_number" class="form-input" placeholder="Scan / SKU" value="${e(
+            x.sku_number,
+          )}"/><input data-ba-item-field="product_id" class="form-input" placeholder="Product ID" value="${e(
+            x.product_id,
+          )}"/><input data-ba-item-field="product_name" class="form-input" placeholder="Deskripsi (boleh edit manual)" value="${e(
+            x.product_name,
+          )}"/><input data-ba-item-field="quantity" class="form-input" placeholder="Qty" value="${e(
+            x.quantity,
+          )}"/><select data-ba-item-field="reason" class="form-input"><option value="">- Pilih reason -</option>${opts()}</select><button type="button" data-ba-remove="${i}" class="rounded-lg px-3 py-2 text-error hover:bg-error-container"><span class="material-symbols-outlined">close</span></button></div>`,
+      )
+      .join("");
+    ba.items.forEach((x, i) => {
+      const s = root.querySelector(`[data-ba-item="${i}"] select`);
+      if (s) s.value = x.reason || "";
+    });
+    root.querySelectorAll("[data-ba-item-field]").forEach((input) =>
+      input.addEventListener("input", (event) => {
+        const i = Number(event.target.closest("[data-ba-item]").dataset.baItem);
+        ba.items[i][event.target.dataset.baItemField] = event.target.value;
+        renderPreview();
+      }),
+    );
+    root.querySelectorAll("[data-ba-remove]").forEach((button) =>
+      button.addEventListener("click", () => {
+        ba.items.splice(Number(button.dataset.baRemove), 1);
+        if (!ba.items.length)
+          ba.items.push({
+            sku_number: "",
+            product_id: "",
+            product_name: "",
+            quantity: "",
+            reason: "",
+          });
+        renderItems();
+        renderPreview();
+      }),
+    );
+    root
+      .querySelectorAll(
+        '[data-ba-item-field="sku_number"],[data-ba-item-field="product_id"]',
+      )
+      .forEach((input) =>
+        input.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            lookup(
+              Number(event.target.closest("[data-ba-item]").dataset.baItem),
+              event.target.value,
+            );
+          }
+        }),
+      );
+  }
+  function syncSupplier() {
+    const po = val("po_number");
+    const match = master().find(
+      (r) => String(r.po_number || r.po || "").trim() === po.trim(),
+    );
+    if (match && !val("supplier_name"))
+      setVal("supplier_name", match.vendor_name || match.company_name || "");
+    renderPreview();
+  }
+  async function loadHistory() {
+    try {
+      ba.docs = await motherDuckApiGet("ba_list");
+    } catch {
+      ba.docs = [];
+    }
+    const root = document.getElementById("ba-history-v20");
+    if (!root) return;
+    root.innerHTML = `<h3 class="font-extrabold">BA terakhir</h3><div class="mt-2 space-y-2">${
+      ba.docs.length
+        ? ba.docs
+            .slice(0, 8)
+            .map(
+              (d) =>
+                `<button type="button" data-ba-open="${e(
+                  d.ba_id,
+                )}" class="w-full text-left rounded-xl border border-outline-variant p-3 hover:bg-surface-container"><b>${e(
+                  d.ba_number,
+                )}</b><span class="block text-xs text-on-surface-variant">${e(
+                  d.po_number || "Tanpa PO",
+                )} · ${e(d.supplier_name || "-")} · ${
+                  d.item_count || 0
+                } item</span></button>`,
+            )
+            .join("")
+        : '<p class="text-sm text-on-surface-variant">Belum ada BA tersimpan.</p>'
+    }</div>`;
+    root.querySelectorAll("[data-ba-open]").forEach((button) =>
+      button.addEventListener("click", async () => {
+        try {
+          ba.selected = await motherDuckApiGet("ba_detail", {
+            ba_id: button.dataset.baOpen,
+          });
+          renderPreview();
+          showToast("Preview BA " + ba.selected.document.ba_number, "success");
+        } catch (err) {
+          showToast(err.message || "Gagal membuka BA", "error");
+        }
+      }),
+    );
+  }
+  async function save() {
+    const button = document.getElementById("ba-save-v20"),
+      payload = {
+        ba_date: val("ba_date"),
+        day_name: val("day_name"),
+        po_number: val("po_number"),
+        supplier_name: val("supplier_name"),
+        note: val("note"),
+        items: ba.items,
+      };
+    if (!payload.supplier_name)
+      return showToast("Supplier / Principal wajib diisi.", "error");
+    if (!payload.items.some((x) => x.sku_number || x.product_name))
+      return showToast("Isi minimal satu barang.", "error");
+    try {
+      button.disabled = true;
+      ba.selected = await motherDuckApiPost("create_ba", payload);
+      renderPreview();
+      await loadHistory();
+      showToast("BA tersimpan: " + ba.selected.document.ba_number, "success");
+    } catch (err) {
+      showToast(err.message || "Gagal menyimpan BA", "error");
+    } finally {
+      button.disabled = false;
+    }
+  }
+  function print() {
+    const source = document.getElementById("ba-preview-v20");
+    const win = window.open("", "_blank", "width=960,height=760");
+    if (!win) return showToast("Izinkan popup untuk mencetak BA.", "error");
+    win.document.write(
+      `<!doctype html><html><head><title>BA Reject</title><script src="https://cdn.tailwindcss.com"><\/script><style>@page{size:A4;margin:0}body{background:#fff}table{border-collapse:collapse}th,td{border:1px solid #555;padding:5px}th{text-align:center;background:#f0f0f0}</style></head><body>${source.innerHTML}<script>window.onload=()=>window.print()<\/script></body></html>`,
+    );
+    win.document.close();
+  }
+  window.pageBaRejectV20 = () =>
+    `<div class="max-w-[1500px] mx-auto space-y-5"><div class="rounded-2xl bg-gradient-to-r from-primary to-[#193d73] text-on-primary p-6 shadow-lg"><div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><div class="text-[11px] font-bold tracking-[.18em] uppercase opacity-80">Dokumen terpisah</div><h2 class="mt-1 text-2xl font-extrabold">BA Reject / Penolakan Barang</h2><p class="mt-1 text-sm opacity-85">Tidak mengubah status ticket atau proses Checker. Data BA tersimpan di MotherDuck.</p></div><button type="button" id="ba-print-v20" class="rounded-xl bg-white px-4 py-3 font-bold text-primary"><span class="material-symbols-outlined align-middle mr-1">print</span>Cetak BA</button></div></div><div class="grid grid-cols-1 xl:grid-cols-[minmax(390px,.9fr)_minmax(0,1.3fr)] gap-5"><section class="rounded-2xl bg-surface-container-lowest border border-outline-variant p-5 shadow-sm"><div class="flex items-center justify-between"><h3 class="font-extrabold text-lg">Informasi dokumen</h3><span class="text-xs text-on-surface-variant">Nomor dibuat server saat simpan</span></div><div class="mt-4 grid sm:grid-cols-2 gap-3"><label class="field-label">Tanggal<input data-ba-field="ba_date" type="date" class="form-input mt-1" value="${wibDate()}"/></label><label class="field-label">Hari<input data-ba-field="day_name" class="form-input mt-1 bg-surface-container" readonly value="${day(
+      wibDate(),
+    )}"/></label><label class="field-label sm:col-span-2">Nomor PO<input data-ba-field="po_number" list="ba-po-options-v20" class="form-input mt-1" placeholder="Pilih / ketik manual nomor PO"/><datalist id="ba-po-options-v20">${poOptions()}</datalist></label><label class="field-label sm:col-span-2">Supplier / Principal<input data-ba-field="supplier_name" class="form-input mt-1" placeholder="Auto dari PO, tetap bisa diketik manual"/></label><label class="field-label sm:col-span-2">Note<textarea data-ba-field="note" class="form-input mt-1 min-h-20" placeholder="Opsional..."></textarea></label></div><div class="mt-6 flex items-center justify-between"><h3 class="font-extrabold text-lg">Daftar barang reject</h3><button type="button" id="ba-add-item-v20" class="rounded-lg border border-primary px-3 py-2 text-sm font-bold text-primary">+ Tambah barang</button></div><p class="mt-1 text-xs text-on-surface-variant">Scan SKU atau isi Product ID lalu tekan Enter. Deskripsi otomatis terisi dan tetap dapat diedit.</p><div id="ba-items-v20" class="mt-3 space-y-2"></div><button type="button" id="ba-save-v20" class="mt-5 w-full rounded-xl bg-primary px-4 py-3 font-bold text-on-primary"><span class="material-symbols-outlined align-middle mr-1">save</span>Simpan BA & buat nomor</button><div id="ba-history-v20" class="mt-6 border-t border-outline-variant pt-5"></div></section><section><div id="ba-preview-v20" class="sticky top-4"></div></section></div></div>`;
+  window.initBaRejectV20 = () => {
+    ba.selected = null;
+    renderItems();
+    renderPreview();
+    document.querySelectorAll("[data-ba-field]").forEach((input) =>
+      input.addEventListener("input", () => {
+        if (input.dataset.baField === "ba_date")
+          setVal("day_name", day(input.value));
+        renderPreview();
+      }),
+    );
+    document
+      .querySelector('[data-ba-field="po_number"]')
+      ?.addEventListener("change", syncSupplier);
+    document
+      .getElementById("ba-add-item-v20")
+      ?.addEventListener("click", () => {
+        ba.items.push({
+          sku_number: "",
+          product_id: "",
+          product_name: "",
+          quantity: "",
+          reason: "",
+        });
+        renderItems();
+      });
+    document.getElementById("ba-save-v20")?.addEventListener("click", save);
+    document.getElementById("ba-print-v20")?.addEventListener("click", print);
+    loadHistory();
+  };
+  pageMeta.ba_reject = {
+    title: "BA Reject",
+    subtitle: "Buat, simpan, dan cetak berita acara penolakan barang",
+  };
+  ["SPV", "ADMIN", "DEVELOPER", "ASTRONAUTS"].forEach((role) => {
+    ROLE_ACCESS[role] = Array.isArray(ROLE_ACCESS[role])
+      ? ROLE_ACCESS[role]
+      : [];
+    if (!ROLE_ACCESS[role].includes("ba_reject"))
+      ROLE_ACCESS[role].push("ba_reject");
+  });
+  const previousRender = renderPage;
+  renderPage = function (page, toast = true) {
+    if (String(page || "") !== "ba_reject")
+      return previousRender.call(this, page, toast);
+    if (!isLoggedIn() || !canAccessPage("ba_reject"))
+      return previousRender.call(this, getDefaultPageForRole(), toast);
+    state.page = "ba_reject";
+    document.getElementById("page-title").textContent =
+      pageMeta.ba_reject.title;
+    document.getElementById("page-subtitle").textContent =
+      pageMeta.ba_reject.subtitle;
+    document.getElementById("page-root").innerHTML = window.pageBaRejectV20();
+    applyRoleAccessUI();
+    updateActiveNav("ba_reject");
+    history.replaceState(null, "", "#ba_reject");
+    setTimeout(window.initBaRejectV20, 0);
+    if (toast) showToast("Buka menu BA Reject");
+  };
+  window.renderPage = renderPage;
 })();
 
 /* ==========================================================================
@@ -14497,15 +18505,21 @@ if (window.__exportCsvV19) {
         mainRowsV21(checkerRowsBeforeV21.apply(this, arguments)),
       );
     };
-    try { getCheckerSectionRows = window.getCheckerSectionRows; } catch (error) {}
+    try {
+      getCheckerSectionRows = window.getCheckerSectionRows;
+    } catch (error) {}
   }
 
   const checkerCountsBeforeV21 = window.checkerSectionCounts;
   if (typeof checkerCountsBeforeV21 === "function") {
     window.checkerSectionCounts = function checkerSectionCountsV21() {
-      return withMainDashboardV21(() => checkerCountsBeforeV21.apply(this, arguments));
+      return withMainDashboardV21(() =>
+        checkerCountsBeforeV21.apply(this, arguments),
+      );
     };
-    try { checkerSectionCounts = window.checkerSectionCounts; } catch (error) {}
+    try {
+      checkerSectionCounts = window.checkerSectionCounts;
+    } catch (error) {}
   }
 
   const checkerActiveBeforeV21 = window.getCheckerActiveRows;
@@ -14515,15 +18529,21 @@ if (window.__exportCsvV19) {
         mainRowsV21(checkerActiveBeforeV21.apply(this, arguments)),
       );
     };
-    try { getCheckerActiveRows = window.getCheckerActiveRows; } catch (error) {}
+    try {
+      getCheckerActiveRows = window.getCheckerActiveRows;
+    } catch (error) {}
   }
 
   const monitorBeforeV21 = window.pageMonitor;
   if (typeof monitorBeforeV21 === "function") {
     window.pageMonitor = function pageMonitorWithoutDropoffV21() {
-      return withMainDashboardV21(() => monitorBeforeV21.apply(this, arguments));
+      return withMainDashboardV21(() =>
+        monitorBeforeV21.apply(this, arguments),
+      );
     };
-    try { pageMonitor = window.pageMonitor; } catch (error) {}
+    try {
+      pageMonitor = window.pageMonitor;
+    } catch (error) {}
   }
 
   const reportBeforeV21 = window.pageLaporan;
@@ -14531,28 +18551,39 @@ if (window.__exportCsvV19) {
     window.pageLaporan = function pageLaporanWithoutDropoffV21() {
       return withMainDashboardV21(() => reportBeforeV21.apply(this, arguments));
     };
-    try { pageLaporan = window.pageLaporan; } catch (error) {}
+    try {
+      pageLaporan = window.pageLaporan;
+    } catch (error) {}
   }
 
   const latestCallBeforeV21 = window.getLatestCallTicket;
   if (typeof latestCallBeforeV21 === "function") {
     window.getLatestCallTicket = function getLatestMainCallTicketV21(queue) {
-      const source = Array.isArray(queue) ? queue : state.dashboard?.queue || [];
+      const source = Array.isArray(queue)
+        ? queue
+        : state.dashboard?.queue || [];
       return latestCallBeforeV21.call(this, mainRowsV21(source));
     };
-    try { getLatestCallTicket = window.getLatestCallTicket; } catch (error) {}
+    try {
+      getLatestCallTicket = window.getLatestCallTicket;
+    } catch (error) {}
   }
 
   function dropoffSourceRowsV21() {
     const historyRows = state.dashboard?.history_queue;
-    const source = Array.isArray(historyRows) && historyRows.length
-      ? historyRows
-      : state.dashboard?.queue || [];
+    const source =
+      Array.isArray(historyRows) && historyRows.length
+        ? historyRows
+        : state.dashboard?.queue || [];
     const now = Date.now();
     return domain.sortDropoffs(source).filter((row) => {
       if (!domain.isTerminal(row)) return true;
       const end = parseInboundDateSafe(
-        row.completed_at || row.cancelled_at || row.expired_at || row.updated_at || "",
+        row.completed_at ||
+          row.cancelled_at ||
+          row.expired_at ||
+          row.updated_at ||
+          "",
       );
       return end && now - end.getTime() <= 48 * 60 * 60 * 1000;
     });
@@ -14565,20 +18596,29 @@ if (window.__exportCsvV19) {
 
   function dropoffGateOptionsV21(selected = "") {
     const current = String(selected || "").trim();
-    const gates = typeof getCibitungGateOptions === "function"
-      ? getCibitungGateOptions()
-      : state.options?.gate || [];
+    const gates =
+      typeof getCibitungGateOptions === "function"
+        ? getCibitungGateOptions()
+        : state.options?.gate || [];
     return `<option value="">Pilih Gate</option>${gates
-      .map((gate) => `<option value="${esc(gate)}" ${String(gate) === current ? "selected" : ""}>${esc(gate)}</option>`)
+      .map(
+        (gate) =>
+          `<option value="${esc(gate)}" ${
+            String(gate) === current ? "selected" : ""
+          }>${esc(gate)}</option>`,
+      )
       .join("")}`;
   }
 
   function dropoffStatusToneV21(status = "WAITING") {
     const safe = String(status || "WAITING").toUpperCase();
-    if (safe === "COMPLETED") return "bg-success/15 text-success border-success/30";
+    if (safe === "COMPLETED")
+      return "bg-success/15 text-success border-success/30";
     if (safe === "EXPIRED") return "bg-error/15 text-error border-error/30";
-    if (safe === "UNLOADING") return "bg-warning/15 text-warning border-warning/30";
-    if (safe === "CALLED") return "bg-primary/15 text-primary border-primary/30";
+    if (safe === "UNLOADING")
+      return "bg-warning/15 text-warning border-warning/30";
+    if (safe === "CALLED")
+      return "bg-primary/15 text-primary border-primary/30";
     return "bg-surface-container-high text-on-surface-variant border-outline-variant";
   }
 
@@ -14588,71 +18628,145 @@ if (window.__exportCsvV19) {
     const canAct = dropoffCanActV21();
     const ticketId = String(row.ticket_id || "");
     const safeId = ticketId.replace(/[^A-Za-z0-9_-]/g, "_");
-    const nextLabel = status === "WAITING"
-      ? "Panggil Drop-Off"
-      : status === "CALLED"
+    const nextLabel =
+      status === "WAITING"
+        ? "Panggil Drop-Off"
+        : status === "CALLED"
         ? "Mulai Bongkar"
         : status === "UNLOADING"
-          ? "Selesai Bongkar"
-          : "";
-    const nextIcon = status === "WAITING"
-      ? "campaign"
-      : status === "CALLED"
+        ? "Selesai Bongkar"
+        : "";
+    const nextIcon =
+      status === "WAITING"
+        ? "campaign"
+        : status === "CALLED"
         ? "warehouse"
         : "task_alt";
     const age = terminal
-      ? `Selesai ${esc(row.completed_at || row.cancelled_at || row.expired_at || row.updated_at || "-")}`
+      ? `Selesai ${esc(
+          row.completed_at ||
+            row.cancelled_at ||
+            row.expired_at ||
+            row.updated_at ||
+            "-",
+        )}`
       : `Aktif ${esc(domain.ageLabel(row))}`;
-    const action = !terminal && canAct
-      ? `<div class="mt-4 flex flex-col sm:flex-row gap-2">
-          ${status === "WAITING" ? `<select id="dropoff-gate-${safeId}" class="form-select sm:max-w-56">${dropoffGateOptionsV21(row.gate)}</select>` : ""}
-          <button type="button" onclick="advanceDropoffTicketV21('${esc(ticketId)}', this)" class="bg-primary-container text-on-primary-container rounded-xl px-4 py-3 font-bold inline-flex items-center justify-center gap-2 flex-1"><span class="material-symbols-outlined">${nextIcon}</span>${esc(nextLabel)}</button>
+    const action =
+      !terminal && canAct
+        ? `<div class="mt-4 flex flex-col sm:flex-row gap-2">
+          ${
+            status === "WAITING"
+              ? `<select id="dropoff-gate-${safeId}" class="form-select sm:max-w-56">${dropoffGateOptionsV21(
+                  row.gate,
+                )}</select>`
+              : ""
+          }
+          <button type="button" onclick="advanceDropoffTicketV21('${esc(
+            ticketId,
+          )}', this)" class="bg-primary-container text-on-primary-container rounded-xl px-4 py-3 font-bold inline-flex items-center justify-center gap-2 flex-1"><span class="material-symbols-outlined">${nextIcon}</span>${esc(
+            nextLabel,
+          )}</button>
         </div>`
-      : !terminal
+        : !terminal
         ? `<div class="mt-4 rounded-xl bg-surface-container p-3 text-xs text-on-surface-variant">Mode lihat. Perubahan status dilakukan Checker, Admin, atau SPV.</div>`
         : "";
 
-    return `<article class="dropoff-card-v21 rounded-2xl border border-outline-variant/50 bg-surface-container-lowest p-5 shadow-sm" data-dropoff-search="${esc([row.queue_no,row.plat_number,row.vendor_name,row.driver_name,status,row.gate].join(" ").toLowerCase())}">
+    return `<article class="dropoff-card-v21 rounded-2xl border border-outline-variant/50 bg-surface-container-lowest p-5 shadow-sm" data-dropoff-search="${esc(
+      [
+        row.queue_no,
+        row.plat_number,
+        row.vendor_name,
+        row.driver_name,
+        status,
+        row.gate,
+      ]
+        .join(" ")
+        .toLowerCase(),
+    )}">
       <div class="flex items-start justify-between gap-3">
-        <div><div class="font-queue-id text-primary text-2xl">${esc(row.queue_no || "-")}</div><div class="mt-1 text-xs font-bold uppercase text-on-surface-variant">${esc(row.vendor_name || "-")}</div></div>
-        <span class="rounded-full border px-3 py-1 text-[10px] font-extrabold ${dropoffStatusToneV21(status)}">${esc(status)}</span>
+        <div><div class="font-queue-id text-primary text-2xl">${esc(
+          row.queue_no || "-",
+        )}</div><div class="mt-1 text-xs font-bold uppercase text-on-surface-variant">${esc(
+      row.vendor_name || "-",
+    )}</div></div>
+        <span class="rounded-full border px-3 py-1 text-[10px] font-extrabold ${dropoffStatusToneV21(
+          status,
+        )}">${esc(status)}</span>
       </div>
       <div class="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
-        <div class="rounded-xl bg-surface-container p-3"><span class="block text-[10px] uppercase font-bold text-on-surface-variant">Plat</span><b class="mt-1 block">${esc(row.plat_number || "-")}</b></div>
-        <div class="rounded-xl bg-surface-container p-3"><span class="block text-[10px] uppercase font-bold text-on-surface-variant">Driver</span><b class="mt-1 block truncate">${esc(row.driver_name || "-")}</b></div>
-        <div class="rounded-xl bg-surface-container p-3"><span class="block text-[10px] uppercase font-bold text-on-surface-variant">Gate</span><b class="mt-1 block">${esc(row.gate || "-")}</b></div>
+        <div class="rounded-xl bg-surface-container p-3"><span class="block text-[10px] uppercase font-bold text-on-surface-variant">Plat</span><b class="mt-1 block">${esc(
+          row.plat_number || "-",
+        )}</b></div>
+        <div class="rounded-xl bg-surface-container p-3"><span class="block text-[10px] uppercase font-bold text-on-surface-variant">Driver</span><b class="mt-1 block truncate">${esc(
+          row.driver_name || "-",
+        )}</b></div>
+        <div class="rounded-xl bg-surface-container p-3"><span class="block text-[10px] uppercase font-bold text-on-surface-variant">Gate</span><b class="mt-1 block">${esc(
+          row.gate || "-",
+        )}</b></div>
         <div class="rounded-xl bg-surface-container p-3"><span class="block text-[10px] uppercase font-bold text-on-surface-variant">Umur Tiket</span><b class="mt-1 block">${age}</b></div>
       </div>
-      <div class="mt-3 text-xs text-on-surface-variant"><b>Operasional:</b> ${esc(row.operational_date || "-")} &middot; <b>Slot:</b> ${esc(row.slot || "-")} &middot; tanpa Checker PO / Done GR</div>
+      <div class="mt-3 text-xs text-on-surface-variant"><b>Operasional:</b> ${esc(
+        row.operational_date || "-",
+      )} &middot; <b>Slot:</b> ${esc(
+      row.slot || "-",
+    )} &middot; tanpa Checker PO / Done GR</div>
       ${action}
     </article>`;
   }
 
   window.filterDropoffCardsV21 = function filterDropoffCardsV21(input) {
-    const query = String(input?.value || "").trim().toLowerCase();
+    const query = String(input?.value || "")
+      .trim()
+      .toLowerCase();
     document.querySelectorAll(".dropoff-card-v21").forEach((card) => {
-      card.style.display = !query || String(card.dataset.dropoffSearch || "").includes(query) ? "" : "none";
+      card.style.display =
+        !query || String(card.dataset.dropoffSearch || "").includes(query)
+          ? ""
+          : "none";
     });
   };
 
-  window.advanceDropoffTicketV21 = async function advanceDropoffTicketV21(ticketId, button) {
-    if (!dropoffCanActV21()) return showToast("Role ini hanya dapat melihat Drop-Off.");
-    const row = dropoffSourceRowsV21().find((item) => String(item.ticket_id || "") === String(ticketId || ""));
+  window.advanceDropoffTicketV21 = async function advanceDropoffTicketV21(
+    ticketId,
+    button,
+  ) {
+    if (!dropoffCanActV21())
+      return showToast("Role ini hanya dapat melihat Drop-Off.");
+    const row = dropoffSourceRowsV21().find(
+      (item) => String(item.ticket_id || "") === String(ticketId || ""),
+    );
     if (!row) return showToast("Tiket Drop-Off tidak ditemukan. Refresh data.");
 
     const status = domain.statusOf(row);
-    const nextStatus = { WAITING: "CALLED", CALLED: "UNLOADING", UNLOADING: "COMPLETED" }[status];
+    const nextStatus = {
+      WAITING: "CALLED",
+      CALLED: "UNLOADING",
+      UNLOADING: "COMPLETED",
+    }[status];
     if (!nextStatus) return showToast(`Status ${status} sudah selesai.`);
 
     const safeId = String(ticketId).replace(/[^A-Za-z0-9_-]/g, "_");
     const gateInput = document.getElementById(`dropoff-gate-${safeId}`);
-    const currentGate = String(row.gate || "").trim() === "-" ? "" : String(row.gate || "").trim();
-    const selectedGate = String(gateInput ? gateInput.value : currentGate).trim();
-    if (status === "WAITING" && !selectedGate) return showToast("Pilih Gate terlebih dahulu.");
-    if (nextStatus === "COMPLETED" && !confirm(`Selesaikan bongkar ${row.queue_no || "Drop-Off"}?`)) return;
+    const currentGate =
+      String(row.gate || "").trim() === "-"
+        ? ""
+        : String(row.gate || "").trim();
+    const selectedGate = String(
+      gateInput ? gateInput.value : currentGate,
+    ).trim();
+    if (status === "WAITING" && !selectedGate)
+      return showToast("Pilih Gate terlebih dahulu.");
+    if (
+      nextStatus === "COMPLETED" &&
+      !confirm(`Selesaikan bongkar ${row.queue_no || "Drop-Off"}?`)
+    )
+      return;
 
     const actor = getAuthUser?.() || {};
-    const now = typeof formatDateTimeLocal === "function" ? formatDateTimeLocal(new Date()) : new Date().toISOString();
+    const now =
+      typeof formatDateTimeLocal === "function"
+        ? formatDateTimeLocal(new Date())
+        : new Date().toISOString();
     const payload = {
       ticket_id: row.ticket_id,
       queue_no: row.original_queue_no || row.queue_no,
@@ -14679,10 +18793,12 @@ if (window.__exportCsvV19) {
     try {
       if (button) {
         button.disabled = true;
-        button.innerHTML = '<span class="material-symbols-outlined animate-spin">progress_activity</span>Menyimpan...';
+        button.innerHTML =
+          '<span class="material-symbols-outlined animate-spin">progress_activity</span>Menyimpan...';
       }
       const result = await updateCheckerToBackend(payload);
-      if (typeof applyBackendActionResult === "function") applyBackendActionResult(result);
+      if (typeof applyBackendActionResult === "function")
+        applyBackendActionResult(result);
       showToast(`Drop-Off berubah menjadi ${nextStatus}.`);
       await refreshDashboard();
       renderPage("dropoff", false);
@@ -14704,8 +18820,23 @@ if (window.__exportCsvV19) {
       <section class="rounded-2xl bg-gradient-to-r from-[#4c1d95] via-[#6d28d9] to-primary text-white p-6 shadow-lg">
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4"><div><div class="text-[11px] font-bold tracking-[.2em] uppercase opacity-80">Antrean terpisah</div><h2 class="mt-1 text-3xl font-extrabold">Drop-Off Workspace</h2><p class="mt-2 text-sm opacity-90">Tiket lintas hari tidak masuk sequence, KPI, Waiting List, Checker, atau monitor REG/VIP.</p></div><button type="button" onclick="refreshDashboard()" class="rounded-xl bg-white/15 border border-white/30 px-4 py-3 font-bold inline-flex items-center justify-center gap-2"><span class="material-symbols-outlined">refresh</span>Refresh</button></div>
       </section>
-      <section class="grid grid-cols-2 md:grid-cols-5 gap-3">${miniMetric("Aktif", summary.active, "text-primary")}${miniMetric("Waiting", summary.waiting, "text-tertiary")}${miniMetric("Called", summary.called, "text-primary")}${miniMetric("Bongkar", summary.unloading, "text-warning")}${miniMetric("Selesai 48 Jam", summary.completed, "text-success")}</section>
-      <section class="glass-card rounded-2xl p-4 sm:p-6"><div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4"><div><h3 class="font-headline-md text-headline-md">Daftar Drop-Off</h3><p class="text-on-surface-variant">Tiket aktif selalu dibawa lintas hari sampai selesai. Riwayat selesai tampil selama 48 jam.</p></div><input oninput="filterDropoffCardsV21(this)" class="form-input md:max-w-sm" placeholder="Cari queue, plat, vendor, driver..." /></div><div class="grid grid-cols-1 xl:grid-cols-2 gap-4">${rows.map(dropoffCardV21).join("") || '<div class="xl:col-span-2 rounded-xl border border-dashed border-outline-variant p-10 text-center text-on-surface-variant">Belum ada tiket Drop-Off.</div>'}</div></section>
+      <section class="grid grid-cols-2 md:grid-cols-5 gap-3">${miniMetric(
+        "Aktif",
+        summary.active,
+        "text-primary",
+      )}${miniMetric("Waiting", summary.waiting, "text-tertiary")}${miniMetric(
+      "Called",
+      summary.called,
+      "text-primary",
+    )}${miniMetric("Bongkar", summary.unloading, "text-warning")}${miniMetric(
+      "Selesai 48 Jam",
+      summary.completed,
+      "text-success",
+    )}</section>
+      <section class="glass-card rounded-2xl p-4 sm:p-6"><div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4"><div><h3 class="font-headline-md text-headline-md">Daftar Drop-Off</h3><p class="text-on-surface-variant">Tiket aktif selalu dibawa lintas hari sampai selesai. Riwayat selesai tampil selama 48 jam.</p></div><input oninput="filterDropoffCardsV21(this)" class="form-input md:max-w-sm" placeholder="Cari queue, plat, vendor, driver..." /></div><div class="grid grid-cols-1 xl:grid-cols-2 gap-4">${
+        rows.map(dropoffCardV21).join("") ||
+        '<div class="xl:col-span-2 rounded-xl border border-dashed border-outline-variant p-10 text-center text-on-surface-variant">Belum ada tiket Drop-Off.</div>'
+      }</div></section>
     </div>`;
   };
 
@@ -14713,20 +18844,27 @@ if (window.__exportCsvV19) {
     title: "Drop-Off",
     subtitle: "Antrean lintas hari terpisah dari REG dan VIP",
   };
-  ["SPV", "ADMIN", "CHECKER", "SECURITY", "DEVELOPER"].forEach((role) => {
-    ROLE_ACCESS[role] = Array.isArray(ROLE_ACCESS[role]) ? ROLE_ACCESS[role] : [];
-    if (!ROLE_ACCESS[role].includes("dropoff")) ROLE_ACCESS[role].push("dropoff");
-  });
+  ["SPV", "ADMIN", "CHECKER", "SECURITY", "DEVELOPER", "ASTRONAUTS"].forEach(
+    (role) => {
+      ROLE_ACCESS[role] = Array.isArray(ROLE_ACCESS[role])
+        ? ROLE_ACCESS[role]
+        : [];
+      if (!ROLE_ACCESS[role].includes("dropoff"))
+        ROLE_ACCESS[role].push("dropoff");
+    },
+  );
 
   const renderBeforeV21 = renderPage;
   renderPage = function renderPageWithDropoffV21(page, toast = true) {
-    if (String(page || "") !== "dropoff") return renderBeforeV21.call(this, page, toast);
+    if (String(page || "") !== "dropoff")
+      return renderBeforeV21.call(this, page, toast);
     if (!isLoggedIn() || !canAccessPage("dropoff")) {
       return renderBeforeV21.call(this, getDefaultPageForRole(), toast);
     }
     state.page = "dropoff";
     document.getElementById("page-title").textContent = pageMeta.dropoff.title;
-    document.getElementById("page-subtitle").textContent = pageMeta.dropoff.subtitle;
+    document.getElementById("page-subtitle").textContent =
+      pageMeta.dropoff.subtitle;
     document.getElementById("page-root").innerHTML = window.pageDropoffV21();
     applyRoleAccessUI();
     updateActiveNav("dropoff");
@@ -14741,9 +18879,12 @@ if (window.__exportCsvV19) {
 (function bindCommercialRoleV23() {
   ROLE_ACCESS.COMERCIAL = ["commercial"];
   ROLE_DEFAULT_PAGE.COMERCIAL = "commercial";
-  ["SPV", "ADMIN", "DEVELOPER"].forEach((role) => {
-    ROLE_ACCESS[role] = Array.isArray(ROLE_ACCESS[role]) ? ROLE_ACCESS[role] : [];
-    if (!ROLE_ACCESS[role].includes("commercial")) ROLE_ACCESS[role].push("commercial");
+  ["SPV", "ADMIN", "DEVELOPER", "ASTRONAUTS"].forEach((role) => {
+    ROLE_ACCESS[role] = Array.isArray(ROLE_ACCESS[role])
+      ? ROLE_ACCESS[role]
+      : [];
+    if (!ROLE_ACCESS[role].includes("commercial"))
+      ROLE_ACCESS[role].push("commercial");
   });
   applyRoleAccessUI?.();
 })();
@@ -14757,17 +18898,25 @@ if (window.__exportCsvV19) {
   state.options.fleet_type = [...contracts.FLEET_TYPES];
   window.normalizeFleetType = contracts.normalizeFleetType;
   window.getFleetTypeOptions = () => [...contracts.FLEET_TYPES];
-  window.getFleetDisplayLabel = (type) => contracts.normalizeFleetType(type) || "FLEET";
+  window.getFleetDisplayLabel = (type) =>
+    contracts.normalizeFleetType(type) || "FLEET";
   window.getFleetNote = (type) => contracts.fleetNote(type);
   window.getFleetSlaRuleTextV163 = (type) => contracts.fleetSlaRuleText(type);
   window.getFleetOptionLabelV163 = (type) => {
     const fleet = contracts.normalizeFleetType(type);
     return `${fleet} (${contracts.fleetNote(fleet)})`;
   };
-  window.vehicleFleetOptionsHtml = function vehicleFleetOptionsHtmlV24(selected = "") {
-    const selectedFleet = contracts.normalizeFleetType(selected || contracts.FLEET_TYPES[0]);
-    return contracts.FLEET_TYPES.map((type) =>
-      `<option value="${esc(type)}" ${type === selectedFleet ? "selected" : ""}>${esc(window.getFleetOptionLabelV163(type))}</option>`,
+  window.vehicleFleetOptionsHtml = function vehicleFleetOptionsHtmlV24(
+    selected = "",
+  ) {
+    const selectedFleet = contracts.normalizeFleetType(
+      selected || contracts.FLEET_TYPES[0],
+    );
+    return contracts.FLEET_TYPES.map(
+      (type) =>
+        `<option value="${esc(type)}" ${
+          type === selectedFleet ? "selected" : ""
+        }>${esc(window.getFleetOptionLabelV163(type))}</option>`,
     ).join("");
   };
   window.getFleetImageUrl = function getFleetImageUrlV24(type) {
@@ -14796,10 +18945,14 @@ if (window.__exportCsvV19) {
     getFleetImageUrl = window.getFleetImageUrl;
   } catch (error) {}
 
-  window.updateVehicleFleetPreview = function updateVehicleFleetPreviewV24(selectEl) {
+  window.updateVehicleFleetPreview = function updateVehicleFleetPreviewV24(
+    selectEl,
+  ) {
     const row = selectEl?.closest(".vehicle-row");
     if (!row) return;
-    const fleet = contracts.normalizeFleetType(selectEl.value || contracts.FLEET_TYPES[0]);
+    const fleet = contracts.normalizeFleetType(
+      selectEl.value || contracts.FLEET_TYPES[0],
+    );
     const image = row.querySelector("[data-vehicle-fleet-img]");
     const label = row.querySelector("[data-vehicle-fleet-label]");
     const note = row.querySelector("[data-vehicle-fleet-note-v163]");
@@ -14814,17 +18967,25 @@ if (window.__exportCsvV19) {
     }
     if (note) {
       note.style.display = "";
-      note.textContent = `${contracts.fleetNote(fleet)} · ${window.getFleetSlaRuleTextV163?.(fleet) || ""}`;
+      note.textContent = `${contracts.fleetNote(fleet)} · ${
+        window.getFleetSlaRuleTextV163?.(fleet) || ""
+      }`;
     }
-    row.querySelector("[data-dropoff-word-v168]")?.style.setProperty("display", "none");
+    row
+      .querySelector("[data-dropoff-word-v168]")
+      ?.style.setProperty("display", "none");
     syncVehicleMultiInput?.();
   };
-  try { updateVehicleFleetPreview = window.updateVehicleFleetPreview; } catch (error) {}
+  try {
+    updateVehicleFleetPreview = window.updateVehicleFleetPreview;
+  } catch (error) {}
 
   window.handleTicketTypeChange = function handleTicketTypeChangeV24() {
     const form = document.getElementById("security-form");
     if (!form) return;
-    const type = String(form.querySelector('[name="ticket_type"]')?.value || "REG").toUpperCase();
+    const type = String(
+      form.querySelector('[name="ticket_type"]')?.value || "REG",
+    ).toUpperCase();
     const dropOff = type === "DROP" || type === "DROP-OFF";
     const poHidden = form.querySelector('[name="po_number"]');
     if (poHidden) {
@@ -14833,17 +18994,30 @@ if (window.__exportCsvV19) {
       if (dropOff) poHidden.setCustomValidity("");
     }
     const poSearch = document.getElementById("po-search-input");
-    if (poSearch) poSearch.placeholder = dropOff ? "PO opsional untuk DROP-OFF" : "Cari atau ketik PO manual...";
-    form.querySelectorAll('[data-vehicle-field="fleet_type"]').forEach((select) => {
-      select.disabled = false;
-      if (!contracts.FLEET_TYPES.includes(contracts.normalizeFleetType(select.value))) {
-        select.innerHTML = window.vehicleFleetOptionsHtml(contracts.FLEET_TYPES[0]);
-      }
-      window.updateVehicleFleetPreview(select);
-    });
+    if (poSearch)
+      poSearch.placeholder = dropOff
+        ? "PO opsional untuk DROP-OFF"
+        : "Cari atau ketik PO manual...";
+    form
+      .querySelectorAll('[data-vehicle-field="fleet_type"]')
+      .forEach((select) => {
+        select.disabled = false;
+        if (
+          !contracts.FLEET_TYPES.includes(
+            contracts.normalizeFleetType(select.value),
+          )
+        ) {
+          select.innerHTML = window.vehicleFleetOptionsHtml(
+            contracts.FLEET_TYPES[0],
+          );
+        }
+        window.updateVehicleFleetPreview(select);
+      });
     lookupPo?.(true);
   };
-  try { handleTicketTypeChange = window.handleTicketTypeChange; } catch (error) {}
+  try {
+    handleTicketTypeChange = window.handleTicketTypeChange;
+  } catch (error) {}
 
   window.getInboundSlaHours = (row = {}) => contracts.getSlaHours(row);
   window.getInboundSlaInfo = function getInboundSlaInfoV24(row = {}) {
@@ -14851,20 +19025,28 @@ if (window.__exportCsvV19) {
     const late = ["LATE", "SLA MISS"].includes(info.status);
     return {
       ...info,
-      className: late ? "text-error" : info.status === "ON PROCESS" ? "text-warning" : "text-success",
+      className: late
+        ? "text-error"
+        : info.status === "ON PROCESS"
+        ? "text-warning"
+        : "text-success",
       badgeClass: late
         ? "bg-error/10 text-error border-error/30"
         : info.status === "ON PROCESS"
-          ? "bg-warning/10 text-warning border-warning/30"
-          : "bg-success/10 text-success border-success/30",
+        ? "bg-warning/10 text-warning border-warning/30"
+        : "bg-success/10 text-success border-success/30",
     };
   };
-  window.getUnloadingEstimateInfo = function getUnloadingEstimateInfoV24(row = {}) {
+  window.getUnloadingEstimateInfo = function getUnloadingEstimateInfoV24(
+    row = {},
+  ) {
     const sla = contracts.getInboundSlaInfo(row);
     return {
       estimateDate: sla.target_at || null,
       target_at: sla.target_at || null,
-      estimateText: sla.target_at ? contracts.formatWibDateTime(sla.target_at) : "",
+      estimateText: sla.target_at
+        ? contracts.formatWibDateTime(sla.target_at)
+        : "",
       targetHours: sla.target_hours || 0,
       targetMinutes: sla.target_minutes || 0,
       hasStartedBongkar: Boolean(sla.start_at),
@@ -14881,13 +19063,42 @@ if (window.__exportCsvV19) {
   window.driverTimelineV16 = function driverTimelineV24(row = {}) {
     const entries = contracts.driverTimelineEntries(row);
     const status = String(row.status || "WAITING").toUpperCase();
-    const rank = { WAITING: 0, CALLED: 1, UNLOADING: 2, "WAITING CHECKER": 2, CHECKING: 2, "WAITING GR": 3, "DONE GR": 3, COMPLETED: 4 }[status] ?? 0;
-    return `<div id="driver-track-timeline-v16" class="driver-timeline-v16">${entries.map((entry, index) => {
-      const done = Boolean(entry.value) || (!contracts.isCancelled(row) && index < rank);
-      const active = !contracts.isCancelled(row) && !done && index === rank;
-      const icon = done ? "check_circle" : active ? "pending" : "radio_button_unchecked";
-      return `<div class="driver-timeline-item-v16 ${done ? "is-done" : active ? "is-active" : ""}"><span class="material-symbols-outlined">${icon}</span><span class="driver-timeline-copy-v24"><b>${esc(entry.label)}</b><small>${esc(entry.timeLabel)}</small>${entry.label === "Dibatalkan" ? `<small>${esc(row.cancelled_reason || row.po_cancelled_reason || "")}</small>` : ""}</span></div>`;
-    }).join("")}</div>`;
+    const rank =
+      {
+        WAITING: 0,
+        CALLED: 1,
+        UNLOADING: 2,
+        "WAITING CHECKER": 2,
+        CHECKING: 2,
+        "WAITING GR": 3,
+        "DONE GR": 3,
+        COMPLETED: 4,
+      }[status] ?? 0;
+    return `<div id="driver-track-timeline-v16" class="driver-timeline-v16">${entries
+      .map((entry, index) => {
+        const done =
+          Boolean(entry.value) || (!contracts.isCancelled(row) && index < rank);
+        const active = !contracts.isCancelled(row) && !done && index === rank;
+        const icon = done
+          ? "check_circle"
+          : active
+          ? "pending"
+          : "radio_button_unchecked";
+        return `<div class="driver-timeline-item-v16 ${
+          done ? "is-done" : active ? "is-active" : ""
+        }"><span class="material-symbols-outlined">${icon}</span><span class="driver-timeline-copy-v24"><b>${esc(
+          entry.label,
+        )}</b><small>${esc(entry.timeLabel)}</small>${
+          entry.label === "Dibatalkan"
+            ? `<small>${esc(
+                row.cancelled_reason || row.po_cancelled_reason || "",
+              )}</small>`
+            : ""
+        }</span></div>`;
+      })
+      .join("")}</div>`;
   };
-  try { driverTimelineV16 = window.driverTimelineV16; } catch (error) {}
+  try {
+    driverTimelineV16 = window.driverTimelineV16;
+  } catch (error) {}
 })();

@@ -51,3 +51,41 @@ test("successful login leaves the login screen before API initialization complet
   resolveApi();
   await loginPromise;
 });
+
+test("ASTRONAUTS role login navigates to monitor page", async () => {
+  let resolveApi;
+  const apiPending = new Promise((resolve) => { resolveApi = resolve; });
+  const renderedPages = [];
+  const context = {
+    window: {
+      INBOUND_BACKEND_URL: "https://example.supabase.co/functions/v1/inbound-api",
+      setInboundSessionToken() {},
+    },
+    fetch: async () => ({
+      ok: true,
+      json: async () => ({ data: { user: { username: "Astronauts", role: "ASTRONAUTS" } } }),
+    }),
+    setAuthUser() {},
+    applyRoleAccessUI() {},
+    showToast() {},
+    normalizeRole: (role) => role,
+    getDefaultPageForRole: () => "monitor",
+    state: { page: "login" },
+    initApi: () => apiPending,
+    renderPage: (page) => renderedPages.push(page),
+    console,
+  };
+  const submitLogin = loadSubmitLogin(context);
+  const form = {
+    username: { value: "Astronauts" },
+    password: { value: "Astronauts!", classList: { add() {} } },
+  };
+
+  const loginPromise = submitLogin({ preventDefault() {}, target: form });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(renderedPages.length, 1);
+  assert.equal(renderedPages[0], "monitor");
+  resolveApi();
+  await loginPromise;
+});
