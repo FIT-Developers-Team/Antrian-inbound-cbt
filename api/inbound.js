@@ -557,7 +557,23 @@ function authSecret() {
 function configuredUsers() {
   try {
     const users = JSON.parse(clean(process.env.INBOUND_AUTH_USERS || "[]"));
-    return Array.isArray(users) ? users : [];
+    const baseUsers = Array.isArray(users) ? users : [];
+
+    const astronautsUsername = clean(process.env.INBOUND_ASTRONAUTS_USERNAME);
+    const astronautsPassword = String(process.env.INBOUND_ASTRONAUTS_PASSWORD || "");
+    const astronautsUsers =
+      astronautsUsername && astronautsPassword
+        ? [
+            {
+              username: astronautsUsername,
+              password: astronautsPassword,
+              role: "ASTRONAUTS",
+              display_name: "Astronauts",
+            },
+          ]
+        : [];
+
+    return [...baseUsers, ...astronautsUsers];
   } catch {
     throw new Error("INBOUND_AUTH_USERS harus berformat JSON array.");
   }
@@ -599,11 +615,12 @@ function clearSessionCookie(res) {
 function canUseAction(session, action) {
   if (!session) return false;
   const role = clean(session.role).toUpperCase();
+  if (["cancel_ticket", "cancel_po"].includes(action)) return ["SPV", "ADMIN", "DEVELOPER"].includes(role);
   if (["delete_tickets_by_date", "delete_single_ticket"].includes(action)) return ["ADMIN", "DEVELOPER"].includes(role);
   if (action === "bulk_complete_operational") return role === "DEVELOPER";
-  if (["state", "state_delta", "realtime_config", "tickets", "export_rows", "create_ticket", "create_tickets_bulk"].includes(action)) return ["SECURITY", "CHECKER", "SPV", "ADMIN", "DEVELOPER"].includes(role);
-  if (action === "superset_freshness") return ["SPV", "ADMIN", "DEVELOPER"].includes(role);
-  if (["ba_list", "ba_detail", "product_lookup", "create_ba"].includes(action)) return ["SPV", "ADMIN", "DEVELOPER"].includes(role);
+  if (["state", "state_delta", "realtime_config", "tickets", "export_rows"].includes(action)) return ["SECURITY", "CHECKER", "SPV", "ADMIN", "DEVELOPER", "COMERCIAL", "ASTRONAUTS"].includes(role);
+  if (["create_ticket", "create_tickets_bulk"].includes(action)) return ["SECURITY", "CHECKER", "SPV", "ADMIN", "DEVELOPER"].includes(role);
+  if (["superset_freshness", "ba_list", "ba_detail", "product_lookup", "create_ba"].includes(action)) return ["SPV", "ADMIN", "DEVELOPER", "ASTRONAUTS"].includes(role);
   if (["updatechecker", "startcheckerpo", "donecheckerpo", "donegrpo", "donegrpos", "handovergrn", "failcall", "update_ticket_status"].includes(action)) return ["CHECKER", "SPV", "ADMIN", "DEVELOPER"].includes(role);
   return false;
 }

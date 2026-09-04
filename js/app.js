@@ -13923,12 +13923,13 @@ window.initShader = function initShaderDisabled() {
           .toLowerCase(),
     );
 
-    // Akun COMERCIAL divalidasi sepenuhnya oleh Supabase. Username tim dapat
+    // Akun COMERCIAL & ASTRONAUTS divalidasi sepenuhnya oleh backend. Username tim dapat
     // ditambah lewat secret tanpa harus menaruh daftar akun di browser.
-    if (!master && normalizeRole(stored.role) === "COMERCIAL") {
+    const roleUpper = normalizeRole(stored.role);
+    if (!master && (roleUpper === "COMERCIAL" || roleUpper === "ASTRONAUTS")) {
       return {
         ...stored,
-        role: "COMERCIAL",
+        role: roleUpper,
         display_name: stored.display_name || stored.username,
       };
     }
