@@ -13871,6 +13871,11 @@ window.initShader = function initShaderDisabled() {
       role: "DEVELOPER",
       display_name: "Pandu Developer",
     },
+    {
+      username: "Astronauts",
+      role: "ASTRONAUTS",
+      display_name: "Astronauts",
+    },
   );
 
   ROLE_ACCESS.SPV = ["daftar", "checker", "panggil", "monitor", "laporan"];
@@ -13886,12 +13891,20 @@ window.initShader = function initShaderDisabled() {
     "setting",
     "debug",
   ];
+  ROLE_ACCESS.ASTRONAUTS = [
+    "monitor",
+    "commercial",
+    "laporan",
+    "dropoff",
+    "ba_reject",
+  ];
 
   ROLE_DEFAULT_PAGE.SPV = "daftar";
   ROLE_DEFAULT_PAGE.ADMIN = "laporan";
   ROLE_DEFAULT_PAGE.CHECKER = "checker";
   ROLE_DEFAULT_PAGE.SECURITY = "daftar";
   ROLE_DEFAULT_PAGE.DEVELOPER = "daftar";
+  ROLE_DEFAULT_PAGE.ASTRONAUTS = "monitor";
 
   // Session lama tidak boleh mempertahankan role/akun yang sudah dihapus.
   // Contoh: generic admin dari versi sebelumnya harus otomatis logout.
@@ -18412,7 +18425,7 @@ if (window.__exportCsvV19) {
     title: "BA Reject",
     subtitle: "Buat, simpan, dan cetak berita acara penolakan barang",
   };
-  ["SPV", "ADMIN", "DEVELOPER"].forEach((role) => {
+  ["SPV", "ADMIN", "DEVELOPER", "ASTRONAUTS"].forEach((role) => {
     ROLE_ACCESS[role] = Array.isArray(ROLE_ACCESS[role])
       ? ROLE_ACCESS[role]
       : [];
@@ -18830,13 +18843,15 @@ if (window.__exportCsvV19) {
     title: "Drop-Off",
     subtitle: "Antrean lintas hari terpisah dari REG dan VIP",
   };
-  ["SPV", "ADMIN", "CHECKER", "SECURITY", "DEVELOPER"].forEach((role) => {
-    ROLE_ACCESS[role] = Array.isArray(ROLE_ACCESS[role])
-      ? ROLE_ACCESS[role]
-      : [];
-    if (!ROLE_ACCESS[role].includes("dropoff"))
-      ROLE_ACCESS[role].push("dropoff");
-  });
+  ["SPV", "ADMIN", "CHECKER", "SECURITY", "DEVELOPER", "ASTRONAUTS"].forEach(
+    (role) => {
+      ROLE_ACCESS[role] = Array.isArray(ROLE_ACCESS[role])
+        ? ROLE_ACCESS[role]
+        : [];
+      if (!ROLE_ACCESS[role].includes("dropoff"))
+        ROLE_ACCESS[role].push("dropoff");
+    },
+  );
 
   const renderBeforeV21 = renderPage;
   renderPage = function renderPageWithDropoffV21(page, toast = true) {
@@ -18863,7 +18878,7 @@ if (window.__exportCsvV19) {
 (function bindCommercialRoleV23() {
   ROLE_ACCESS.COMERCIAL = ["commercial"];
   ROLE_DEFAULT_PAGE.COMERCIAL = "commercial";
-  ["SPV", "ADMIN", "DEVELOPER"].forEach((role) => {
+  ["SPV", "ADMIN", "DEVELOPER", "ASTRONAUTS"].forEach((role) => {
     ROLE_ACCESS[role] = Array.isArray(ROLE_ACCESS[role])
       ? ROLE_ACCESS[role]
       : [];
